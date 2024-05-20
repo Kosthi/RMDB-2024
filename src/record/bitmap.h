@@ -14,10 +14,11 @@ See the Mulan PSL v2 for more details. */
 #include <cstring>
 
 static constexpr int BITMAP_WIDTH = 8;
-static constexpr unsigned BITMAP_HIGHEST_BIT = 0x80u;  // 128 (2^7)
+static constexpr unsigned BITMAP_HIGHEST_BIT = 0x80u; // 128 (2^7)
 
 class Bitmap {
-   public:
+public:
+
     // 从地址bm开始的size个字节全部置0
     static void init(char *bm, int size) { memset(bm, 0, size); }
 
@@ -54,7 +55,7 @@ class Bitmap {
     // rid_.slot_no = Bitmap::next_bit(true, page_handle.bitmap, file_handle_->file_hdr_.num_records_per_page,
     // rid_.slot_no); int slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
-   private:
+private:
     static int get_bucket(int pos) { return pos / BITMAP_WIDTH; }
 
     static char get_bit(int pos) { return BITMAP_HIGHEST_BIT >> static_cast<char>(pos % BITMAP_WIDTH); }
