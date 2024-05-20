@@ -93,6 +93,11 @@ class DatabaseExistsError : public RMDBError {
     DatabaseExistsError(const std::string &db_name) : RMDBError("Database already exists: " + db_name) {}
 };
 
+class DatabaseNotOpenError : public RMDBError {
+public:
+    DatabaseNotOpenError(const std::string &db_name) : RMDBError("Database not open: " + db_name) {}
+};
+
 class TableNotFoundError : public RMDBError {
    public:
     TableNotFoundError(const std::string &tab_name) : RMDBError("Table not found: " + tab_name) {}
