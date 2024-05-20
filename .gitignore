@@ -7,6 +7,7 @@ package-lock.json
 **/.DS_Store
 
 # build
+build
 cmake-build-debug
 cmake-build-debug-ubuntu-2204-arm
 
