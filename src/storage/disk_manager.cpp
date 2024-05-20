@@ -180,6 +180,7 @@ int DiskManager::open_file(const std::string &path) {
 
     path2fd_[path] = fd;
     fd2path_[fd] = path;
+    return fd;
 }
 
 /**
