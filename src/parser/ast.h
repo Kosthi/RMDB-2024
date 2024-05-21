@@ -219,11 +219,9 @@ struct SelectStmt : public TreeNode {
     std::vector<std::string> tabs;
     std::vector<std::shared_ptr<BinaryExpr>> conds;
     std::vector<std::shared_ptr<JoinExpr>> jointree;
-
     
     bool has_sort;
     std::shared_ptr<OrderBy> order;
-
 
     SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
                std::vector<std::string> tabs_,
@@ -231,8 +229,8 @@ struct SelectStmt : public TreeNode {
                std::shared_ptr<OrderBy> order_) :
             cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)), 
             order(std::move(order_)) {
-                has_sort = (bool)order;
-            }
+        has_sort = (bool)order;
+    }
 };
 
 // set enable_nestloop
