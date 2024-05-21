@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include <cassert>
 #include <cstring>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 #include "defs.h"
@@ -29,14 +30,15 @@ struct TabCol {
 };
 
 struct Value {
-    ColType type;  // type of value
+    ColType type; // type of value
     union {
-        int int_val;      // int value
-        float float_val;  // float value
+        int int_val; // int value
+        float float_val; // float value
     };
-    std::string str_val;  // string value
 
-    std::shared_ptr<RmRecord> raw;  // raw record buffer
+    std::string str_val; // string value
+
+    std::shared_ptr<RmRecord> raw; // raw record buffer
 
     void set_int(int int_val_) {
         type = TYPE_INT;
@@ -58,12 +60,12 @@ struct Value {
         raw = std::make_shared<RmRecord>(len);
         if (type == TYPE_INT) {
             assert(len == sizeof(int));
-            *(int *)(raw->data) = int_val;
+            *(int *) (raw->data) = int_val;
         } else if (type == TYPE_FLOAT) {
             assert(len == sizeof(float));
-            *(float *)(raw->data) = float_val;
+            *(float *) (raw->data) = float_val;
         } else if (type == TYPE_STRING) {
-            if (len < (int)str_val.size()) {
+            if (len < (int) str_val.size()) {
                 throw StringOverflowError();
             }
             memset(raw->data, 0, len);
@@ -75,11 +77,11 @@ struct Value {
 enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };
 
 struct Condition {
-    TabCol lhs_col;   // left-hand side column
-    CompOp op;        // comparison operator
-    bool is_rhs_val;  // true if right-hand side is a value (not a column)
-    TabCol rhs_col;   // right-hand side column
-    Value rhs_val;    // right-hand side value
+    TabCol lhs_col; // left-hand side column
+    CompOp op; // comparison operator
+    bool is_rhs_val; // true if right-hand side is a value (not a column)
+    TabCol rhs_col; // right-hand side column
+    Value rhs_val; // right-hand side value
 };
 
 struct SetClause {
