@@ -227,3 +227,25 @@ void BufferPoolManager::flush_all_pages(int fd) {
         }
     }
 }
+
+auto BufferPoolManager::FetchPageBasic(PageId page_id) -> BasicPageGuard {
+    auto *page = fetch_page(page_id);
+    return {this, page};
+}
+
+auto BufferPoolManager::FetchPageRead(PageId page_id) -> ReadPageGuard {
+    auto *page = fetch_page(page_id);
+    page->RLatch();
+    return {this, page};
+}
+
+auto BufferPoolManager::FetchPageWrite(PageId page_id) -> WritePageGuard {
+    auto *page = fetch_page(page_id);
+    page->WLatch();
+    return {this, page};
+}
+
+auto BufferPoolManager::NewPageGuarded(PageId *page_id) -> BasicPageGuard {
+    auto *page = new_page(page_id);
+    return {this, page};
+}

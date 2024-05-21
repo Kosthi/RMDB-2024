@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "page.h"
 #include "replacer/lru_replacer.h"
 #include "replacer/replacer.h"
+#include "storage/page_guard.h"
 
 class BufferPoolManager {
 private:
@@ -75,6 +76,14 @@ public:
     bool delete_page(PageId page_id);
 
     void flush_all_pages(int fd);
+
+    auto FetchPageBasic(PageId page_id) -> BasicPageGuard;
+
+    auto FetchPageRead(PageId page_id) -> ReadPageGuard;
+
+    auto FetchPageWrite(PageId page_id) -> WritePageGuard;
+
+    auto NewPageGuarded(PageId *page_id) -> BasicPageGuard;
 
 private:
     bool find_victim_page(frame_id_t *frame_id);
