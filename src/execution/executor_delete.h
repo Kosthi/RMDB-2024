@@ -9,6 +9,8 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include <utility>
+
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -25,18 +27,20 @@ private:
     SmManager *sm_manager_;
 
 public:
-    DeleteExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<Condition> conds,
-                   std::vector<Rid> rids, Context *context) {
-        sm_manager_ = sm_manager;
-        tab_name_ = tab_name;
-        tab_ = sm_manager_->db_.get_table(tab_name);
-        fh_ = sm_manager_->fhs_.at(tab_name).get();
-        conds_ = conds;
-        rids_ = rids;
+    DeleteExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
+                   std::vector<Rid> rids, Context *context): sm_manager_(sm_manager), tab_name_(std::move(tab_name)),
+                                                             conds_(std::move(conds)),
+                                                             rids_(std::move(rids)) {
+        tab_ = sm_manager_->db_.get_table(tab_name_);
+        fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
     }
 
+    // 只执行一次
     std::unique_ptr<RmRecord> Next() override {
+        for (auto &rid: rids_) {
+            fh_->delete_record(rid, context_);
+        }
         return nullptr;
     }
 
