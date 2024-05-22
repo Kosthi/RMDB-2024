@@ -10,6 +10,9 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <optional>
+#include <readline/readline.h>
+
 #include "ix_defs.h"
 #include "transaction/transaction.h"
 
@@ -68,7 +71,9 @@ public:
         rids = reinterpret_cast<Rid *>(keys + file_hdr->keys_size_);
     }
 
-    int get_size() { return page_hdr->num_key; }
+    inline bool isSafe(Operation operation);
+
+    inline int get_size() { return page_hdr->num_key; }
 
     void set_size(int size) { page_hdr->num_key = size; }
 
@@ -83,27 +88,33 @@ public:
 
     page_id_t get_page_no() { return page->get_page_id().page_no; }
 
-    PageId get_page_id() { return page->get_page_id(); }
+    inline PageId get_page_id() { return page->get_page_id(); }
 
     page_id_t get_next_leaf() { return page_hdr->next_leaf; }
 
     page_id_t get_prev_leaf() { return page_hdr->prev_leaf; }
 
-    page_id_t get_parent_page_no() { return page_hdr->parent; }
+    inline page_id_t get_parent_page_no() { return page_hdr->parent; }
 
-    bool is_leaf_page() { return page_hdr->is_leaf; }
+    inline bool is_leaf_page() { return page_hdr->is_leaf; }
 
-    bool is_root_page() { return get_parent_page_no() == INVALID_PAGE_ID; }
+    inline bool is_internal_page() { return !page_hdr->is_leaf; }
 
-    void set_next_leaf(page_id_t page_no) { page_hdr->next_leaf = page_no; }
+    inline bool is_root_page() { return get_parent_page_no() == INVALID_PAGE_ID; }
 
-    void set_prev_leaf(page_id_t page_no) { page_hdr->prev_leaf = page_no; }
+    inline void set_next_leaf(page_id_t page_no) { page_hdr->next_leaf = page_no; }
 
-    void set_parent_page_no(page_id_t parent) { page_hdr->parent = parent; }
+    inline void set_prev_leaf(page_id_t page_no) { page_hdr->prev_leaf = page_no; }
 
-    char *get_key(int key_idx) const { return keys + key_idx * file_hdr->col_tot_len_; }
+    inline void set_parent_page_no(page_id_t parent) { page_hdr->parent = parent; }
 
-    Rid *get_rid(int rid_idx) const { return &rids[rid_idx]; }
+    inline char *get_key(int key_idx) const { return keys + key_idx * file_hdr->col_tot_len_; }
+
+    inline Rid *get_rid(int rid_idx) const { return &rids[rid_idx]; }
+
+    inline char *get_last_key() { get_key(get_size() - 1); }
+
+    inline Rid *get_last_rid() { get_rid(get_size() - 1); }
 
     void set_key(int key_idx, const char *key) {
         memcpy(keys + key_idx * file_hdr->col_tot_len_, key, file_hdr->col_tot_len_);
@@ -121,14 +132,16 @@ public:
 
     bool leaf_lookup(const char *key, Rid **value);
 
-    int insert(const char *key, const Rid &value);
+    std::pair<int, int> insert(const char *key, const Rid &value);
 
     // 用于在结点中的指定位置插入单个键值对
     void insert_pair(int pos, const char *key, const Rid &rid) { insert_pairs(pos, key, &rid, 1); }
 
+    void insert_pair(int pos, const char *key, const Rid *rid) { insert_pairs(pos, key, rid, 1); }
+
     void erase_pair(int pos);
 
-    int remove(const char *key);
+    std::pair<int, int> remove(const char *key);
 
     /**
      * @brief used in internal node to remove the last key in root node, and return the last child
@@ -162,6 +175,10 @@ public:
     inline int Compare(const char *a, const char *b) const {
         return ix_compare(a, b, file_hdr->col_types_, file_hdr->col_lens_);
     }
+
+    inline bool isFull() {
+        return page_hdr->num_key == get_max_size();
+    }
 };
 
 /* B+树 */
@@ -175,6 +192,26 @@ private:
     int fd_; // 存储B+树的文件
     IxFileHdr *file_hdr_; // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
     std::mutex root_latch_;
+
+    class Context {
+    public:
+        // When you insert into / remove from the B+ tree, store the write guard of header page here.
+        // Remember to drop the header page guard and set it to nullopt when you want to unlock all.
+        std::optional<WritePageGuard> header_page_{std::nullopt};
+
+        // Save the root page id here so that it's easier to know if the current page is the root page.
+        page_id_t root_page_id_{INVALID_PAGE_ID};
+
+        // Store the write guards of the pages that you're modifying here.
+        std::deque<WritePageGuard> write_set_;
+
+        // You may want to use this when getting value, but not necessary.
+        std::deque<ReadPageGuard> read_set_;
+
+        auto isRootPage(page_id_t page_id) -> bool { return page_id == root_page_id_; }
+
+        Operation op_type_;
+    };
 
 public:
     IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
@@ -235,4 +272,8 @@ private:
 
     // for index test
     Rid get_rid(const Iid &iid) const;
+
+    inline int Compare(const char *a, const char *b) const {
+        return ix_compare(a, b, file_hdr_->col_types_, file_hdr_->col_lens_);
+    }
 };
