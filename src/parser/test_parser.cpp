@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 int main() {
     std::vector<std::string> sqls = {
         "show tables;",
+        "show index from tb;",
         "desc tb;",
         "create table tb (a int, b float, c char(4));",
         "drop table tb;",
