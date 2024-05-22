@@ -64,13 +64,16 @@ public:
         if (auto x = std::dynamic_pointer_cast<OtherPlan>(plan)) {
             return std::make_shared<PortalStmt>(PORTAL_CMD_UTILITY, std::vector<TabCol>(),
                                                 std::unique_ptr<AbstractExecutor>(), plan);
-        } else if (auto x = std::dynamic_pointer_cast<SetKnobPlan>(plan)) {
+        }
+        if (auto x = std::dynamic_pointer_cast<SetKnobPlan>(plan)) {
             return std::make_shared<PortalStmt>(PORTAL_CMD_UTILITY, std::vector<TabCol>(),
                                                 std::unique_ptr<AbstractExecutor>(), plan);
-        } else if (auto x = std::dynamic_pointer_cast<DDLPlan>(plan)) {
+        }
+        if (auto x = std::dynamic_pointer_cast<DDLPlan>(plan)) {
             return std::make_shared<PortalStmt>(PORTAL_MULTI_QUERY, std::vector<TabCol>(),
                                                 std::unique_ptr<AbstractExecutor>(), plan);
-        } else if (auto x = std::dynamic_pointer_cast<DMLPlan>(plan)) {
+        }
+        if (auto x = std::dynamic_pointer_cast<DMLPlan>(plan)) {
             switch (x->tag) {
                 case T_select: {
                     std::shared_ptr<ProjectionPlan> p = std::dynamic_pointer_cast<ProjectionPlan>(x->subplan_);
@@ -113,12 +116,9 @@ public:
 
                 default:
                     throw InternalError("Unexpected field type");
-                    break;
             }
-        } else {
-            throw InternalError("Unexpected field type");
         }
-        return nullptr;
+        throw InternalError("Unexpected field type");
     }
 
     // 遍历算子树并执行算子生成执行结果
