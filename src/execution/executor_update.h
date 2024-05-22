@@ -50,6 +50,37 @@ public:
                 auto &&col_meta = tab_.get_col(set.lhs.col_name);
                 memcpy(record->data + col_meta->offset, set.rhs.raw->data, col_meta->len);
             }
+
+            // 先检查 key 是否是 unique
+            for (auto &[index_name, index] : tab_.indexes) {
+                auto &&ih = sm_manager_->ihs_.at(index_name).get();
+                int offset = 0;
+                // TODO 优化 放到容器中
+                char *key = new char[index.col_tot_len];
+                for (size_t i = 0; i < index.col_num; ++i) {
+                    memcpy(key + offset, record->data + index.cols[i].offset, index.cols[i].len);
+                    offset += index.cols[i].len;
+                }
+                if (!ih->is_unique(key, context_->txn_)) {
+                    delete []key;
+                    throw NonUniqueIndexError("", {index_name});
+                }
+                delete []key;
+            }
+
+            // Unique Index -> Insert into index
+            for (auto &[index_name, index] : tab_.indexes) {
+                auto ih = sm_manager_->ihs_.at(index_name).get();
+                char *key = new char[index.col_tot_len];
+                int offset = 0;
+                for (size_t i = 0; i < index.col_num; ++i) {
+                    memcpy(key + offset, record->data + index.cols[i].offset, index.cols[i].len);
+                    offset += index.cols[i].len;
+                }
+                ih->insert_entry(key, rid, context_->txn_);
+                delete []key;
+            }
+
             fh_->update_record(rid, record->data, context_);
         }
         return nullptr;

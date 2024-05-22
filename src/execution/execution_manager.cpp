@@ -66,7 +66,6 @@ void QlManager::run_mutli_query(std::shared_ptr<Plan> plan, Context *context) {
             }
             default:
                 throw InternalError("Unexpected field type");
-                break;
         }
     }
 }
@@ -82,6 +81,10 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
             }
             case T_ShowTable: {
                 sm_manager_->show_tables(context);
+                break;
+            }
+            case T_ShowIndex: {
+                sm_manager_->show_indexs(x->tab_name_, context);
                 break;
             }
             case T_DescTable: {
@@ -110,7 +113,6 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
             }
             default:
                 throw InternalError("Unexpected field type");
-                break;
         }
     } else if (auto x = std::dynamic_pointer_cast<SetKnobPlan>(plan)) {
         switch (x->set_knob_type_) {
@@ -124,7 +126,6 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
             }
             default: {
                 throw RMDBError("Not implemented!\n");
-                break;
             }
         }
     }

@@ -41,7 +41,7 @@ public:
         context_ = context;
         tab_ = sm_manager_->db_.get_table(tab_name_);
         // index_no_ = index_no;
-        index_meta_ = *(tab_.get_index_meta(index_col_names_));
+        index_meta_ = tab_.get_index_meta(index_col_names_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         cols_ = tab_.cols;
         len_ = cols_.back().offset + cols_.back().len;
@@ -93,10 +93,10 @@ public:
             case OP_EQ: {
                 // 设置成最小值
                 memset(key + offset, 0, remaining_bytes);
-                ih->lower_bound(key);
+                lower = ih->lower_bound(key);
                 // 设置成最大值
                 memset(key + offset, 0xff, remaining_bytes);
-                ih->upper_bound(key);
+                upper = ih->upper_bound(key);
                 break;
             }
             case OP_GE: {
