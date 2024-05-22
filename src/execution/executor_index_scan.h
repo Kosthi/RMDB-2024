@@ -129,6 +129,9 @@ public:
                 throw InternalError("Unexpected op type！");
         }
 
+        // 释放内存
+        delete []key;
+
         scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
         while (!scan_->is_end()) {
             rm_record_ = fh_->get_record(scan_->rid(), context_);
