@@ -526,7 +526,7 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
 
     // 并且需要删除叶子结点，先不实现并发
     bool is_delete = coalesce_or_redistribute(leaf_node, transaction, &is_root_locked);
-    leaf_node->page->WUnlatch();
+    // leaf_node->page->WUnlatch();
     buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), true);
     if (is_delete) {
         assert(buffer_pool_manager_->delete_page(leaf_node->get_page_id()));
