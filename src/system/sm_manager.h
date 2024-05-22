@@ -70,6 +70,8 @@ public:
 
     void show_tables(Context *context);
 
+    void show_indexs(std::string &table_name, Context *context);
+
     void desc_table(const std::string &tab_name, Context *context);
 
     void create_table(const std::string &tab_name, const std::vector<ColDef> &col_defs, Context *context);
