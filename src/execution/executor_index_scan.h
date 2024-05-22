@@ -25,26 +25,22 @@ private:
     std::vector<ColMeta> cols_; // 需要读取的字段
     size_t len_; // 选取出来的一条记录的长度
     std::vector<Condition> fed_conds_; // 扫描条件，和conds_字段相同
-
     std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
     IndexMeta index_meta_; // index scan涉及到的索引元数据
-
     Rid rid_;
     std::unique_ptr<RecScan> scan_;
-
     SmManager *sm_manager_;
+    std::unique_ptr<RmRecord> rm_record_;
 
 public:
     IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
                       std::vector<std::string> index_col_names,
-                      Context *context) {
-        sm_manager_ = sm_manager;
+                      Context *context) : sm_manager_(sm_manager), tab_name_(std::move(tab_name)),
+                                          conds_(std::move(conds)),
+                                          index_col_names_(std::move(index_col_names)) {
         context_ = context;
-        tab_name_ = std::move(tab_name);
         tab_ = sm_manager_->db_.get_table(tab_name_);
-        conds_ = std::move(conds);
         // index_no_ = index_no;
-        index_col_names_ = index_col_names;
         index_meta_ = *(tab_.get_index_meta(index_col_names_));
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         cols_ = tab_.cols;
@@ -63,17 +59,168 @@ public:
             }
         }
         fed_conds_ = conds_;
+        std::reverse(fed_conds_.begin(), fed_conds_.end());
     }
 
     void beginTuple() override {
+        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
+        const auto &&ih = sm_manager_->ihs_[index_name].get();
+
+        Iid lower = ih->leaf_begin(), upper = ih->leaf_end();
+        char *key = new char[index_meta_.col_tot_len];
+
+        int offset = 0;
+        int last_idx = 0; // 第一个范围查询位置
+
+        for (auto &cond: conds_) {
+            // 右边一定是数值
+            memcpy(key + offset, cond.rhs_val.raw->data, cond.rhs_val.raw->size);
+            offset += cond.rhs_val.raw->size;
+            // 移除已经在索引中的的谓词
+            fed_conds_.pop_back();
+            // 非等值查询
+            if (cond.op != OP_EQ) {
+                break;
+            }
+            ++last_idx;
+        }
+
+        const int &&remaining_bytes = index_meta_.col_tot_len - offset;
+        const auto &last_cond = conds_[last_idx == conds_.size() ? last_idx - 1 : last_idx];
+
+        switch (last_cond.op) {
+            // 全部都是等值查询
+            case OP_EQ: {
+                // 设置成最小值
+                memset(key + offset, 0, remaining_bytes);
+                ih->lower_bound(key);
+                // 设置成最大值
+                memset(key + offset, 0xff, remaining_bytes);
+                ih->upper_bound(key);
+                break;
+            }
+            case OP_GE: {
+                // 设置成最小值
+                memset(key + offset, 0, remaining_bytes);
+                lower = ih->lower_bound(key);
+                break;
+            }
+            case OP_LE: {
+                // 设置成最大值
+                memset(key + offset, 0xff, remaining_bytes);
+                upper = ih->upper_bound(key);
+                break;
+            }
+            case OP_GT: {
+                // 设置成最小值
+                memset(key + offset, 0xff, remaining_bytes);
+                lower = ih->upper_bound(key);
+                break;
+            }
+            case OP_LT: {
+                // 设置成最大值
+                memset(key + offset, 0, remaining_bytes);
+                upper = ih->lower_bound(key);
+                break;
+            }
+            case OP_NE:
+                break;
+            default:
+                throw InternalError("Unexpected op type！");
+        }
+
+        scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
+        while (!scan_->is_end()) {
+            rm_record_ = fh_->get_record(scan_->rid(), context_);
+            if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
+                break;
+            }
+            scan_->next();
+        }
     }
 
     void nextTuple() override {
+        if (scan_->is_end()) {
+            return;
+        }
+        for (scan_->next(); !scan_->is_end(); scan_->next()) {
+            rm_record_ = fh_->get_record(scan_->rid(), context_);
+            if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
+                break;
+            }
+        }
     }
 
     std::unique_ptr<RmRecord> Next() override {
-        return nullptr;
+        return std::move(rm_record_);
     }
 
     Rid &rid() override { return rid_; }
+
+    bool is_end() const { return scan_->is_end(); }
+
+    const std::vector<ColMeta> &cols() const override { return cols_; }
+
+    size_t tupleLen() const override { return len_; }
+
+    static inline int compare(const char *a, const char *b, int col_len, ColType col_type) {
+        switch (col_type) {
+            case TYPE_INT: {
+                const int ai = *reinterpret_cast<const int *>(a);
+                const int bi = *reinterpret_cast<const int *>(b);
+                return (ai > bi) - (ai < bi);
+            }
+            case TYPE_FLOAT: {
+                const float af = *reinterpret_cast<const float *>(a);
+                const float bf = *reinterpret_cast<const float *>(b);
+                return (af > bf) - (af < bf);
+            }
+            case TYPE_STRING:
+                return memcmp(a, b, col_len);
+            default:
+                throw InternalError("Unexpected data type！");
+        }
+    }
+
+    // 判断是否满足单个谓词条件
+    bool cmp_cond(const RmRecord *rec, const Condition &cond, const std::vector<ColMeta> &rec_cols) {
+        const auto &lhs_col_meta = get_col(rec_cols, cond.lhs_col);
+        const char *lhs_data = rec->data + lhs_col_meta->offset;
+        const char *rhs_data;
+        ColType rhs_type;
+
+        // 提取左值与右值的数据和类型
+        // 常值
+        if (cond.is_rhs_val) {
+            rhs_type = cond.rhs_val.type;
+            rhs_data = cond.rhs_val.raw->data;
+        } else {
+            // 列值
+            const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
+            rhs_type = rhs_col_meta->type;
+            rhs_data = rec->data + rhs_col_meta->offset;
+        }
+
+        if (lhs_col_meta->type != rhs_type) {
+            throw IncompatibleTypeError(coltype2str(lhs_col_meta->type), coltype2str(rhs_type));
+        }
+
+        int cmp = compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type);
+        switch (cond.op) {
+            case OP_EQ: return cmp == 0;
+            case OP_NE: return cmp != 0;
+            case OP_LT: return cmp < 0;
+            case OP_GT: return cmp > 0;
+            case OP_LE: return cmp <= 0;
+            case OP_GE: return cmp >= 0;
+            default:
+                throw InternalError("Unexpected op type！");
+        }
+    }
+
+    bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds, const std::vector<ColMeta> &rec_cols) {
+        return std::all_of(conds.begin(), conds.end(), [&](const Condition &cond) {
+            return cmp_cond(rec, cond, rec_cols);
+        });
+    }
 };
