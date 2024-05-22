@@ -75,6 +75,37 @@ public:
         }
     }
 
+    void print_indexs(const std::vector<std::string> &indexs, Context *context) const {
+        assert(indexs.size() == num_cols);
+
+        // 预分配足够的空间
+        std::string buffer;
+        buffer.reserve(BUFFER_LENGTH);
+
+        // 拷贝
+        auto prev_offset = *context->offset_;
+        for (const auto& col : indexs) {
+            std::string ss = "| " + col + " ";
+            if (!context->ellipsis_ && *context->offset_ + RECORD_COUNT_LENGTH + ss.length() < BUFFER_LENGTH) {
+                buffer.append(ss);
+                *context->offset_ += ss.length();
+            } else {
+                context->ellipsis_ = true;
+            }
+        }
+
+        std::string end_str = "|\n";
+        if (!context->ellipsis_ && *context->offset_ + RECORD_COUNT_LENGTH + end_str.length() < BUFFER_LENGTH) {
+            buffer.append(end_str);
+            *context->offset_ += end_str.length();
+        }
+
+        // 一次性拷贝整个字符串
+        if (!buffer.empty()) {
+            memcpy(context->data_send_ + prev_offset, buffer.c_str(), buffer.length());
+        }
+    }
+
     static void print_record_count(size_t num_rec, Context *context) {
         // std::cout << "Total record(s): " << num_rec << '\n';
         std::string str = "";
