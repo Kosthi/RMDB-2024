@@ -426,6 +426,20 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
     }
 }
 
+// 检查是否是 unique key，只有 insert 操作会调用
+bool IxIndexHandle::is_unique(const char *key, Transaction *transaction) {
+    // 操作应该为insert
+    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::INSERT, transaction, false);
+    int pos = leaf_node->lower_bound(key);
+    // 释放写锁
+    if (pos == leaf_node->page_hdr->num_key || Compare(key, leaf_node->get_key(pos))) {
+        buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
+        return true;
+    }
+    buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
+    return false;
+}
+
 /**
  * @brief 将指定键值对插入到B+树中
  * @param (key, value) 要插入的键值对

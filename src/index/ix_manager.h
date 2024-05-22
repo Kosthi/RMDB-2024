@@ -28,21 +28,23 @@ public:
     }
 
     std::string get_index_name(const std::string &filename, const std::vector<std::string> &index_cols) {
-        std::string index_name = filename;
-        for (size_t i = 0; i < index_cols.size(); ++i)
-            index_name += "_" + index_cols[i];
-        index_name += ".idx";
-
-        return index_name;
+        std::ostringstream oss;
+        oss << filename;
+        for (const auto &col : index_cols) {
+            oss << "_" << col;
+        }
+        oss << ".idx";
+        return oss.str();
     }
 
     std::string get_index_name(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-        std::string index_name = filename;
-        for (size_t i = 0; i < index_cols.size(); ++i)
-            index_name += "_" + index_cols[i].name;
-        index_name += ".idx";
-
-        return index_name;
+        std::ostringstream oss;
+        oss << filename;
+        for (const auto &col : index_cols) {
+            oss << "_" << col.name;
+        }
+        oss << ".idx";
+        return oss.str();
     }
 
     bool exists(const std::string &filename, const std::vector<ColMeta> &index_cols) {
@@ -55,8 +57,11 @@ public:
         return disk_manager_->is_file(ix_name);
     }
 
-    void create_index(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-        std::string ix_name = get_index_name(filename, index_cols);
+    bool exists(const std::string &index_name) {
+        return disk_manager_->is_file(index_name);
+    }
+
+    void create_index(std::string &ix_name, const std::vector<ColMeta>& index_cols) {
         // Create index file
         disk_manager_->create_file(ix_name);
         // Open index file
@@ -134,6 +139,10 @@ public:
         disk_manager_->close_file(fd);
     }
 
+    void destroy_index(const std::string &index_name) {
+        disk_manager_->destroy_file(index_name);
+    }
+
     void destroy_index(const std::string &filename, const std::vector<ColMeta> &index_cols) {
         std::string ix_name = get_index_name(filename, index_cols);
         disk_manager_->destroy_file(ix_name);
@@ -154,6 +163,11 @@ public:
     std::unique_ptr<IxIndexHandle> open_index(const std::string &filename, const std::vector<std::string> &index_cols) {
         std::string ix_name = get_index_name(filename, index_cols);
         int fd = disk_manager_->open_file(ix_name);
+        return std::make_unique<IxIndexHandle>(disk_manager_, buffer_pool_manager_, fd);
+    }
+
+    std::unique_ptr<IxIndexHandle> open_index(const std::string &index_name) {
+        int fd = disk_manager_->open_file(index_name);
         return std::make_unique<IxIndexHandle>(disk_manager_, buffer_pool_manager_, fd);
     }
 
