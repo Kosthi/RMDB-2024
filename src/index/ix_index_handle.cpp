@@ -438,10 +438,10 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
     // 2. 在该叶子节点中插入键值对
     // 3. 如果结点已满，分裂结点，并把新结点的相关信息插入父节点
     // 提示：记得unpin page；若当前叶子节点是最右叶子节点，则需要更新file_hdr_.last_leaf；记得处理并发的上锁
-    auto &[leaf_node, is_root_locked] = find_leaf_page(key, Operation::INSERT, transaction, false);
+    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::INSERT, transaction, false);
     int old_size = leaf_node->get_size();
     // key 重复
-    auto &[new_size, pos] = leaf_node->insert(key, value);
+    const auto &[new_size, pos] = leaf_node->insert(key, value);
     if (new_size == old_size) {
         if (is_root_locked) {
             root_latch_.unlock();
@@ -504,10 +504,10 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
         return false;
     }
 
-    auto &[leaf_node, is_root_locked] = find_leaf_page(key, Operation::DELETE, transaction, false);
+    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::DELETE, transaction, false);
     int old_size = leaf_node->get_size();
     // key 找不到
-    auto &[new_size, pos] = leaf_node->remove(key);
+    const auto &[new_size, pos] = leaf_node->remove(key);
     if (new_size == old_size) {
         if (is_root_locked) {
             root_latch_.unlock();
