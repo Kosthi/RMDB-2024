@@ -10,6 +10,9 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <float.h>
+#include <limits.h>
+
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -31,6 +34,10 @@ private:
     std::unique_ptr<RecScan> scan_;
     SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
+    constexpr static int int_min_ = INT32_MIN;
+    constexpr static int int_max_ = INT32_MAX;
+    constexpr static float float_min_ = FLT_MIN;
+    constexpr static float float_max_ = FLT_MAX;
 
 public:
     IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
@@ -87,77 +94,76 @@ public:
             ++last_idx;
         }
 
-        const int &&remaining_bytes = index_meta_.col_tot_len - offset;
-        const int &&un_equal_bytes = index_meta_.col_tot_len - equal_offset;
         const auto &last_cond = conds_[last_idx == conds_.size() ? last_idx - 1 : last_idx];
 
         switch (last_cond.op) {
             // 全部都是等值查询
             case OP_EQ: {
-                // 设置成最小值
-                memset(key + offset, 0, remaining_bytes);
+                // where name = 'bztyhnmj';
+                // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                set_remaining_all_min(offset, last_idx, key);
                 lower = ih->lower_bound(key);
-                // 设置成最大值
-                memset(key + offset, 0xff, remaining_bytes);
+                // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
+                set_remaining_all_max(offset, last_idx, key);
                 upper = ih->upper_bound(key);
                 break;
             }
             case OP_GE: {
                 // where name >= 'bztyhnmj';
-                // 设置成最小值
-                memset(key + offset, 0, remaining_bytes);
+                // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                set_remaining_all_min(offset, last_idx + 2, key);
                 lower = ih->lower_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name >= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询置最大 找上限
-                    // where w_id = 0
-                    memset(key + equal_offset, 0xff, un_equal_bytes);
+                    // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
+                    set_remaining_all_max(equal_offset, last_idx + 1, key);
                     upper = ih->upper_bound(key);
                 }
                 break;
             }
             case OP_LE: {
                 // where name <= 'bztyhnmj';
-                // 设置成最大值
-                memset(key + offset, 0xff, remaining_bytes);
+                // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
+                set_remaining_all_max(offset, last_idx + 2, key);
                 upper = ih->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name <= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
-                    // where w_id = 0
-                    memset(key + equal_offset, 0, un_equal_bytes);
+                    // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                    set_remaining_all_min(equal_offset, last_idx + 1, key);
                     lower = ih->lower_bound(key);
                 }
                 break;
             }
             case OP_GT: {
                 // where name > 'bztyhnmj';
-                // 设置成最小值
-                memset(key + offset, 0xff, remaining_bytes);
+                // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
+                set_remaining_all_max(offset, last_idx + 2, key);
                 lower = ih->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name > 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找上限
-                    // where w_id = 0
-                    memset(key + equal_offset, 0xff, un_equal_bytes);
+                    // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
+                    set_remaining_all_max(equal_offset, last_idx + 1, key);
                     upper = ih->upper_bound(key);
                 }
                 break;
             }
             case OP_LT: {
                 // where name < 'bztyhnmj';
-                // 设置成最大值
-                memset(key + offset, 0, remaining_bytes);
+                // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                set_remaining_all_min(offset, last_idx + 2, key);
                 upper = ih->lower_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name < 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
-                    // where w_id = 0
-                    memset(key + equal_offset, 0, un_equal_bytes);
+                    // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                    set_remaining_all_min(equal_offset, last_idx + 1, key);
                     lower = ih->lower_bound(key);
                 }
                 break;
@@ -206,6 +212,47 @@ public:
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
     size_t tupleLen() const override { return len_; }
+
+    // 根据不同的列值类型设置不同的最大值
+    // int   类型范围 int_min_ ~ int_max_
+    // float 类型范围 float_min_ ~ float_max_
+    // char  类型范围 0 ~ 255
+    void set_remaining_all_max(int offset, int last_idx, char *&key) {
+        // 设置成最大值
+        for (auto i = last_idx; i < index_meta_.cols.size(); ++i) {
+            auto &col = index_meta_.cols[i];
+            if (col.type == TYPE_INT) {
+                memcpy(key + offset, &int_max_, sizeof(int));
+            } else if (col.type == TYPE_FLOAT) {
+                memcpy(key + offset, &float_max_, sizeof(float));
+            } else if (col.type == TYPE_STRING) {
+                memset(key + offset, 0xff, col.len);
+            } else {
+                throw InternalError("Unexpected data type！");
+            }
+            offset += col.len;
+        }
+    }
+
+    // 根据不同的列值类型设置不同的最小值
+    // int   类型范围 int_min_ ~ int_max_
+    // float 类型范围 float_min_ ~ float_max_
+    // char  类型范围 0 ~ 255
+    void set_remaining_all_min(int offset, int last_idx, char *&key) {
+        for (auto i = last_idx; i < index_meta_.cols.size(); ++i) {
+            auto &col = index_meta_.cols[i];
+            if (col.type == TYPE_INT) {
+                memcpy(key + offset, &int_min_, sizeof(int));
+            } else if (col.type == TYPE_FLOAT) {
+                memcpy(key + offset, &float_min_, sizeof(float));
+            } else if (col.type == TYPE_STRING) {
+                memset(key + offset, 0, col.len);
+            } else {
+                throw InternalError("Unexpected data type！");
+            }
+            offset += col.len;
+        }
+    }
 
     static inline int compare(const char *a, const char *b, int col_len, ColType col_type) {
         switch (col_type) {
