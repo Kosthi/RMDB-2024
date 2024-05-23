@@ -60,7 +60,8 @@ public:
                 memcpy(key + offset, rec.data + index.cols[i].offset, index.cols[i].len);
                 offset += index.cols[i].len;
             }
-            if (!ih->is_unique(key, context_->txn_)) {
+            Rid unique_rid{};
+            if (!ih->is_unique(key, unique_rid, context_->txn_)) {
                 delete []key;
                 throw NonUniqueIndexError("", {index_name});
             }

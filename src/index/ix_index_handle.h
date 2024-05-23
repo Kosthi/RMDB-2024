@@ -224,7 +224,7 @@ public:
                                                    bool find_first = false);
 
     // check unique
-    bool is_unique(const char *key, Transaction *transaction);
+    bool is_unique(const char *key, Rid &value, Transaction *transaction);
 
     // for insert
     page_id_t insert_entry(const char *key, const Rid &value, Transaction *transaction);
