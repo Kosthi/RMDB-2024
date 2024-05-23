@@ -228,6 +228,29 @@ void BufferPoolManager::flush_all_pages(int fd) {
     }
 }
 
+/**
+ * @description: 将buffer_pool中的所有页写回到磁盘
+ * @param {int} fd 文件句柄
+ */
+void BufferPoolManager::delete_all_pages(int fd) {
+    std::lock_guard lock(latch_);
+
+    for (auto it = page_table_.begin(); it != page_table_.end();) {
+        if (it->first.fd == fd) {
+            // 清页面
+            auto &page = pages_[it->second];
+            page.reset_memory();
+            page.is_dirty_ = false;
+            page.pin_count_ = 0;
+            // 记得把页框还回去
+            free_list_.push_back(it->second);
+            it = page_table_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 auto BufferPoolManager::FetchPageBasic(PageId page_id) -> BasicPageGuard {
     auto *page = fetch_page(page_id);
     return {this, page};

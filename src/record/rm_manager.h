@@ -81,6 +81,8 @@ public:
                                   sizeof(file_handle->file_hdr_));
         // 缓冲区的所有页刷到磁盘，注意这句话必须写在close_file前面
         buffer_pool_manager_->flush_all_pages(file_handle->fd_);
+        // ！清空页表，防止 disk read error
+        buffer_pool_manager_->delete_all_pages(file_handle->fd_);
         disk_manager_->close_file(file_handle->fd_);
     }
 };

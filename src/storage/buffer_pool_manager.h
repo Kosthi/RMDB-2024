@@ -77,6 +77,8 @@ public:
 
     void flush_all_pages(int fd);
 
+    void delete_all_pages(int fd);
+
     auto FetchPageBasic(PageId page_id) -> BasicPageGuard;
 
     auto FetchPageRead(PageId page_id) -> ReadPageGuard;

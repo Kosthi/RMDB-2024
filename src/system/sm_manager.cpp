@@ -111,7 +111,7 @@ void SmManager::open_db(const std::string &db_name) {
     for (auto &[table_name, tab_meta]: db_.tabs_) {
         fhs_[table_name] = rm_manager_->open_file(table_name);
         // 待索引完成后更新
-        for (auto &[index_name, _] : tab_meta.indexes) {
+        for (auto &[index_name, _]: tab_meta.indexes) {
             ihs_[index_name] = ix_manager_->open_index(index_name);
         }
     }
@@ -188,7 +188,7 @@ void SmManager::show_indexs(std::string &table_name, Context *context) {
     std::string format = "|  " + table_name + " | unique | (";
 
     std::ostringstream cols_stream;
-    for (const auto &[_, index] : db_.tabs_[table_name].indexes) {
+    for (const auto &[_, index]: db_.tabs_[table_name].indexes) {
         cols_stream << "(" << index.cols[0].name;
         outfile << format << index.cols[0].name;
         for (size_t i = 1; i < index.cols.size(); ++i) {
@@ -321,8 +321,12 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
         }
         // 插入B+树
         if (ih->insert_entry(key, rid, context->txn_) == IX_NO_PAGE) {
+            // 释放内存
+            delete []key;
             // 重复了
-            drop_index(tab_name, col_metas, context);
+            ix_manager_->close_index(ih.get());
+            ix_manager_->destroy_index(ix_name);
+            // drop_index(tab_name, col_names, context);
             throw NonUniqueIndexError(tab_name, col_names);
         }
     }
