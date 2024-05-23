@@ -23,16 +23,131 @@ See the Mulan PSL v2 for more details. */
 #include "record_printer.h"
 
 // 目前的索引匹配规则为：完全匹配索引字段，且全部为单点查询，不会自动调整where条件的顺序
-bool Planner::get_index_cols(std::string tab_name, std::vector<Condition> curr_conds,
+// 支持自动调整where顺序，最长前缀匹配
+bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr_conds,
                              std::vector<std::string> &index_col_names) {
-    index_col_names.clear();
-    for (auto &cond: curr_conds) {
-        if (cond.is_rhs_val && cond.op == OP_EQ && cond.lhs_col.tab_name.compare(tab_name) == 0)
-            index_col_names.push_back(cond.lhs_col.col_name);
+    // index_col_names.clear();
+    // for (auto &cond: curr_conds) {
+    //     if (cond.is_rhs_val && cond.op == OP_EQ && cond.lhs_col.tab_name == tab_name)
+    //         index_col_names.push_back(cond.lhs_col.col_name);
+    // }
+
+    if (curr_conds.empty()) {
+        return false;
     }
+
+    // TODO
     TabMeta &tab = sm_manager_->db_.get_table(tab_name);
-    if (tab.is_index(index_col_names)) return true;
-    return false;
+    // TODO 优化：减少索引文件名长度，提高匹配效率
+    // conds重复去重
+
+    std::set<std::string> index_set; // 快速查找
+    std::unordered_map<std::string, int> conds_map; // 列名 -> Cond
+    std::unordered_map<std::string, int> repelicate_conds_map;
+    for (std::size_t i = 0; i < curr_conds.size(); ++i) {
+        auto &col_name = curr_conds[i].lhs_col.col_name;
+        if (index_set.count(col_name) == 0) {
+            index_set.emplace(col_name);
+            conds_map.emplace(col_name, i);
+        } else {
+            repelicate_conds_map.emplace(col_name, i);
+        }
+    }
+
+    int max_len = 0, max_equals = 0, cur_len = 0, cur_equals = 0;
+    for (auto &[index_name, index] : tab.indexes) {
+        cur_len = cur_equals = 0;
+        auto &cols = index.cols;
+        for (auto &col : index.cols) {
+            if (index_set.count(col.name) == 0) {
+                break;
+            }
+            if (curr_conds[conds_map[col.name]].op == OP_EQ) {
+                ++cur_equals;
+            }
+            ++cur_len;
+        }
+        // 如果有 where a = 1, b = 1, c > 1;
+        // index(a, b, c), index(a, b, c, d);
+        // 应该匹配最合适的，避免索引查询中带来的额外拷贝开销
+        if (cur_len > max_len && cur_len < curr_conds.size()) {
+            // 匹配最长的
+            max_len = cur_len;
+            index_col_names.clear();
+            for (int i = 0; i < index.cols.size(); ++i) {
+                index_col_names.emplace_back(index.cols[i].name);
+            }
+        } else if (cur_len == curr_conds.size()) {
+            max_len = cur_len;
+            // 最长前缀相等选择等号多的
+            if (index_col_names.empty()) {
+                for (int i = 0; i < index.cols.size(); ++i) {
+                    index_col_names.emplace_back(index.cols[i].name);
+                }
+                // for (int i = 0; i < cur_len; ++i) {
+                //     index_col_names.emplace_back(index.cols[i].name);
+                // }
+                // = = >  等号优先   = > =     = =
+                // = > =           = = > _   = = _
+                // } else if(index_col_names.size() > index.cols.size()) {
+                //     // 选择最合适的，正好满足，这样减少索引查找的 memcpy
+                //     index_col_names.clear();
+                //     for (int i = 0; i < index.cols.size(); ++i) {
+                //         index_col_names.emplace_back(index.cols[i].name);
+                //     }
+                // = = >  等号优先   = > =     = =
+                // = > =           = = > _   = = _
+                // 谁等号多选谁，不管是否合适
+            } else if (cur_equals > max_equals) {
+                max_equals = cur_equals;
+                // cur_len >= cur_equals;
+                index_col_names.clear();
+                for (int i = 0; i < index.cols.size(); ++i) {
+                    index_col_names.emplace_back(index.cols[i].name);
+                }
+                // for (int i = 0; i < cur_len; ++i) {
+                //     index_col_names.emplace_back(index.cols[i].name);
+                // }
+            }
+        }
+    }
+
+    // 没有索引
+    if (index_col_names.empty()) {
+        return false;
+    }
+
+    std::vector<Condition> fed_conds; // 理想谓词
+
+    // 连接剩下的非索引列
+    // 先清除已经在set中的
+    for (auto &index_name : index_col_names) {
+        if (index_set.count(index_name)) {
+            index_set.erase(index_name);
+            fed_conds.emplace_back(std::move(curr_conds[conds_map[index_name]]));
+        }
+    }
+
+    // 连接 set 中剩下的
+    for (auto &index_name : index_set) {
+        fed_conds.emplace_back(std::move(curr_conds[conds_map[index_name]]));
+    }
+
+    // 连接重复的，如果有
+    for (auto &[index_name, idx] : repelicate_conds_map) {
+        fed_conds.emplace_back(std::move(curr_conds[repelicate_conds_map[index_name]]));
+    }
+
+    curr_conds = std::move(fed_conds);
+
+    // 检查正确与否
+    for (auto &index_name : index_col_names) {
+        std::cout << index_name << ",";
+    }
+    std::cout << "\n";
+
+    // if (tab.is_index(index_col_names)) return true;
+    return true;
 }
 
 /**
