@@ -75,7 +75,7 @@ public:
 
     inline int get_size() { return page_hdr->num_key; }
 
-    void set_size(int size) { page_hdr->num_key = size; }
+    inline void set_size(int size) { page_hdr->num_key = size; }
 
     int get_max_size() { return file_hdr->btree_order_ + 1; }
 
@@ -100,7 +100,7 @@ public:
 
     inline bool is_internal_page() { return !page_hdr->is_leaf; }
 
-    inline bool is_root_page() { return get_parent_page_no() == INVALID_PAGE_ID; }
+    inline bool is_root_page() { return get_parent_page_no() == IX_NO_PAGE; }
 
     inline void set_next_leaf(page_id_t page_no) { page_hdr->next_leaf = page_no; }
 
@@ -162,6 +162,7 @@ public:
      * @return int
      */
     int find_child(IxNodeHandle *child) {
+        // TODO：优化为什么不二分
         int rid_idx;
         for (rid_idx = 0; rid_idx < page_hdr->num_key; rid_idx++) {
             if (get_rid(rid_idx)->page_no == child->get_page_no()) {
