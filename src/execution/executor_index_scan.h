@@ -70,6 +70,7 @@ public:
         char *key = new char[index_meta_.col_tot_len];
 
         int offset = 0;
+        int equal_offset = 0; // 如果前面有等值查询，记录等值查询列值的长度
         int last_idx = 0; // 第一个范围查询位置
 
         for (auto &cond: conds_) {
@@ -82,10 +83,12 @@ public:
             if (cond.op != OP_EQ) {
                 break;
             }
+            equal_offset = offset;
             ++last_idx;
         }
 
         const int &&remaining_bytes = index_meta_.col_tot_len - offset;
+        const int &&un_equal_bytes = index_meta_.col_tot_len - equal_offset;
         const auto &last_cond = conds_[last_idx == conds_.size() ? last_idx - 1 : last_idx];
 
         switch (last_cond.op) {
@@ -100,27 +103,63 @@ public:
                 break;
             }
             case OP_GE: {
+                // where name >= 'bztyhnmj';
                 // 设置成最小值
                 memset(key + offset, 0, remaining_bytes);
                 lower = ih->lower_bound(key);
+                // 如果前面有等号需要重新更新上下界
+                // where w_id = 0 and name >= 'bztyhnmj';
+                if (last_idx > 0) {
+                    // 把后面的范围查询置最大 找上限
+                    // where w_id = 0
+                    memset(key + equal_offset, 0xff, un_equal_bytes);
+                    upper = ih->upper_bound(key);
+                }
                 break;
             }
             case OP_LE: {
+                // where name <= 'bztyhnmj';
                 // 设置成最大值
                 memset(key + offset, 0xff, remaining_bytes);
                 upper = ih->upper_bound(key);
+                // 如果前面有等号需要重新更新上下界
+                // where w_id = 0 and name <= 'bztyhnmj';
+                if (last_idx > 0) {
+                    // 把后面的范围查询清 0 找下限
+                    // where w_id = 0
+                    memset(key + equal_offset, 0, un_equal_bytes);
+                    lower = ih->lower_bound(key);
+                }
                 break;
             }
             case OP_GT: {
+                // where name > 'bztyhnmj';
                 // 设置成最小值
                 memset(key + offset, 0xff, remaining_bytes);
                 lower = ih->upper_bound(key);
+                // 如果前面有等号需要重新更新上下界
+                // where w_id = 0 and name > 'bztyhnmj';
+                if (last_idx > 0) {
+                    // 把后面的范围查询清 0 找上限
+                    // where w_id = 0
+                    memset(key + equal_offset, 0xff, un_equal_bytes);
+                    upper = ih->upper_bound(key);
+                }
                 break;
             }
             case OP_LT: {
+                // where name < 'bztyhnmj';
                 // 设置成最大值
                 memset(key + offset, 0, remaining_bytes);
                 upper = ih->lower_bound(key);
+                // 如果前面有等号需要重新更新上下界
+                // where w_id = 0 and name < 'bztyhnmj';
+                if (last_idx > 0) {
+                    // 把后面的范围查询清 0 找下限
+                    // where w_id = 0
+                    memset(key + equal_offset, 0, un_equal_bytes);
+                    lower = ih->lower_bound(key);
+                }
                 break;
             }
             case OP_NE:
@@ -134,7 +173,8 @@ public:
 
         scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
         while (!scan_->is_end()) {
-            rm_record_ = fh_->get_record(scan_->rid(), context_);
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
             if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
                 break;
             }
@@ -147,7 +187,8 @@ public:
             return;
         }
         for (scan_->next(); !scan_->is_end(); scan_->next()) {
-            rm_record_ = fh_->get_record(scan_->rid(), context_);
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
             if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
                 break;
             }
