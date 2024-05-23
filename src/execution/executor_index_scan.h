@@ -99,7 +99,7 @@ public:
         switch (last_cond.op) {
             // 全部都是等值查询
             case OP_EQ: {
-                // where name = 'bztyhnmj';
+                // where p_id = 0, name = 'bztyhnmj';
                 // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                 set_remaining_all_min(offset, last_idx, key);
                 lower = ih->lower_bound(key);
@@ -109,61 +109,73 @@ public:
                 break;
             }
             case OP_GE: {
-                // where name >= 'bztyhnmj';
-                // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-                set_remaining_all_min(offset, last_idx + 2, key);
-                lower = ih->lower_bound(key);
+                // where name >= 'bztyhnmj';                      last_idx = 0, + 1
+                // where name >= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
+                // where p_id = 3, name >= 'bztyhnmj';            last_idx = 1, + 1
+                // where p_id = 3, name >= 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 如果前面有等号需要重新更新上下界
+                // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
+                set_remaining_all_min(offset, last_idx + 1, key);
+                lower = ih->lower_bound(key);
                 // where w_id = 0 and name >= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询置最大 找上限
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-                    set_remaining_all_max(equal_offset, last_idx + 1, key);
+                    set_remaining_all_max(equal_offset, last_idx, key);
                     upper = ih->upper_bound(key);
                 }
                 break;
             }
             case OP_LE: {
-                // where name <= 'bztyhnmj';
+                // where name <= 'bztyhnmj';                      last_idx = 0, + 1
+                // where name <= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
+                // where p_id = 3, name <= 'bztyhnmj';            last_idx = 1, + 1
+                // where p_id = 3, name <= 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-                set_remaining_all_max(offset, last_idx + 2, key);
+                set_remaining_all_max(offset, last_idx + 1, key);
                 upper = ih->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name <= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-                    set_remaining_all_min(equal_offset, last_idx + 1, key);
+                    set_remaining_all_min(equal_offset, last_idx, key);
                     lower = ih->lower_bound(key);
                 }
                 break;
             }
             case OP_GT: {
-                // where name > 'bztyhnmj';
+                // where name > 'bztyhnmj';                      last_idx = 0, + 1
+                // where name > 'bztyhnmj' and id = 1;           last_idx = 0, + 1
+                // where p_id = 3, name > 'bztyhnmj';            last_idx = 1, + 1
+                // where p_id = 3, name > 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-                set_remaining_all_max(offset, last_idx + 2, key);
+                set_remaining_all_max(offset, last_idx + 1, key);
                 lower = ih->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name > 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找上限
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-                    set_remaining_all_max(equal_offset, last_idx + 1, key);
+                    set_remaining_all_max(equal_offset, last_idx, key);
                     upper = ih->upper_bound(key);
                 }
                 break;
             }
             case OP_LT: {
-                // where name < 'bztyhnmj';
+                // where name < 'bztyhnmj';                      last_idx = 0, + 1
+                // where name < 'bztyhnmj' and id = 1;           last_idx = 0, + 1
+                // where p_id = 3, name < 'bztyhnmj';            last_idx = 1, + 1
+                // where p_id = 3, name < 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-                set_remaining_all_min(offset, last_idx + 2, key);
+                set_remaining_all_min(offset, last_idx + 1, key);
                 upper = ih->lower_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name < 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-                    set_remaining_all_min(equal_offset, last_idx + 1, key);
+                    set_remaining_all_min(equal_offset, last_idx, key);
                     lower = ih->lower_bound(key);
                 }
                 break;
