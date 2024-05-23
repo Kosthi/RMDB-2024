@@ -173,6 +173,11 @@ int DiskManager::open_file(const std::string &path) {
         throw FileNotFoundError(path);
     }
 
+    // 注意不能重复打开相同文件
+    if (path2fd_.count(path)) {
+        throw FileNotClosedError(path);
+    }
+
     int fd = open(path.c_str(), O_RDWR);
     if (fd == -1) {
         throw InternalError("DiskManager::open_file: Open Error");
