@@ -45,23 +45,27 @@ public:
     // 这里 next 只会被调用一次
     std::unique_ptr<RmRecord> Next() override {
         for (auto &rid: rids_) {
-            auto &&record = fh_->get_record(rid, context_);
+            auto &&updated_record = fh_->get_record(rid, context_);
+            auto old_record = std::make_unique<RmRecord>(*updated_record);
+
             for (auto &set: set_clauses_) {
                 auto &&col_meta = tab_.get_col(set.lhs.col_name);
-                memcpy(record->data + col_meta->offset, set.rhs.raw->data, col_meta->len);
+                memcpy(updated_record->data + col_meta->offset, set.rhs.raw->data, col_meta->len);
             }
 
             // 先检查 key 是否是 unique
-            for (auto &[index_name, index] : tab_.indexes) {
+            for (auto &[index_name, index]: tab_.indexes) {
                 auto &&ih = sm_manager_->ihs_.at(index_name).get();
                 int offset = 0;
                 // TODO 优化 放到容器中
                 char *key = new char[index.col_tot_len];
                 for (size_t i = 0; i < index.col_num; ++i) {
-                    memcpy(key + offset, record->data + index.cols[i].offset, index.cols[i].len);
+                    memcpy(key + offset, updated_record->data + index.cols[i].offset, index.cols[i].len);
                     offset += index.cols[i].len;
                 }
-                if (!ih->is_unique(key, context_->txn_)) {
+                // TODO 如果 update a = 5 where a = 5，应该在优化器阶段优化掉
+                Rid unique_rid{};
+                if (!ih->is_unique(key, unique_rid, context_->txn_) && rid != unique_rid) {
                     delete []key;
                     throw NonUniqueIndexError("", {index_name});
                 }
@@ -69,19 +73,23 @@ public:
             }
 
             // Unique Index -> Insert into index
-            for (auto &[index_name, index] : tab_.indexes) {
+            for (auto &[index_name, index]: tab_.indexes) {
                 auto ih = sm_manager_->ihs_.at(index_name).get();
-                char *key = new char[index.col_tot_len];
+                char *old_key = new char[index.col_tot_len];
+                char *new_key = new char[index.col_tot_len];
                 int offset = 0;
                 for (size_t i = 0; i < index.col_num; ++i) {
-                    memcpy(key + offset, record->data + index.cols[i].offset, index.cols[i].len);
+                    memcpy(old_key + offset, old_record->data + index.cols[i].offset, index.cols[i].len);
+                    memcpy(new_key + offset, updated_record->data + index.cols[i].offset, index.cols[i].len);
                     offset += index.cols[i].len;
                 }
-                ih->insert_entry(key, rid, context_->txn_);
-                delete []key;
+                ih->delete_entry(old_key, context_->txn_);
+                ih->insert_entry(new_key, rid, context_->txn_);
+                delete []old_key;
+                delete []new_key;
             }
 
-            fh_->update_record(rid, record->data, context_);
+            fh_->update_record(rid, updated_record->data, context_);
         }
         return nullptr;
     }
