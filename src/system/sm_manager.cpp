@@ -185,7 +185,7 @@ void SmManager::show_indexs(std::string &table_name, Context *context) {
     std::ofstream outfile("output.txt", std::ios::out | std::ios::app);
     RecordPrinter printer(3);
     std::vector<std::string> rec_str{table_name, "unique", ""};
-    std::string format = "|  " + table_name + " | unique | (";
+    std::string format = "| " + table_name + " | unique | (";
 
     std::ostringstream cols_stream;
     for (const auto &[_, index]: db_.tabs_[table_name].indexes) {
