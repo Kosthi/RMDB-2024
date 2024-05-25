@@ -49,6 +49,17 @@ namespace ast {
             return m.at(type);
         }
 
+        static std::string aggType2str(AggType type) {
+            static std::map<AggType, std::string> m{
+                {AGG_COL, "AGG_COL"},
+                {AGG_COUNT, "AGG_COUNT"},
+                {AGG_MAX, "AGG_MAX"},
+                {AGG_MIN, "AGG_MIN"},
+                {AGG_SUM, "AGG_SUM"}
+            };
+            return m.at(type);
+        }
+
         static std::string op2str(SvCompOp op) {
             static std::map<SvCompOp, std::string> m{
                 {SV_OP_EQ, "=="},
@@ -74,7 +85,9 @@ namespace ast {
         static void print_node(const std::shared_ptr<TreeNode> &node, int offset) {
             std::cout << offset2string(offset);
             offset += 2;
-            if (auto x = std::dynamic_pointer_cast<Help>(node)) {
+            if (node == nullptr) {
+                std::cout << "NULLPTR\n";
+            } else if (auto x = std::dynamic_pointer_cast<Help>(node)) {
                 std::cout << "HELP\n";
             } else if (auto x = std::dynamic_pointer_cast<ShowTables>(node)) {
                 std::cout << "SHOW_TABLES\n";
@@ -133,6 +146,16 @@ namespace ast {
                 print_node(x->lhs, offset);
                 print_val(op2str(x->op), offset);
                 print_node(x->rhs, offset);
+            } else if (auto x = std::dynamic_pointer_cast<BoundExpr>(node)) {
+                std::cout << "BOUND_EXPR\n";
+                print_val(aggType2str(x->type), offset);
+                print_node(x->col, offset);
+                print_val(x->alias, offset);
+            } else if (auto x = std::dynamic_pointer_cast<HavingExpr>(node)) {
+                std::cout << "HAVING_EXPR\n";
+                print_node(x->lhs, offset);
+                print_val(op2str(x->op), offset);
+                print_node(x->rhs, offset);
             } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
                 std::cout << "INSERT\n";
                 print_val(x->tab_name, offset);
@@ -148,9 +171,11 @@ namespace ast {
                 print_node_list(x->conds, offset);
             } else if (auto x = std::dynamic_pointer_cast<SelectStmt>(node)) {
                 std::cout << "SELECT\n";
-                print_node_list(x->cols, offset);
+                print_node_list(x->select_list, offset);
                 print_val_list(x->tabs, offset);
-                print_node_list(x->conds, offset);
+                print_node_list(x->conds, offset); // where
+                print_node_list(x->group_bys, offset); // group by
+                print_node_list(x->havings, offset); // having
             } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
                 std::cout << "BEGIN\n";
             } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {

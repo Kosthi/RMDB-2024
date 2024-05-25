@@ -32,6 +32,14 @@ namespace ast {
         OrderBy_DESC
     };
 
+    enum AggType {
+        AGG_COUNT,
+        AGG_MAX,
+        AGG_MIN,
+        AGG_SUM,
+        AGG_COL // 没有聚合函数
+    };
+
     enum SetKnobType {
         EnableNestLoop, EnableSortMerge
     };
@@ -190,12 +198,30 @@ namespace ast {
         }
     };
 
+    struct BoundExpr : public TreeNode {
+        std::shared_ptr<Col> col;
+        AggType type;
+        std::string alias; // 别名
+
+        // BoundExpr(std::shared_ptr<Col> col_) : col(std::move(col_)) {}
+
+        BoundExpr(std::shared_ptr<Col> col_, AggType type_) : col(std::move(col_)),
+                                                              type(type_) {
+        }
+
+        BoundExpr(std::shared_ptr<Col> col_, AggType type_, std::string alias_) : col(std::move(col_)),
+            type(type_), alias(std::move(alias_)) {
+        }
+
+        inline bool is_aggregate() const { return type != AGG_COL; }
+    };
+
     struct OrderBy : public TreeNode {
         std::shared_ptr<Col> cols;
         OrderByDir orderby_dir;
 
         OrderBy(std::shared_ptr<Col> cols_, OrderByDir orderby_dir_) : cols(std::move(cols_)),
-                                                                       orderby_dir(std::move(orderby_dir_)) {
+                                                                       orderby_dir(orderby_dir_) {
         }
     };
 
@@ -243,20 +269,41 @@ namespace ast {
         }
     };
 
+    struct HavingExpr : public TreeNode {
+        std::shared_ptr<BoundExpr> lhs;
+        SvCompOp op;
+        // 先不支持 COUNT(*) <= SUM(id);
+        std::shared_ptr<Expr> rhs;
+
+        HavingExpr(std::shared_ptr<BoundExpr> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_) : lhs(std::move(lhs_)),
+            op(op_),
+            rhs(std::move(rhs_)) {
+        }
+    };
+
     struct SelectStmt : public TreeNode {
-        std::vector<std::shared_ptr<Col> > cols;
+        std::vector<std::shared_ptr<BoundExpr> > select_list;
         std::vector<std::string> tabs;
-        std::vector<std::shared_ptr<BinaryExpr> > conds;
         std::vector<std::shared_ptr<JoinExpr> > jointree;
+        std::vector<std::shared_ptr<Col> > group_bys;
+        // 放 where 谓词，对元组过滤
+        std::vector<std::shared_ptr<BinaryExpr> > conds;
+        // 放 having 谓词，对分组过滤
+        std::vector<std::shared_ptr<HavingExpr> > havings;
 
         bool has_sort;
         std::shared_ptr<OrderBy> order;
 
-        SelectStmt(std::vector<std::shared_ptr<Col> > cols_,
+        SelectStmt(std::vector<std::shared_ptr<BoundExpr> > select_list_,
                    std::vector<std::string> tabs_,
                    std::vector<std::shared_ptr<BinaryExpr> > conds_,
-                   std::shared_ptr<OrderBy> order_) : cols(std::move(cols_)), tabs(std::move(tabs_)),
+                   std::vector<std::shared_ptr<Col> > group_bys_,
+                   std::vector<std::shared_ptr<HavingExpr> > havings_,
+                   std::shared_ptr<OrderBy> order_) : select_list(std::move(select_list_)),
+                                                      tabs(std::move(tabs_)),
                                                       conds(std::move(conds_)),
+                                                      group_bys(std::move(group_bys_)),
+                                                      havings(std::move(havings_)),
                                                       order(std::move(order_)) {
             has_sort = (bool) order;
         }
@@ -278,6 +325,7 @@ namespace ast {
         std::string sv_str;
         bool sv_bool;
         OrderByDir sv_orderby_dir;
+        AggType sv_agg_type;
         std::vector<std::string> sv_strs;
 
         std::shared_ptr<TreeNode> sv_node;
@@ -294,8 +342,15 @@ namespace ast {
         std::shared_ptr<Value> sv_val;
         std::vector<std::shared_ptr<Value> > sv_vals;
 
+        // replace with BoundExpr, not use now
         std::shared_ptr<Col> sv_col;
         std::vector<std::shared_ptr<Col> > sv_cols;
+
+        std::shared_ptr<BoundExpr> sv_bound;
+        std::vector<std::shared_ptr<BoundExpr> > sv_bounds;
+
+        std::shared_ptr<HavingExpr> sv_having;
+        std::vector<std::shared_ptr<HavingExpr> > sv_havings;
 
         std::shared_ptr<SetClause> sv_set_clause;
         std::vector<std::shared_ptr<SetClause> > sv_set_clauses;

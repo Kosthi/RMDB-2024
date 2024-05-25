@@ -35,7 +35,13 @@ int main() {
         "help;",
         "",
     };
-    for (auto &sql : sqls) {
+    std::vector<std::string> aggSqls = {
+        "select v1, count(*) as v2, count(v1) as v3, sum(v1) as v4, max(v1) as v5, min(v1) as v6 from t1;",
+        "select id,MAX(score) as max_score,MIN(score) as min_score,SUM(score) as sum_score from grade group by id;",
+        "select id,MAX(score) as max_score from grade group by id, course having v1 > 0;", // 需要手动检查
+        "select id, MAX(score) as max_score from grade where MAX(score) > 90 group by id;" // 语法分析报错时抛出即可
+    };
+    for (auto &sql: aggSqls) {
         std::cout << sql << std::endl;
         YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
         assert(yyparse() == 0);

@@ -23,6 +23,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
+COUNT MAX MIN SUM AS GROUP HAVING
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
@@ -41,10 +42,13 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName
+%type <sv_str> tbName colName alias asClause
 %type <sv_strs> tableList colNameList
 %type <sv_col> col
-%type <sv_cols> colList selector
+%type <sv_cols> colList group_by_clause
+%type <sv_bound> select_item
+%type <sv_bounds> select_list
+%type <sv_havings> having_clause having_clauses
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
@@ -158,9 +162,9 @@ dml:
     {
         $$ = std::make_shared<UpdateStmt>($2, $4, $5);
     }
-    |   SELECT selector FROM tableList optWhereClause opt_order_clause
+    |   SELECT select_list FROM tableList optWhereClause group_by_clause having_clauses opt_order_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6);
+        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8);
     }
     ;
 
@@ -342,12 +346,54 @@ setClause:
     }
     ;
 
-selector:
+asClause:
+        AS alias
+    {
+        $$ = $2;
+    }
+    |   { $$ = ""; }
+    ;
+
+select_item:
+        col asClause
+    {
+        $$ = std::make_shared<BoundExpr>($1, AGG_COL, $2);
+    }
+    |   COUNT '(' '*' ')' asClause
+    {
+        $$ = std::make_shared<BoundExpr>(nullptr, AGG_COUNT, $5);
+    }
+    |   COUNT '(' col ')' asClause
+    {
+        $$ = std::make_shared<BoundExpr>($3, AGG_COUNT, $5);
+    }
+    |   MAX '(' col ')' asClause
+    {
+        $$ = std::make_shared<BoundExpr>($3, AGG_MAX, $5);
+    }
+    |   MIN '(' col ')' asClause
+    {
+        $$ = std::make_shared<BoundExpr>($3, AGG_MIN, $5);
+    }
+    |   SUM '(' col ')' asClause
+    {
+        $$ = std::make_shared<BoundExpr>($3, AGG_SUM, $5);
+    }
+    ;
+
+select_list:
         '*'
     {
         $$ = {};
     }
-    |   colList
+    |   select_item
+    {
+        $$ = std::vector<std::shared_ptr<BoundExpr>>{$1};
+    }
+    |   select_list ',' select_item
+    {
+        $$.push_back($3);
+    }
     ;
 
 tableList:
@@ -386,6 +432,34 @@ opt_asc_desc:
     |       { $$ = OrderBy_DEFAULT; }
     ;    
 
+group_by_clause:
+        GROUP BY colList
+    {
+        $$ = $3;
+    }
+    |   /* epsilon */ { /* ignore*/ }
+    ;
+
+having_clause:
+        select_item op expr
+    {
+        $$.emplace_back(std::make_shared<HavingExpr>($1, $2, $3));
+    }
+    |   having_clause AND select_item op expr
+    {
+        $$.emplace_back(std::make_shared<HavingExpr>($3, $4, $5));
+    }
+    |   /* epsilon */ { /* ignore*/ }
+    ;
+
+having_clauses:
+        HAVING having_clause
+    {
+        $$ = $2;
+    }
+    |   /* epsilon */ { /* ignore*/ }
+    ;
+
 set_knob_type:
     ENABLE_NESTLOOP { $$ = EnableNestLoop; }
     |   ENABLE_SORTMERGE { $$ = EnableSortMerge; }
@@ -394,4 +468,6 @@ set_knob_type:
 tbName: IDENTIFIER;
 
 colName: IDENTIFIER;
+
+alias: IDENTIFIER;
 %%
