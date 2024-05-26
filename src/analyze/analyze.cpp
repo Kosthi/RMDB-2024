@@ -68,6 +68,9 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
 
         if (query->cols.empty()) {
             // select all columns
+            if (!x->group_bys.empty() || !x->havings.empty()) {
+                throw InternalError("select * 不能包含聚合和分组子句！");
+            }
             for (auto &col: all_cols) {
                 query->cols.emplace_back(TabCol{col.tab_name, col.name});
             }
@@ -75,7 +78,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             // 表名不存在，从列名推断表名；如果表名存在则对列做检查
             for (std::size_t i = 0; i < query->cols.size(); ++i) {
                 // COUNT(*)
-                if (query->agg_types[i] == AGG_COUNT && query->cols[i].tab_name.empty() && query->cols[i].col_name.empty()) {
+                if (query->agg_types[i] == AGG_COUNT && query->cols[i].tab_name.empty() && query->cols[i].col_name.
+                    empty()) {
                     continue;
                 }
                 // TODO 直接引用减少拷贝
@@ -87,12 +91,12 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         get_clause(x->conds, query->conds);
 
         // 处理 group by 条件
-        for (auto &group_by : x->group_bys) {
+        for (auto &group_by: x->group_bys) {
             query->group_bys.emplace_back(TabCol{group_by->tab_name, group_by->col_name});
         }
 
         // 填充表名和列校验
-        for (auto &tab_col : query->group_bys) {
+        for (auto &tab_col: query->group_bys) {
             tab_col = check_column(all_cols, tab_col);
         }
 
@@ -103,7 +107,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             }
             bool has_col = false;
             bool has_agg = false;
-            for (auto &agg_type : query->agg_types) {
+            for (auto &agg_type: query->agg_types) {
                 has_col |= agg_type == AGG_COL;
                 has_agg |= agg_type != AGG_COL;
                 if (has_col && has_agg) {
@@ -115,8 +119,9 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             // select id , score from grade group by course;
             for (std::size_t i = 0; i < query->cols.size(); ++i) {
                 if (query->agg_types[i] == AGG_COL) {
-                    auto && pos = std::find_if(query->group_bys.begin(), query->group_bys.end(), [&](TabCol &tab_col) {
-                        return tab_col.tab_name == query->cols[i].tab_name && tab_col.col_name == query->cols[i].col_name;
+                    auto &&pos = std::find_if(query->group_bys.begin(), query->group_bys.end(), [&](TabCol &tab_col) {
+                        return tab_col.tab_name == query->cols[i].tab_name && tab_col.col_name == query->cols[i].
+                               col_name;
                     });
                     if (pos == query->group_bys.end()) {
                         throw InternalError("SELECT 列表中不能出现没有在 GROUP BY 子句中的非聚集列！");
@@ -234,8 +239,8 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
     }
 }
 
-void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr>> &sv_conds,
-                         std::vector<Condition> &conds) {
+void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr> > &sv_conds,
+                                std::vector<Condition> &conds) {
     conds.clear();
     for (auto &expr: sv_conds) {
         Condition cond;
