@@ -101,10 +101,12 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             if (!x->havings.empty()) {
                 throw InternalError("没有 GROUP BY 子句但是有 HAVING 子句！");
             }
+            bool has_col = false;
             bool has_agg = false;
             for (auto &agg_type : query->agg_types) {
-                has_agg = agg_type != AGG_COL;
-                if (has_agg && agg_type == AGG_COL) {
+                has_col |= agg_type == AGG_COL;
+                has_agg |= agg_type != AGG_COL;
+                if (has_col && has_agg) {
                     throw InternalError("没有 GROUP BY 子句且有聚合函数，但包含非聚合值！");
                 }
             }

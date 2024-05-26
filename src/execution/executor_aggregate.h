@@ -242,6 +242,7 @@ private:
 
     AggregateHashTable ht_;
     std::unordered_map<AggregateKey, AggregateValue>::const_iterator it_;
+    bool has_group_col_{false};
 
 public:
     AggregateExecutor(std::unique_ptr<AbstractExecutor> prev, const std::vector<TabCol> &sel_cols,
@@ -262,6 +263,7 @@ public:
         len_ = 0;
         for (std::size_t i = 0; i < sel_cols.size(); ++i) {
             auto &sel_col = sel_cols[i];
+            has_group_col_ |= agg_types_[i] == AGG_COL;
             // count(*)
             if (agg_types_[i] == AGG_COUNT && sel_col.tab_name.empty() && sel_col.col_name.empty()) {
                 // 占位
@@ -481,10 +483,12 @@ public:
         // }
 
         // 先生成左 key 右 value 的形式，具体列顺序由投影算子执行
-        for (std::size_t i = 0; i < group_bys_.size(); ++i) {
-            auto &key = it_->first.group_bys[i];
-            memcpy(record->data + offset, key.raw->data, group_bys_[i].len);
-            offset += group_bys_[i].len;
+        if (has_group_col_) {
+            for (std::size_t i = 0; i < group_bys_.size(); ++i) {
+                auto &key = it_->first.group_bys[i];
+                memcpy(record->data + offset, key.raw->data, group_bys_[i].len);
+                offset += group_bys_[i].len;
+            }
         }
 
         for (std::size_t i = 0; i < agg_types_.size(); ++i) {
