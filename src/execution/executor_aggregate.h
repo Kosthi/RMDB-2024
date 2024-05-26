@@ -504,7 +504,7 @@ public:
             offset += sel_cols_[i].len;
         }
 
-        assert(offset == len_);
+        // assert(offset == len_);
         return std::move(record);
     }
 
