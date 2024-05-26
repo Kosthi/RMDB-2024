@@ -17,6 +17,14 @@ enum JoinType {
     INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN
 };
 
+enum AggType {
+    AGG_COUNT,
+    AGG_MAX,
+    AGG_MIN,
+    AGG_SUM,
+    AGG_COL // 没有聚合函数
+};
+
 namespace ast {
     enum SvType {
         SV_TYPE_INT, SV_TYPE_FLOAT, SV_TYPE_STRING, SV_TYPE_BOOL
@@ -30,14 +38,6 @@ namespace ast {
         OrderBy_DEFAULT,
         OrderBy_ASC,
         OrderBy_DESC
-    };
-
-    enum AggType {
-        AGG_COUNT,
-        AGG_MAX,
-        AGG_MIN,
-        AGG_SUM,
-        AGG_COL // 没有聚合函数
     };
 
     enum SetKnobType {

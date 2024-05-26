@@ -43,7 +43,9 @@ public:
         for (size_t i = 0; i < values_.size(); i++) {
             auto &col = tab_.cols[i];
             auto &val = values_[i];
-            if (col.type != val.type) {
+            if (col.type == TYPE_FLOAT && val.type == TYPE_INT) {
+                val.set_float(static_cast<float>(val.int_val));
+            } else if (col.type != val.type) {
                 throw IncompatibleTypeError(coltype2str(col.type), coltype2str(val.type));
             }
             val.init_raw(col.len);
@@ -51,7 +53,7 @@ public:
         }
 
         // 先检查 key 是否是 unique
-        for (auto &[index_name, index] : tab_.indexes) {
+        for (auto &[index_name, index]: tab_.indexes) {
             auto ih = sm_manager_->ihs_.at(index_name).get();
             int offset = 0;
             // TODO 优化 放到容器中
@@ -72,7 +74,7 @@ public:
         rid_ = fh_->insert_record(rec.data, context_);
 
         // Unique Index -> Insert into index
-        for (auto &[index_name, index] : tab_.indexes) {
+        for (auto &[index_name, index]: tab_.indexes) {
             auto ih = sm_manager_->ihs_.at(index_name).get();
             char *key = new char[index.col_tot_len];
             int offset = 0;

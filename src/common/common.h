@@ -15,7 +15,10 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
+#include <parser/ast.h>
+
 #include "defs.h"
 #include "record/rm_defs.h"
 
@@ -72,11 +75,26 @@ struct Value {
             memcpy(raw->data, str_val.c_str(), str_val.size());
         }
     }
+
+    bool operator==(const Value& other) const {
+        if (type != other.type) return false;
+        switch (type) {
+            case TYPE_INT:
+                return int_val == other.int_val;
+            case TYPE_FLOAT:
+                return float_val == other.float_val;
+            case TYPE_STRING:
+                return str_val == other.str_val;
+            default:
+                return false;
+        }
+    }
 };
 
 enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };
 
 struct Condition {
+    AggType agg_type;
     TabCol lhs_col; // left-hand side column
     CompOp op; // comparison operator
     bool is_rhs_val; // true if right-hand side is a value (not a column)

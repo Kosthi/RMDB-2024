@@ -24,10 +24,22 @@ class Query{
     public:
     std::shared_ptr<ast::TreeNode> parse;
     // TODO jointree
-    // where条件
+
+    // where 条件
     std::vector<Condition> conds;
+
+    // group by
+    std::vector<TabCol> group_bys;
+    // having 条件
+    std::vector<Condition> havings;
+
     // 投影列
     std::vector<TabCol> cols;
+    // 聚合类型 没有聚合类型为AGG_COL
+    std::vector<AggType> agg_types;
+    // as 别名
+    std::vector<std::string> alias;
+
     // 表名
     std::vector<std::string> tables;
     // update 的set 值
@@ -53,8 +65,8 @@ private:
     TabCol check_column(const std::vector<ColMeta> &all_cols, TabCol target);
     void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
     void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds);
+    void get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr>> &sv_conds, std::vector<Condition> &conds);
     void check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds);
     Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
     CompOp convert_sv_comp_op(ast::SvCompOp op);
 };
-

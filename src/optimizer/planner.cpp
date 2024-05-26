@@ -55,10 +55,10 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
     }
 
     int max_len = 0, max_equals = 0, cur_len = 0, cur_equals = 0;
-    for (auto &[index_name, index] : tab.indexes) {
+    for (auto &[index_name, index]: tab.indexes) {
         cur_len = cur_equals = 0;
         auto &cols = index.cols;
-        for (auto &col : index.cols) {
+        for (auto &col: index.cols) {
             if (index_set.count(col.name) == 0) {
                 break;
             }
@@ -121,7 +121,7 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
 
     // 连接剩下的非索引列
     // 先清除已经在set中的
-    for (auto &index_name : index_col_names) {
+    for (auto &index_name: index_col_names) {
         if (index_set.count(index_name)) {
             index_set.erase(index_name);
             fed_conds.emplace_back(std::move(curr_conds[conds_map[index_name]]));
@@ -129,19 +129,19 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
     }
 
     // 连接 set 中剩下的
-    for (auto &index_name : index_set) {
+    for (auto &index_name: index_set) {
         fed_conds.emplace_back(std::move(curr_conds[conds_map[index_name]]));
     }
 
     // 连接重复的，如果有
-    for (auto &[index_name, idx] : repelicate_conds_map) {
+    for (auto &[index_name, idx]: repelicate_conds_map) {
         fed_conds.emplace_back(std::move(curr_conds[repelicate_conds_map[index_name]]));
     }
 
     curr_conds = std::move(fed_conds);
 
     // 检查正确与否
-    for (auto &index_name : index_col_names) {
+    for (auto &index_name: index_col_names) {
         std::cout << index_name << ",";
     }
     std::cout << "\n";
@@ -402,14 +402,33 @@ std::shared_ptr<Plan> Planner::generate_sort_plan(std::shared_ptr<Query> query, 
  * @param conds select plan 选取条件
  */
 std::shared_ptr<Plan> Planner::generate_select_plan(std::shared_ptr<Query> query, Context *context) {
-    //逻辑优化
+    // 逻辑优化
     query = logical_optimization(std::move(query), context);
 
-    //物理优化
+    // 物理优化
     auto sel_cols = query->cols;
     std::shared_ptr<Plan> plannerRoot = physical_optimization(query, context);
+
+    // 检查是否是聚合语句，有 group 要走聚合
+    bool is_agg = !query->group_bys.empty();
+    if (!is_agg) {
+        for (auto &agg_type : query->agg_types) {
+            if (agg_type != AGG_COL) {
+                is_agg = true;
+                break;
+            }
+        }
+    }
+
+    // 生成聚合计划
+    if (is_agg) {
+        plannerRoot = std::make_shared<AggregatePlan>(T_Aggregate, std::move(plannerRoot), query->cols,
+            query->agg_types, query->group_bys, query->havings);
+    }
+
+    // TODO 待会处理别名
     plannerRoot = std::make_shared<ProjectionPlan>(T_Projection, std::move(plannerRoot),
-                                                   std::move(sel_cols));
+                                                   std::move(sel_cols), std::move(query->alias));
 
     return plannerRoot;
 }

@@ -361,7 +361,7 @@ select_item:
     }
     |   COUNT '(' '*' ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>(nullptr, AGG_COUNT, $5);
+        $$ = std::make_shared<BoundExpr>(std::make_shared<Col>("", ""), AGG_COUNT, $5);
     }
     |   COUNT '(' col ')' asClause
     {

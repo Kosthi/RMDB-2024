@@ -28,8 +28,38 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         }
 
         // 处理target list，再target list中添加上表名，例如 a.id
-        for (auto &sv_sel_col: x->cols) {
-            query->cols.emplace_back(TabCol{sv_sel_col->tab_name, sv_sel_col->col_name});
+        for (auto &item: x->select_list) {
+            query->cols.emplace_back(TabCol{item->col->tab_name, item->col->col_name});
+            query->agg_types.emplace_back(item->type);
+            if (query->agg_types.back() != AGG_COL && item->alias.empty()) {
+                switch (query->agg_types.back()) {
+                    case AGG_COUNT: {
+                        // count(*)
+                        if (item->col->col_name.empty()) {
+                            query->alias.emplace_back("COUNT(*)");
+                        } else {
+                            query->alias.emplace_back("COUNT(" + item->col->col_name + ")");
+                        }
+                        break;
+                    }
+                    case AGG_MAX: {
+                        query->alias.emplace_back("MAX(" + item->col->col_name + ")");
+                        break;
+                    }
+                    case AGG_MIN: {
+                        query->alias.emplace_back("MIN(" + item->col->col_name + ")");
+                        break;
+                    }
+                    case AGG_SUM: {
+                        query->alias.emplace_back("SUM(" + item->col->col_name + ")");
+                        break;
+                    }
+                    default:
+                        throw InternalError("Unexpected aggregate type！");
+                }
+            } else {
+                query->alias.emplace_back(item->alias);
+            }
         }
 
         std::vector<ColMeta> all_cols;
@@ -43,13 +73,62 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             }
         } else {
             // 表名不存在，从列名推断表名；如果表名存在则对列做检查
-            for (auto &sel_col: query->cols) {
-                sel_col = check_column(all_cols, sel_col); // 列元数据校验
+            for (std::size_t i = 0; i < query->cols.size(); ++i) {
+                // COUNT(*)
+                if (query->agg_types[i] == AGG_COUNT && query->cols[i].tab_name.empty() && query->cols[i].col_name.empty()) {
+                    continue;
+                }
+                // TODO 直接引用减少拷贝
+                query->cols[i] = check_column(all_cols, query->cols[i]); // 列元数据校验
             }
         }
-        // 处理where条件
+
+        // 处理 where 条件
         get_clause(x->conds, query->conds);
+
+        // 处理 group by 条件
+        for (auto &group_by : x->group_bys) {
+            query->group_bys.emplace_back(TabCol{group_by->tab_name, group_by->col_name});
+        }
+
+        // 填充表名和列校验
+        for (auto &tab_col : query->group_bys) {
+            tab_col = check_column(all_cols, tab_col);
+        }
+
+        // 没有 group，不能出现 AGG_COL，必须都是聚合函数
+        if (query->group_bys.empty()) {
+            if (!x->havings.empty()) {
+                throw InternalError("没有 GROUP BY 子句但是有 HAVING 子句！");
+            }
+            bool has_agg = false;
+            for (auto &agg_type : query->agg_types) {
+                has_agg = agg_type != AGG_COL;
+                if (has_agg && agg_type == AGG_COL) {
+                    throw InternalError("没有 GROUP BY 子句且有聚合函数，但包含非聚合值！");
+                }
+            }
+        } else {
+            // SELECT 列表中不能出现没有在 GROUP BY 子句中的非聚集列
+            // select id , score from grade group by course;
+            for (std::size_t i = 0; i < query->cols.size(); ++i) {
+                if (query->agg_types[i] == AGG_COL) {
+                    auto && pos = std::find_if(query->group_bys.begin(), query->group_bys.end(), [&](TabCol &tab_col) {
+                        return tab_col.tab_name == query->cols[i].tab_name && tab_col.col_name == query->cols[i].col_name;
+                    });
+                    if (pos == query->group_bys.end()) {
+                        throw InternalError("SELECT 列表中不能出现没有在 GROUP BY 子句中的非聚集列！");
+                    }
+                }
+            }
+        }
+
+        // 处理 having 条件
+        get_having_clause(x->havings, query->havings);
+
+        // 推断表名和检查左右类型是否匹配
         check_clause(query->tables, query->conds);
+        check_clause(query->tables, query->havings);
     } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
         /** TODO: */
         // 构造set_clauses
@@ -113,7 +192,8 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol target
         /** TODO: Make sure target column exists */
         bool not_exist = true;
         for (auto &col: all_cols) {
-            if (col.name == target.col_name) {
+            // select t.id from t,d where id = 1;
+            if (col.tab_name == target.tab_name && col.name == target.col_name) {
                 not_exist = false;
                 break;
             }
@@ -138,6 +218,7 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
     conds.clear();
     for (auto &expr: sv_conds) {
         Condition cond;
+        cond.agg_type = AGG_COL;
         cond.lhs_col = {.tab_name = expr->lhs->tab_name, .col_name = expr->lhs->col_name};
         cond.op = convert_sv_comp_op(expr->op);
         if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
@@ -151,12 +232,47 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
     }
 }
 
+void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr>> &sv_conds,
+                         std::vector<Condition> &conds) {
+    conds.clear();
+    for (auto &expr: sv_conds) {
+        Condition cond;
+        // having 语句左侧必须是聚合函数
+        if (expr->lhs->type == AGG_COL) {
+            throw InternalError("Having 语句左侧必须是聚合函数！");
+        }
+        cond.agg_type = expr->lhs->type;
+        // 如果是 having count(*) > 1 这里为空
+        cond.lhs_col = {.tab_name = expr->lhs->col->tab_name, .col_name = expr->lhs->col->col_name};
+        cond.op = convert_sv_comp_op(expr->op);
+        if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
+            cond.is_rhs_val = true;
+            cond.rhs_val = convert_sv_value(rhs_val);
+        } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
+            // 右边一定是数值
+            throw InternalError("Having 语句右侧应该为数值！");
+            // cond.is_rhs_val = false;
+            // cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
+        }
+        conds.emplace_back(cond);
+    }
+}
+
 void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds) {
     // auto all_cols = get_all_cols(tab_names);
     std::vector<ColMeta> all_cols;
     get_all_cols(tab_names, all_cols);
     // Get raw values in where clause
     for (auto &cond: conds) {
+        // count(*)
+        if (cond.agg_type == AGG_COUNT && cond.lhs_col.tab_name.empty() && cond.lhs_col.col_name.empty()) {
+            if (cond.rhs_val.type == TYPE_INT) {
+                cond.rhs_val.init_raw(sizeof(int));
+            } else {
+                throw IncompatibleTypeError("INT", coltype2str(cond.rhs_val.type));
+            }
+            continue;
+        }
         // Infer table name from column name
         cond.lhs_col = check_column(all_cols, cond.lhs_col);
         if (!cond.is_rhs_val) {

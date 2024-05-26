@@ -22,22 +22,29 @@ private:
     size_t len_; // 字段总长度
     std::vector<size_t> proj_idxs_; // 每个投影的字段在原先表所有字段的索引
     const std::vector<ColMeta> &prev_cols_;
+    bool is_agg_{false};
 
 public:
     ProjectionExecutor(std::unique_ptr<AbstractExecutor> prev,
                        const std::vector<TabCol> &proj_cols): prev_(std::move(prev)), prev_cols_(prev_->cols()) {
-        size_t curr_offset = 0;
-        for (auto &proj_col: proj_cols) {
-            // 得到需要投影的列在所有列中的位置
-            auto &&pos = get_col(prev_cols_, proj_col);
-            // 计算偏移量
-            proj_idxs_.emplace_back(pos - prev_cols_.begin());
-            auto col = *pos;
-            col.offset = curr_offset;
-            curr_offset += col.len;
-            proj_cols_.emplace_back(col);
+        if (prev_->getType() == "AggregateExecutor") {
+            is_agg_ = true;
+            // 这里是引用不能拷贝，聚合调用 begin 后会自动调整 offset
+            // proj_cols_ = prev_cols_;
+        } else {
+            size_t curr_offset = 0;
+            for (auto &proj_col: proj_cols) {
+                // 得到需要投影的列在所有列中的位置
+                auto &&pos = get_col(prev_cols_, proj_col);
+                // 计算偏移量
+                proj_idxs_.emplace_back(pos - prev_cols_.begin());
+                auto col = *pos;
+                col.offset = curr_offset;
+                curr_offset += col.len;
+                proj_cols_.emplace_back(col);
+            }
+            len_ = curr_offset;
         }
-        len_ = curr_offset;
     }
 
     void beginTuple() override { prev_->beginTuple(); }
@@ -45,6 +52,9 @@ public:
     void nextTuple() override { prev_->nextTuple(); }
 
     std::unique_ptr<RmRecord> Next() override {
+        if (is_agg_) {
+            return std::move(prev_->Next());
+        }
         // 满足谓词条件的原记录（这里不能使用std::move，字符串乱码？）
         auto &&prev_record = prev_->Next();
         // 要投影的记录
@@ -65,7 +75,7 @@ public:
     bool is_end() const { return prev_->is_end(); }
 
     // 需要实现
-    const std::vector<ColMeta> &cols() const override { return proj_cols_; }
+    const std::vector<ColMeta> &cols() const override { return is_agg_ ? prev_cols_ : proj_cols_; }
 
     size_t tupleLen() const override { return len_; }
 };
