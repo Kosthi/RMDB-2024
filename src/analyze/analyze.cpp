@@ -28,8 +28,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         }
 
         // 处理target list，再target list中添加上表名，例如 a.id
-        for (auto &sv_sel_col: x->cols) {
-            query->cols.emplace_back(TabCol{sv_sel_col->tab_name, sv_sel_col->col_name});
+        for (auto &item: x->select_list) {
+            query->cols.emplace_back(TabCol{item->col->tab_name, item->col->col_name});
         }
 
         std::vector<ColMeta> all_cols;
