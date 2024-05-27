@@ -257,6 +257,7 @@ private:
     AggregateHashTable ht_;
     std::unordered_map<AggregateKey, AggregateValue>::const_iterator it_;
     bool has_group_col_{false};
+    bool is_empty_table_{false};
 
 public:
     AggregateExecutor(std::unique_ptr<AbstractExecutor> prev, const std::vector<TabCol> &sel_cols,
@@ -309,16 +310,16 @@ public:
                 having_cols_.back().len = sizeof(int);
                 // 改和不改都没事
                 having_cols_.back().offset = sizeof(int);
-                } else {
-                    having_cols_.emplace_back(*get_col(cols_, having_cond.lhs_col));
-                    // count(course)
-                    if (having_cond.agg_type == AGG_COUNT && having_cols_.back().type != TYPE_INT) {
-                        having_cols_.back().type = TYPE_INT;
-                        having_cols_.back().len = sizeof(int);
-                        // 改和不改都没事
-                        having_cols_.back().offset = sizeof(int);
-                    }
+            } else {
+                having_cols_.emplace_back(*get_col(cols_, having_cond.lhs_col));
+                // count(course)
+                if (having_cond.agg_type == AGG_COUNT && having_cols_.back().type != TYPE_INT) {
+                    having_cols_.back().type = TYPE_INT;
+                    having_cols_.back().len = sizeof(int);
+                    // 改和不改都没事
+                    having_cols_.back().offset = sizeof(int);
                 }
+            }
         }
 
         // for (auto &sel_col: sel_cols) {
@@ -451,6 +452,14 @@ public:
         }
 
         it_ = ht_.hash_table_.begin();
+        // 空表
+        if (it_ == ht_.hash_table_.end()) {
+            // 空表且有group by，但是没有key直接输出空表
+            if (!group_bys_.empty()) {
+                return;
+            }
+            is_empty_table_ = true;
+        }
 
         while (it_ != ht_.hash_table_.end()) {
             std::size_t i = 0;
@@ -467,6 +476,10 @@ public:
     }
 
     void nextTuple() override {
+        if (is_empty_table_) {
+            is_empty_table_ = false;
+            return;
+        }
         ++it_;
         while (it_ != ht_.hash_table_.end()) {
             std::size_t i = 0;
@@ -484,6 +497,34 @@ public:
 
     std::unique_ptr<RmRecord> Next() override {
         auto record = std::make_unique<RmRecord>(len_);
+        // count 输出 0，其他输出空
+        if (is_empty_table_) {
+            int offset = 0;
+            for (std::size_t i = 0; i < agg_types_.size(); ++i) {
+                switch (agg_types_[i]) {
+                    case AGG_COUNT: {
+                        int zero = 0;
+                        memcpy(record->data + offset, &zero, sizeof(int));
+                        offset += sizeof(int);
+                        break;
+                    }
+                    case AGG_MAX:
+                    case AGG_MIN:
+                    case AGG_SUM: {
+                        // 为了输出空改为字符串类型，原来 len 不变
+                        sel_cols_[i].type = TYPE_STRING;
+                        std::string s;
+                        memcpy(record->data + offset, s.c_str(), sel_cols_[i].len);
+                        offset += sel_cols_[i].len;
+                        break;
+                    }
+                    case AGG_COL:
+                    default:
+                        throw InternalError("Unexpected aggregate type！");
+                }
+            }
+            return std::move(record);
+        }
 
         int offset = 0;
 
@@ -531,7 +572,13 @@ public:
 
     Rid &rid() override { return rid_; }
 
-    bool is_end() const { return it_ == ht_.hash_table_.end(); }
+    bool is_end() const {
+        // 空表输出一次
+        if (is_empty_table_) {
+            return false;
+        }
+        return it_ == ht_.hash_table_.end();
+    }
 
     const std::vector<ColMeta> &cols() const override { return sel_cols_; }
 
