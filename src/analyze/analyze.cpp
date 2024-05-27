@@ -288,14 +288,36 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
         TabMeta &lhs_tab = sm_manager_->db_.get_table(cond.lhs_col.tab_name);
         auto lhs_col = lhs_tab.get_col(cond.lhs_col.col_name);
         // 这里假设 where 语句左值必须为列值
-        ColType lhs_type = lhs_col->type;
+        ColType lhs_type = cond.agg_type == AGG_COUNT ? TYPE_INT : lhs_col->type;
         ColType rhs_type;
         if (cond.is_rhs_val) {
-            if (lhs_type == TYPE_FLOAT && cond.rhs_val.type == TYPE_INT) {
+            // having count(course) > 1
+            // having count(course) > 1.0
+            // having count(course) > '1.0'
+            // 左 char 右 int，左边在聚合算子内处理
+            if (cond.agg_type == AGG_COUNT) {
+                if (cond.rhs_val.type == TYPE_INT) {
+                    cond.rhs_val.init_raw(sizeof(int));
+                } else if (cond.rhs_val.type == TYPE_FLOAT) {
+                    cond.rhs_val.init_raw(sizeof(float));
+                } else if (cond.rhs_val.type == TYPE_STRING) {
+                    cond.rhs_val.init_raw(lhs_col->len);
+                } else {
+                    throw InternalError("Unexpected data type！");
+                }
+            } else if (lhs_type == TYPE_FLOAT && cond.rhs_val.type == TYPE_INT) {
                 cond.rhs_val.set_float(static_cast<float>(cond.rhs_val.int_val));
                 cond.rhs_val.init_raw(sizeof(float));
             } else {
-                cond.rhs_val.init_raw(lhs_col->len);
+                // 左边的类型可能和右边不同不能直接 col_len
+                // 比如 where course > 0 having min(course) > 0.0
+                if (cond.rhs_val.type == TYPE_INT) {
+                    cond.rhs_val.init_raw(sizeof(int));
+                } else if (cond.rhs_val.type == TYPE_FLOAT) {
+                    cond.rhs_val.init_raw(sizeof(float));
+                } else if (cond.rhs_val.type == TYPE_STRING) {
+                    cond.rhs_val.init_raw(lhs_col->len);
+                }
             }
             rhs_type = cond.rhs_val.type;
         } else {

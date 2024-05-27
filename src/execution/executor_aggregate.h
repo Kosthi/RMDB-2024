@@ -63,8 +63,22 @@ struct AggregateKeyHash {
     std::size_t operator()(const AggregateKey &key) const {
         std::size_t hash = 0;
         for (const auto &value: key.group_bys) {
-            hash ^= std::hash<int>()(value.int_val) ^ std::hash<float>()(value.float_val) ^ std::hash<std::string>()(
-                value.str_val);
+            switch (value.type) {
+                case TYPE_INT: {
+                    hash ^= std::hash<int>()(value.int_val);
+                    break;
+                }
+                case TYPE_FLOAT: {
+                    hash ^= std::hash<float>()(value.float_val);
+                    break;
+                }
+                case TYPE_STRING: {
+                    hash ^= std::hash<std::string>()(value.str_val);
+                    break;
+                }
+            }
+            // hash ^= std::hash<int>()(value.int_val) ^ std::hash<float>()(value.float_val) ^ std::hash<std::string>()(
+            //     value.str_val);
         }
         return hash;
     }
@@ -295,9 +309,16 @@ public:
                 having_cols_.back().len = sizeof(int);
                 // 改和不改都没事
                 having_cols_.back().offset = sizeof(int);
-                continue;
-            }
-            having_cols_.emplace_back(*get_col(cols_, having_cond.lhs_col));
+                } else {
+                    having_cols_.emplace_back(*get_col(cols_, having_cond.lhs_col));
+                    // count(course)
+                    if (having_cond.agg_type == AGG_COUNT && having_cols_.back().type != TYPE_INT) {
+                        having_cols_.back().type = TYPE_INT;
+                        having_cols_.back().len = sizeof(int);
+                        // 改和不改都没事
+                        having_cols_.back().offset = sizeof(int);
+                    }
+                }
         }
 
         // for (auto &sel_col: sel_cols) {
