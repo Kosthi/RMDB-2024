@@ -22,6 +22,10 @@ See the Mulan PSL v2 for more details. */
 #include "defs.h"
 #include "record/rm_defs.h"
 
+class Plan;
+// 这里使用前置声明避免头文件互相包含 common.h - analyze.h
+class Query;
+class AbstractExecutor;
 
 struct TabCol {
     std::string tab_name;
@@ -76,7 +80,7 @@ struct Value {
         }
     }
 
-    bool operator==(const Value& other) const {
+    bool operator==(const Value &other) const {
         if (type != other.type) return false;
         switch (type) {
             case TYPE_INT:
@@ -91,13 +95,30 @@ struct Value {
     }
 };
 
-enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };
+enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE, OP_IN };
 
 struct Condition {
+    // Condition(const Condition& cond) {
+    //     agg_type = cond.agg_type;
+    //     lhs_col = cond.lhs_col;
+    //     op = cond.op;
+    //     is_rhs_val = cond.is_rhs_val;
+    //     is_sub_query = cond.is_sub_query;
+    //     sub_query = cond.sub_query;
+    //     sub_query_plan = cond.sub_query_plan;
+    //     prev = std::move(cond.prev);
+    //     rhs_col = cond.rhs_col;
+    //     rhs_val = cond.rhs_val;
+    // }
+
     AggType agg_type;
     TabCol lhs_col; // left-hand side column
     CompOp op; // comparison operator
     bool is_rhs_val; // true if right-hand side is a value (not a column)
+    bool is_sub_query; // 是否是子查询
+    std::shared_ptr<Query> sub_query; // 子查询
+    std::shared_ptr<Plan> sub_query_plan; // 子查询计划
+    std::shared_ptr<AbstractExecutor> prev; // 子查询算子
     TabCol rhs_col; // right-hand side column
     Value rhs_val; // right-hand side value
 };

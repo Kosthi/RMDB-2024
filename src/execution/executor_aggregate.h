@@ -338,6 +338,8 @@ public:
     }
 
     void beginTuple() override {
+        // 子查询要清空，也可以直接缓存？
+        ht_.hash_table_.clear();
         prev_->beginTuple();
 
         std::vector<Value> keys(group_bys_.size());
@@ -442,13 +444,6 @@ public:
 
             ht_.insertCombine({keys}, {values, having_values});
             prev_->nextTuple();
-        }
-
-        // 聚合完成后修改 sel_cols 的偏移量，使之适应投影
-        int offset = 0;
-        for (auto &sel_col: sel_cols_) {
-            sel_col.offset = offset;
-            offset += sel_col.len;
         }
 
         it_ = ht_.hash_table_.begin();

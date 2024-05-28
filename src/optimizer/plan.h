@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include "parser/ast.h"
 
@@ -58,7 +59,7 @@ public:
 class ScanPlan : public Plan {
 public:
     ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-             std::vector<std::string> index_col_names) {
+             std::vector<std::string> index_col_names, bool is_sub_query = false) {
         Plan::tag = tag;
         tab_name_ = std::move(tab_name);
         conds_ = std::move(conds);
@@ -66,7 +67,7 @@ public:
         cols_ = tab.cols;
         len_ = cols_.back().offset + cols_.back().len;
         fed_conds_ = conds_;
-        index_col_names_ = index_col_names;
+        index_col_names_ = std::move(index_col_names);
     }
 
     ~ScanPlan() {
@@ -106,7 +107,8 @@ public:
 
 class ProjectionPlan : public Plan {
 public:
-    ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<std::string> alias) {
+    ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols,
+                   std::vector<std::string> alias) {
         Plan::tag = tag;
         subplan_ = std::move(subplan);
         sel_cols_ = std::move(sel_cols);
@@ -140,10 +142,11 @@ public:
 
 class AggregatePlan : public Plan {
 public:
-    AggregatePlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<AggType> agg_types,
-        std::vector<TabCol> group_bys, std::vector<Condition> havings) :
-        subplan_(std::move(subplan)), sel_cols_(std::move(sel_cols)), agg_types_(std::move(agg_types)),
-    group_bys_(std::move(group_bys)), havings_(std::move(havings)) {
+    AggregatePlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols,
+                  std::vector<AggType> agg_types,
+                  std::vector<TabCol> group_bys, std::vector<Condition> havings) : subplan_(std::move(subplan)),
+        sel_cols_(std::move(sel_cols)), agg_types_(std::move(agg_types)),
+        group_bys_(std::move(group_bys)), havings_(std::move(havings)) {
         Plan::tag = tag;
     }
 

@@ -169,6 +169,12 @@ public:
                                                        x->group_bys_, x->havings_, context);
         }
         if (auto x = std::dynamic_pointer_cast<ScanPlan>(plan)) {
+            // TODO 为每个子查询生成算子
+            for (auto &cond: x->conds_) {
+                if (cond.is_sub_query) {
+                    cond.prev = convert_plan_executor(cond.sub_query_plan, context);
+                }
+            }
             if (x->tag == T_SeqScan) {
                 return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context);
             }

@@ -28,6 +28,8 @@ private:
     std::unique_ptr<RecScan> scan_; // table_iterator
     SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
+    std::vector<bool> is_need_scan_; // 是否需要扫表（非子查询）
+    bool is_sub_query_empty_;
 
 public:
     SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context) {
@@ -40,6 +42,7 @@ public:
         len_ = cols_.back().offset + cols_.back().len;
         context_ = context;
         fed_conds_ = conds_;
+        is_sub_query_empty_ = false;
     }
 
     void beginTuple() override {
@@ -49,6 +52,9 @@ public:
             rm_record_ = std::move(fh_->get_record(rid_, context_));
             if (cmp_conds(rm_record_.get(), conds_, cols_)) {
                 break;
+            }
+            if (is_sub_query_empty_) {
+                return;
             }
         }
     }
@@ -72,7 +78,7 @@ public:
 
     Rid &rid() override { return rid_; }
 
-    bool is_end() const { return scan_->is_end(); }
+    bool is_end() const { return is_sub_query_empty_ || scan_->is_end(); }
 
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
@@ -103,12 +109,36 @@ public:
         const char *lhs_data = rec->data + lhs_col_meta->offset;
         const char *rhs_data;
         ColType rhs_type;
-
+        // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
+        std::unique_ptr<RmRecord> record;
         // 提取左值与右值的数据和类型
         // 常值
         if (cond.is_rhs_val) {
             rhs_type = cond.rhs_val.type;
             rhs_data = cond.rhs_val.raw->data;
+        } else if (cond.is_sub_query) {
+            // 在分析层已经检查过类型，这里直接当相等
+            rhs_type = lhs_col_meta->type;
+            cond.prev->beginTuple();
+            // 如果直接结束则直接返回空表
+            if (cond.prev->is_end()) {
+                is_sub_query_empty_ = true;
+                return false;
+            }
+            // 处理 in 谓词，扫描算子直到找到一个完全相等的
+            if (cond.op == OP_IN) {
+                for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
+                    record = cond.prev->Next();
+                    rhs_data = record->data;
+                    if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            // 聚合只用调用一次
+            record = cond.prev->Next();
+            rhs_data = record->data;
         } else {
             // 列值
             const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
