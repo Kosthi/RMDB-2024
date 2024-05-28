@@ -62,13 +62,14 @@ namespace ast {
 
         static std::string op2str(SvCompOp op) {
             static std::map<SvCompOp, std::string> m{
-                {SV_OP_EQ, "=="},
-                {SV_OP_NE, "!="},
-                {SV_OP_LT, "<"},
-                {SV_OP_GT, ">"},
-                {SV_OP_LE, "<="},
-                {SV_OP_GE, ">="},
-            };
+                    {SV_OP_EQ, "=="},
+                    {SV_OP_NE, "!="},
+                    {SV_OP_LT, "<"},
+                    {SV_OP_GT, ">"},
+                    {SV_OP_LE, "<="},
+                    {SV_OP_GE, ">="},
+                {SV_OP_IN, "IN"}
+                };
             return m.at(op);
         }
 

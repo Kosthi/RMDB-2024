@@ -35,8 +35,8 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_YY_HOME_PARALLELS_PROJECT_RMDB_2024_SRC_PARSER_YACC_TAB_H_INCLUDED
-# define YY_YY_HOME_PARALLELS_PROJECT_RMDB_2024_SRC_PARSER_YACC_TAB_H_INCLUDED
+#ifndef YY_YY_YACC_TAB_H_INCLUDED
+# define YY_YY_YACC_TAB_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -94,15 +94,16 @@ extern int yydebug;
     AS = 295,                      /* AS  */
     GROUP = 296,                   /* GROUP  */
     HAVING = 297,                  /* HAVING  */
-    LEQ = 298,                     /* LEQ  */
-    NEQ = 299,                     /* NEQ  */
-    GEQ = 300,                     /* GEQ  */
-    T_EOF = 301,                   /* T_EOF  */
-    IDENTIFIER = 302,              /* IDENTIFIER  */
-    VALUE_STRING = 303,            /* VALUE_STRING  */
-    VALUE_INT = 304,               /* VALUE_INT  */
-    VALUE_FLOAT = 305,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 306               /* VALUE_BOOL  */
+    IN = 298,                      /* IN  */
+    LEQ = 299,                     /* LEQ  */
+    NEQ = 300,                     /* NEQ  */
+    GEQ = 301,                     /* GEQ  */
+    T_EOF = 302,                   /* T_EOF  */
+    IDENTIFIER = 303,              /* IDENTIFIER  */
+    VALUE_STRING = 304,            /* VALUE_STRING  */
+    VALUE_INT = 305,               /* VALUE_INT  */
+    VALUE_FLOAT = 306,             /* VALUE_FLOAT  */
+    VALUE_BOOL = 307               /* VALUE_BOOL  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -129,4 +130,4 @@ struct YYLTYPE
 int yyparse (void);
 
 
-#endif /* !YY_YY_HOME_PARALLELS_PROJECT_RMDB_2024_SRC_PARSER_YACC_TAB_H_INCLUDED  */
+#endif /* !YY_YY_YACC_TAB_H_INCLUDED  */

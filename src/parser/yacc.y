@@ -23,7 +23,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
-COUNT MAX MIN SUM AS GROUP HAVING
+COUNT MAX MIN SUM AS GROUP HAVING IN
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
@@ -164,7 +164,7 @@ dml:
     }
     |   SELECT select_list FROM tableList optWhereClause group_by_clause having_clauses opt_order_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8);
+        $$ = std::static_pointer_cast<Expr>(std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8));
     }
     ;
 
@@ -315,6 +315,10 @@ op:
     {
         $$ = SV_OP_GE;
     }
+    |   IN
+    {
+        $$ = SV_OP_IN;
+    }
     ;
 
 expr:
@@ -325,6 +329,10 @@ expr:
     |   col
     {
         $$ = std::static_pointer_cast<Expr>($1);
+    }
+    |   '(' SELECT select_list FROM tableList optWhereClause group_by_clause having_clauses opt_order_clause ')'
+    {
+        $$ = std::make_shared<SelectStmt>($3, $5, $6, $7, $8, $9);
     }
     ;
 

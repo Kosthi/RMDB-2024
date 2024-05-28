@@ -41,7 +41,16 @@ int main() {
         "select id,MAX(score) as max_score from grade group by id, course having v1 > 0;", // 需要手动检查
         "select id, MAX(score) as max_score from grade where MAX(score) > 90 group by id;" // 语法分析报错时抛出即可
     };
-    for (auto &sql: aggSqls) {
+    std::vector<std::string> subquerySqls = {
+        // 为了减少编写词法规则工作量，在分析阶段判断非法 sqls
+        "select id from grade where score = (select MAX(score) from grade);",
+        "select id from grade where score > (select score from grade);",
+        "select id from grade where score < (select MAX(score) from grade);",
+        "select id from grade where score = (select MIN(score) from grade where score > (select MAX(score) from grade));", // 多级嵌套
+        "select id from grade where name in (select name from grade);",
+        "select id from grade where score = (select MIN(score) from grade where score in (select MAX(score) from grade));"
+    };
+    for (auto &sql: subquerySqls) {
         std::cout << sql << std::endl;
         YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
         assert(yyparse() == 0);
