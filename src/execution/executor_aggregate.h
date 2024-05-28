@@ -241,7 +241,7 @@ private:
     std::vector<ColMeta> group_bys_;
 
     AggregateHashTable ht_;
-    std::unordered_map<AggregateKey, AggregateValue>::const_iterator it_;
+    std::unordered_map<AggregateKey, AggregateValue, AggregateKeyHash, AggregateKeyEqual>::iterator it_;
 
 public:
     AggregateExecutor(std::unique_ptr<AbstractExecutor> prev, const std::vector<TabCol> &sel_cols,
