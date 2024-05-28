@@ -255,7 +255,7 @@ private:
     std::vector<ColMeta> group_bys_;
 
     AggregateHashTable ht_;
-    std::unordered_map<AggregateKey, AggregateValue>::const_iterator it_;
+    std::unordered_map<AggregateKey, AggregateValue, AggregateKeyHash, AggregateKeyEqual>::iterator it_;
     bool has_group_col_{false};
     bool is_empty_table_{false};
 
