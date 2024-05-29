@@ -154,17 +154,18 @@ public:
             }
 
             // where id <= (select count(*) from grade);
-            std::vector<ColMeta>::const_iterator rhs_col_meta;
+            ColMeta rhs_col_meta;
             if (cond.sub_query->agg_types[0] == AGG_COUNT && cond.sub_query->cols[0].tab_name.empty() && cond.sub_query
                 ->cols[0].col_name.empty()) {
                 rhs_type = TYPE_INT;
             } else {
-                rhs_col_meta = get_col(rec_cols, cond.sub_query->cols[0]);
+                // ！子查询右边的列值类型应该由子算子决定
+                rhs_col_meta = cond.prev->cols()[0];
                 // where id > (select count(id) from grade);
                 if (cond.sub_query->agg_types[0] == AGG_COUNT) {
                     rhs_type = TYPE_INT;
                 } else {
-                    rhs_type = rhs_col_meta->type;
+                    rhs_type = rhs_col_meta.type;
                 }
             }
 
@@ -173,12 +174,10 @@ public:
                 for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
                     record = cond.prev->Next();
                     rhs_data = record->data;
-                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_col_meta->type == TYPE_INT) {
+                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                         rhs_type = TYPE_FLOAT;
                         const float a = *reinterpret_cast<const int *>(rhs_data);
                         memcpy(rhs_data, &a, sizeof(float));
-                    } else {
-                        rhs_type = rhs_col_meta->type;
                     }
                     if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
                         return true;
