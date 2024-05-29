@@ -392,6 +392,7 @@ public:
                             const float a = *reinterpret_cast<const float *>(rm_record_->data + sel_cols_[i].offset);
                             v.set_float(a);
                         } else if (sel_cols_[i].type == TYPE_STRING) {
+                            throw InternalError("You cant aggreagte string with max/min/sum");
                             std::string s(rm_record_->data + sel_cols_[i].offset, sel_cols_[i].len);
                             v.set_str(s);
                         }

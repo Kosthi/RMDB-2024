@@ -261,9 +261,9 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
                 throw InternalError("Operand should contain 1 column!");
             }
             // 带有比较运算符的标量子查询右侧不一定是单一聚合函数，有可能是单列，只用保证返回单列单行就行
-            if (cond.op != OP_IN && rhs_select->select_list[0]->type == AGG_COL) {
-                throw InternalError("Subquery returns more than 1 row!");
-            }
+            // if (cond.op != OP_IN && rhs_select->select_list[0]->type == AGG_COL) {
+            //     throw InternalError("Subquery returns more than 1 row!");
+            // }
             cond.is_rhs_val = false;
             cond.is_sub_query = true;
             cond.sub_query = do_analyze(expr->rhs);
