@@ -242,6 +242,7 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
             // select * 和至少两个表，至少有两列，直接抛出异常
             // 这里应该只用保证单列就行，是否单行具体由算子检查
             if (rhs_select->select_list.empty()) {
+                throw InternalError("Operand should contain 1 column!");
                 if (rhs_select->tabs.size() > 1) {
                     throw InternalError("Operand should contain 1 column!");
                 }
