@@ -256,7 +256,8 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
                 auto bound_expr = std::make_shared<ast::BoundExpr>(
                     std::make_shared<ast::Col>(all_cols[0].tab_name, all_cols[0].name), AGG_COL);
                 rhs_select->select_list.emplace_back(std::move(bound_expr));
-            } else if (rhs_select->select_list.size() > 1) {
+            }
+            if (rhs_select->select_list.size() > 1) {
                 throw InternalError("Operand should contain 1 column!");
             }
             // 带有比较运算符的标量子查询右侧不一定是单一聚合函数，有可能是单列，只用保证返回单列单行就行

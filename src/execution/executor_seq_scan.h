@@ -149,6 +149,7 @@ public:
             cond.prev->beginTuple();
             // 如果直接结束则直接返回空表
             if (cond.prev->is_end()) {
+                throw InternalError("Empty sub query!");
                 is_sub_query_empty_ = true;
                 return false;
             }
