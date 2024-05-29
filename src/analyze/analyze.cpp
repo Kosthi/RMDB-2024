@@ -363,7 +363,7 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
                     }
                     value.init_raw(lhs_col->len);
                 }
-                return;
+                continue;
             }
             // 子查询右边是唯一列
             auto &table_name = cond.sub_query->cols[0].tab_name;
