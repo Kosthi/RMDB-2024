@@ -107,7 +107,7 @@ public:
     bool cmp_cond(const RmRecord *rec, const Condition &cond, const std::vector<ColMeta> &rec_cols) {
         const auto &lhs_col_meta = get_col(rec_cols, cond.lhs_col);
         const char *lhs_data = rec->data + lhs_col_meta->offset;
-        const char *rhs_data;
+        char *rhs_data;
         ColType rhs_type;
         // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
         std::unique_ptr<RmRecord> record;
@@ -117,28 +117,55 @@ public:
             rhs_type = cond.rhs_val.type;
             rhs_data = cond.rhs_val.raw->data;
         } else if (cond.is_sub_query) {
-            // 在分析层已经检查过类型，这里直接当相等
-            rhs_type = lhs_col_meta->type;
             cond.prev->beginTuple();
             // 如果直接结束则直接返回空表
             if (cond.prev->is_end()) {
                 is_sub_query_empty_ = true;
                 return false;
             }
+
+            // where id <= (select count(*) from grade);
+            std::vector<ColMeta>::const_iterator rhs_col_meta;
+            if (cond.sub_query->agg_types[0] == AGG_COUNT && cond.sub_query->cols[0].tab_name.empty() && cond.sub_query
+                ->cols[0].col_name.empty()) {
+                rhs_type = TYPE_INT;
+            } else {
+                rhs_col_meta = get_col(rec_cols, cond.sub_query->cols[0]);
+                // where id > (select count(id) from grade);
+                if (cond.sub_query->agg_types[0] == AGG_COUNT) {
+                    rhs_type = TYPE_INT;
+                } else {
+                    rhs_type = rhs_col_meta->type;
+                }
+            }
+
             // 处理 in 谓词，扫描算子直到找到一个完全相等的
             if (cond.op == OP_IN) {
                 for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
                     record = cond.prev->Next();
                     rhs_data = record->data;
+                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_col_meta->type == TYPE_INT) {
+                        rhs_type = TYPE_FLOAT;
+                        const float a = *reinterpret_cast<const int *>(rhs_data);
+                        memcpy(rhs_data, &a, sizeof(float));
+                    } else {
+                        rhs_type = rhs_col_meta->type;
+                    }
                     if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
                         return true;
                     }
                 }
                 return false;
             }
+
             // 聚合只用调用一次
             record = cond.prev->Next();
             rhs_data = record->data;
+            if (lhs_col_meta->type == TYPE_FLOAT && rhs_col_meta->type == TYPE_INT) {
+                rhs_type = TYPE_FLOAT;
+                const float a = *reinterpret_cast<const int *>(rhs_data);
+                memcpy(rhs_data, &a, sizeof(float));
+            }
         } else {
             // 列值
             const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);

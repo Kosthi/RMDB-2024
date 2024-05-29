@@ -347,7 +347,11 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
                 // where name = (select MAX(score) from grade);
                 TabMeta &rhs_tab = sm_manager_->db_.get_table(table_name);
                 auto rhs_col = rhs_tab.get_col(col_name);
-                rhs_type = rhs_col->type;
+                if (lhs_type == TYPE_FLOAT && rhs_col->type == TYPE_INT) {
+                    rhs_type = TYPE_FLOAT;
+                } else {
+                    rhs_type = rhs_col->type;
+                }
             }
         } else {
             TabMeta &rhs_tab = sm_manager_->db_.get_table(cond.rhs_col.tab_name);
