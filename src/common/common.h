@@ -98,19 +98,6 @@ struct Value {
 enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE, OP_IN };
 
 struct Condition {
-    // Condition(const Condition& cond) {
-    //     agg_type = cond.agg_type;
-    //     lhs_col = cond.lhs_col;
-    //     op = cond.op;
-    //     is_rhs_val = cond.is_rhs_val;
-    //     is_sub_query = cond.is_sub_query;
-    //     sub_query = cond.sub_query;
-    //     sub_query_plan = cond.sub_query_plan;
-    //     prev = std::move(cond.prev);
-    //     rhs_col = cond.rhs_col;
-    //     rhs_val = cond.rhs_val;
-    // }
-
     AggType agg_type;
     TabCol lhs_col; // left-hand side column
     CompOp op; // comparison operator
@@ -121,6 +108,7 @@ struct Condition {
     std::shared_ptr<AbstractExecutor> prev; // 子查询算子
     TabCol rhs_col; // right-hand side column
     Value rhs_val; // right-hand side value
+    std::vector<Value> rhs_value_list; // 值列表
 };
 
 struct SetClause {

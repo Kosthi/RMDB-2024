@@ -117,6 +117,35 @@ public:
             rhs_type = cond.rhs_val.type;
             rhs_data = cond.rhs_val.raw->data;
         } else if (cond.is_sub_query) {
+            // 查的是值列表
+            if (!cond.rhs_value_list.empty()) {
+                // in 谓词
+                if (cond.op == OP_IN) {
+                    // 前面已经强制转换和检查类型匹配过了，这里不需要
+                    for (auto &value: cond.rhs_value_list) {
+                        rhs_data = value.raw->data;
+                        if (compare(lhs_data, rhs_data, lhs_col_meta->len, value.type) == 0) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                // 比较谓词
+                assert(cond.rhs_value_list.size() == 1);
+                auto &value = cond.rhs_value_list[0];
+                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta->len, value.type);
+                switch (cond.op) {
+                    case OP_EQ: return cmp == 0;
+                    case OP_NE: return cmp != 0;
+                    case OP_LT: return cmp < 0;
+                    case OP_GT: return cmp > 0;
+                    case OP_LE: return cmp <= 0;
+                    case OP_GE: return cmp >= 0;
+                    default:
+                        throw InternalError("Unexpected op type！");
+                }
+            }
+            // 查的是子算子
             cond.prev->beginTuple();
             // 如果直接结束则直接返回空表
             if (cond.prev->is_end()) {
@@ -161,7 +190,7 @@ public:
             // 聚合只用调用一次
             record = cond.prev->Next();
             rhs_data = record->data;
-            if (lhs_col_meta->type == TYPE_FLOAT && rhs_col_meta->type == TYPE_INT) {
+            if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                 rhs_type = TYPE_FLOAT;
                 const float a = *reinterpret_cast<const int *>(rhs_data);
                 memcpy(rhs_data, &a, sizeof(float));

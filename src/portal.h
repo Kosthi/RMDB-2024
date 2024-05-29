@@ -171,7 +171,7 @@ public:
         if (auto x = std::dynamic_pointer_cast<ScanPlan>(plan)) {
             // TODO 为每个子查询生成算子
             for (auto &cond: x->conds_) {
-                if (cond.is_sub_query) {
+                if (cond.is_sub_query && cond.sub_query_plan != nullptr) {
                     cond.prev = convert_plan_executor(cond.sub_query_plan, context);
                 }
             }

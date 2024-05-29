@@ -248,6 +248,18 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
             cond.is_rhs_val = false;
             cond.is_sub_query = true;
             cond.sub_query = do_analyze(expr->rhs);
+        } else if (!expr->rhs_list.empty()) {
+            if (cond.op != OP_IN && (expr->rhs_list.size() > 1 || expr->rhs_list.empty())) {
+                throw InternalError("Operand should contain 1 column!");
+            }
+            cond.is_rhs_val = false;
+            cond.is_sub_query = true;
+            // > 只有一个 或者 in 有多个
+            for (auto &value: expr->rhs_list) {
+                cond.rhs_value_list.emplace_back(convert_sv_value(value));
+            }
+        } else {
+            throw InternalError("获取 where 右值错误！");
         }
         conds.emplace_back(cond);
     }
@@ -336,13 +348,30 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
             }
             rhs_type = cond.rhs_val.type;
         } else if (cond.is_sub_query) {
+            // 子查询是个值列表
+            if (cond.sub_query == nullptr) {
+                assert(!cond.rhs_value_list.empty());
+                // 检查列表中值的类型是否都相同
+                // int 可以转换为float
+                for (auto &value: cond.rhs_value_list) {
+                    if (lhs_type != value.type) {
+                        if (lhs_type == TYPE_FLOAT && value.type == TYPE_INT) {
+                            value.set_float(static_cast<float>(value.int_val));
+                        } else {
+                            throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(value.type));
+                        }
+                    }
+                    value.init_raw(lhs_col->len);
+                }
+                return;
+            }
             // 子查询右边是唯一列
             auto &table_name = cond.sub_query->cols[0].tab_name;
             auto &col_name = cond.sub_query->cols[0].col_name;
             // where name = (select count(*) from grade);
             // count 右边类型是 int
             if (cond.sub_query->agg_types[0] == AGG_COUNT) {
-                rhs_type = TYPE_INT;
+                rhs_type = lhs_type == TYPE_FLOAT ? TYPE_FLOAT : TYPE_INT;
             } else {
                 // where name = (select MAX(score) from grade);
                 TabMeta &rhs_tab = sm_manager_->db_.get_table(table_name);

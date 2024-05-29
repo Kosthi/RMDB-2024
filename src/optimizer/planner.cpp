@@ -160,8 +160,8 @@ Planner::pop_conds(std::vector<Condition> &conds, const std::string &tab_names, 
     for (auto &&it = conds.begin(); it != conds.end();) {
         if ((tab_names == it->lhs_col.tab_name && (it->is_rhs_val || it->is_sub_query)) || (
                 it->lhs_col.tab_name == it->rhs_col.tab_name)) {
-            // 如果是子查询，先生成子查询计划
-            if (it->is_sub_query) {
+            // 如果是子查询且不为值列表，先生成子查询计划
+            if (it->is_sub_query && it->sub_query != nullptr) {
                 it->sub_query_plan = generate_select_plan(it->sub_query, context);
             }
             solved_conds.emplace_back(std::move(*it));
