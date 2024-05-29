@@ -237,14 +237,31 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
             cond.is_sub_query = false;
             cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
         } else if (auto rhs_select = std::dynamic_pointer_cast<ast::SelectStmt>(expr->rhs)) {
-            // 子查询只能有一列或者 select *
-            if (rhs_select->select_list.empty() || rhs_select->select_list.size() > 1) {
+            // 子查询只能有一列或者
+            // select * 需要进一步查表看看是否是单列
+            // select * 和至少两个表，至少有两列，直接抛出异常
+            // 这里应该只用保证单列就行，是否单行具体由算子检查
+            if (rhs_select->select_list.empty()) {
+                if (rhs_select->tabs.size() > 1) {
+                    throw InternalError("Operand should contain 1 column!");
+                }
+                std::vector<ColMeta> all_cols;
+                get_all_cols(rhs_select->tabs, all_cols);
+                // select * 一个表但是包括多行
+                if (all_cols.size() > 1) {
+                    throw InternalError("Operand should contain 1 column!");
+                }
+                // 如果 select * 只有单列 col，则补全为 select col
+                auto bound_expr = std::make_shared<ast::BoundExpr>(
+                    std::make_shared<ast::Col>(all_cols[0].tab_name, all_cols[0].name), AGG_COL);
+                rhs_select->select_list.emplace_back(std::move(bound_expr));
+            } else if (rhs_select->select_list.size() > 1) {
                 throw InternalError("Operand should contain 1 column!");
             }
-            // 带有比较运算符的标量子查询右侧一定是单一聚合函数，只能有一行
-            if (cond.op != OP_IN && rhs_select->select_list[0]->type == AGG_COL) {
-                throw InternalError("Subquery returns more than 1 row!");
-            }
+            // 带有比较运算符的标量子查询右侧不一定是单一聚合函数，有可能是单列，只用保证返回单列单行就行
+            // if (cond.op != OP_IN && rhs_select->select_list[0]->type == AGG_COL) {
+            //     throw InternalError("Subquery returns more than 1 row!");
+            // }
             cond.is_rhs_val = false;
             cond.is_sub_query = true;
             cond.sub_query = do_analyze(expr->rhs);

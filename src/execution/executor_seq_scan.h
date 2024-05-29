@@ -154,6 +154,7 @@ public:
             }
 
             // where id <= (select count(*) from grade);
+            // where id <= (select id from grade where id = 1); // 返回单列单行
             ColMeta rhs_col_meta;
             if (cond.sub_query->agg_types[0] == AGG_COUNT && cond.sub_query->cols[0].tab_name.empty() && cond.sub_query
                 ->cols[0].col_name.empty()) {
@@ -186,8 +187,12 @@ public:
                 return false;
             }
 
-            // 聚合只用调用一次
+            // 聚合或列值只能有一行
             record = cond.prev->Next();
+            cond.prev->nextTuple();
+            if (!cond.prev->is_end()) {
+                throw InternalError("Subquery returns more than 1 row!");
+            }
             rhs_data = record->data;
             if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                 rhs_type = TYPE_FLOAT;
