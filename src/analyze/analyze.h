@@ -20,8 +20,8 @@ See the Mulan PSL v2 for more details. */
 #include "system/sm.h"
 #include "common/common.h"
 
-class Query{
-    public:
+class Query {
+public:
     std::shared_ptr<ast::TreeNode> parse;
     // TODO jointree
 
@@ -32,6 +32,9 @@ class Query{
     std::vector<TabCol> group_bys;
     // having 条件
     std::vector<Condition> havings;
+
+    // TODO sortby 条件，支持多列
+    TabCol sort_bys;
 
     // 投影列
     std::vector<TabCol> cols;
@@ -47,26 +50,36 @@ class Query{
     //insert 的values值
     std::vector<Value> values;
 
-    Query(){}
-
+    Query() {
+    }
 };
 
-class Analyze
-{
+class Analyze {
 private:
     SmManager *sm_manager_;
+
 public:
-    Analyze(SmManager *sm_manager) : sm_manager_(sm_manager){}
-    ~Analyze(){}
+    Analyze(SmManager *sm_manager) : sm_manager_(sm_manager) {
+    }
+
+    ~Analyze() {
+    }
 
     std::shared_ptr<Query> do_analyze(std::shared_ptr<ast::TreeNode> root);
 
 private:
     TabCol check_column(const std::vector<ColMeta> &all_cols, TabCol target);
+
     void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
-    void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds);
-    void get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr>> &sv_conds, std::vector<Condition> &conds);
+
+    void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds, std::vector<Condition> &conds);
+
+    void get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr> > &sv_conds,
+                           std::vector<Condition> &conds);
+
     void check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds);
+
     Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
+
     CompOp convert_sv_comp_op(ast::SvCompOp op);
 };

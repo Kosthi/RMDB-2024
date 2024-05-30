@@ -377,19 +377,20 @@ std::shared_ptr<Plan> Planner::generate_sort_plan(std::shared_ptr<Query> query, 
     if (!x->has_sort) {
         return plan;
     }
-    std::vector<std::string> tables = query->tables;
-    std::vector<ColMeta> all_cols;
-    for (auto &sel_tab_name: tables) {
-        // 这里db_不能写成get_db(), 注意要传指针
-        const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
-        all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
-    }
-    TabCol sel_col;
-    for (auto &col: all_cols) {
-        if (col.name.compare(x->order->cols->col_name) == 0)
-            sel_col = {.tab_name = col.tab_name, .col_name = col.name};
-    }
-    return std::make_shared<SortPlan>(T_Sort, std::move(plan), sel_col,
+    // std::vector<ColMeta> all_cols;
+    // for (auto &sel_tab_name: query->tables) {
+    //     // 这里db_不能写成get_db(), 注意要传指针
+    //     const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
+    //     all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
+    // }
+    // TabCol sel_col;
+    // // TODO 支持多列排序
+    // for (auto &col: all_cols) {
+    //     if (col.name == x->order->cols->col_name) {
+    //         sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+    //     }
+    // }
+    return std::make_shared<SortPlan>(T_Sort, std::move(plan), std::move(query->sort_bys),
                                       x->order->orderby_dir == ast::OrderBy_DESC);
 }
 
@@ -412,7 +413,7 @@ std::shared_ptr<Plan> Planner::generate_select_plan(std::shared_ptr<Query> query
     // 检查是否是聚合语句，有 group 要走聚合
     bool is_agg = !query->group_bys.empty();
     if (!is_agg) {
-        for (auto &agg_type : query->agg_types) {
+        for (auto &agg_type: query->agg_types) {
             if (agg_type != AGG_COL) {
                 is_agg = true;
                 break;
@@ -423,7 +424,7 @@ std::shared_ptr<Plan> Planner::generate_select_plan(std::shared_ptr<Query> query
     // 生成聚合计划
     if (is_agg) {
         plannerRoot = std::make_shared<AggregatePlan>(T_Aggregate, std::move(plannerRoot), query->cols,
-            query->agg_types, query->group_bys, query->havings);
+                                                      query->agg_types, query->group_bys, query->havings);
     }
 
     // TODO 待会处理别名

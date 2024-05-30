@@ -133,6 +133,11 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         // 处理 having 条件
         get_having_clause(x->havings, query->havings);
 
+        // 处理 sortby 条件
+        if (x->has_sort) {
+            query->sort_bys = check_column(all_cols, {x->order->cols->tab_name, x->order->cols->col_name});
+        }
+
         // 推断表名和检查左右类型是否匹配
         check_clause(query->tables, query->conds);
         check_clause(query->tables, query->havings);
