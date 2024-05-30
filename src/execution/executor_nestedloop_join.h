@@ -24,7 +24,7 @@ private:
     std::vector<Condition> fed_conds_; // join条件
     std::unique_ptr<RmRecord> rm_record_;
     std::unique_ptr<RmRecord> lhs_rec_;
-    bool is_end_;
+    bool is_right_empty_;
 
 public:
     NestedLoopJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right,
@@ -37,12 +37,21 @@ public:
             col.offset += left_->tupleLen();
         }
         cols_.insert(cols_.end(), right_cols.begin(), right_cols.end());
-        is_end_ = false;
+        is_right_empty_ = false;
     }
 
     void beginTuple() override {
         left_->beginTuple();
+        // 左表为空时直接返回
+        if (left_->is_end()) {
+            return;
+        }
         right_->beginTuple();
+        // 右表为空时直接返回
+        if (right_->is_end()) {
+            is_right_empty_ = true;
+            return;
+        }
 
         do {
             lhs_rec_ = left_->Next();
@@ -95,7 +104,7 @@ public:
 
     Rid &rid() override { return _abstract_rid; }
 
-    bool is_end() const { return left_->is_end(); }
+    bool is_end() const { return left_->is_end() || is_right_empty_; }
 
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
