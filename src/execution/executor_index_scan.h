@@ -74,6 +74,14 @@ public:
         const auto &&ih = sm_manager_->ihs_[index_name].get();
 
         Iid lower = ih->leaf_begin(), upper = ih->leaf_end();
+        // sortmerge
+        if (!conds_[0].is_rhs_val) {
+            scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
+            return;
+        }
+
         char *key = new char[index_meta_.col_tot_len];
 
         int offset = 0;
@@ -202,6 +210,13 @@ public:
 
     void nextTuple() override {
         if (scan_->is_end()) {
+            return;
+        }
+        // sortmerge
+        if (!conds_[0].is_rhs_val) {
+            scan_->next();
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
             return;
         }
         for (scan_->next(); !scan_->is_end(); scan_->next()) {

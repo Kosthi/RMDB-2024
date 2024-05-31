@@ -30,8 +30,8 @@ class Planner {
 private:
     SmManager *sm_manager_;
 
-    bool enable_nestedloop_join = true;
-    bool enable_sortmerge_join = false;
+    bool enable_nestedloop_join = false;
+    bool enable_sortmerge_join = true;
 
 public:
     Planner(SmManager *sm_manager) : sm_manager_(sm_manager) {

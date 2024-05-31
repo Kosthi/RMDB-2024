@@ -30,6 +30,10 @@ struct TabCol {
     friend bool operator<(const TabCol &x, const TabCol &y) {
         return std::make_pair(x.tab_name, x.col_name) < std::make_pair(y.tab_name, y.col_name);
     }
+
+    bool operator==(const TabCol &y) const {
+        return tab_name == y.tab_name && col_name == y.col_name;
+    }
 };
 
 struct Value {
