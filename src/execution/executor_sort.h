@@ -2,7 +2,7 @@
 
 #include <queue>
 
-#define MAX_CHUNK_SIZE 1000
+#define MAX_CHUNK_SIZE 81920
 
 class SortExecutor : public AbstractExecutor {
 private:
