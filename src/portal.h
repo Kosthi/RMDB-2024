@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "execution/executor_update.h"
 #include "execution/executor_insert.h"
 #include "execution/executor_delete.h"
-#include "execution/execution_sort.h"
+#include "execution/executor_sort.h"
 #include "common/common.h"
 
 typedef enum portalTag {
