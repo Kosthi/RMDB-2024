@@ -33,6 +33,8 @@ void RmScan::next() {
         auto &&rm_page_handle = file_handle_->fetch_page_handle(rid_.page_no);
         rid_.slot_no = Bitmap::next_bit(true, rm_page_handle.bitmap, file_handle_->file_hdr_.num_records_per_page,
                                         rid().slot_no);
+        // 一定要 unpin，否则多次 scan 以后所有页面都会无法替换！
+        file_handle_->buffer_pool_manager_->unpin_page(rm_page_handle.page->get_page_id(), false);
         if (rid_.slot_no < file_handle_->file_hdr_.num_records_per_page) {
             return;
         }
