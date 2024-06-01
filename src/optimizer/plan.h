@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include "parser/ast.h"
 
@@ -66,7 +67,7 @@ public:
         cols_ = tab.cols;
         len_ = cols_.back().offset + cols_.back().len;
         fed_conds_ = conds_;
-        index_col_names_ = index_col_names;
+        index_col_names_ = std::move(index_col_names);
     }
 
     ~ScanPlan() {
