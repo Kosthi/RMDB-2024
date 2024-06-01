@@ -45,15 +45,16 @@ public:
         is_rollback_ = false;
         rollback_cnts_ = 0;
 
-        left_->beginTuple();
-        // 左表为空时直接返回
-        if (left_->is_end()) {
-            return;
-        }
+        // 为了 sort_results.txt 文件内容与测试一致，右算子先开始
         right_->beginTuple();
         // 右表为空时直接返回
         if (right_->is_end()) {
             is_right_empty_ = true;
+            return;
+        }
+        left_->beginTuple();
+        // 左表为空时直接返回
+        if (left_->is_end()) {
             return;
         }
 
