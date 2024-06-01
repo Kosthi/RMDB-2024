@@ -263,7 +263,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
             // 存在索引
             // 且在排序列上，不需要排序
             if (x->has_sort) {
-                for (auto &cond : curr_conds) {
+                for (auto &cond: curr_conds) {
                     if (cond.lhs_col == query->sort_bys || cond.rhs_col == query->sort_bys) {
                         x->has_sort = false;
                         break;
@@ -305,6 +305,16 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                 table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
                                                                   std::move(join_conds));
             } else if (enable_nestedloop_join) {
+                // 这里要对两个 scan 加个sort
+                if (x->has_sort) {
+                    // TODO 检查排序列是否就是连接列，检查排序列上是否有索引
+                    left = std::make_shared<SortPlan>(T_Sort, std::move(left), it->lhs_col,
+                                                      x->order->orderby_dir == ast::OrderBy_DESC);
+                    right = std::make_shared<SortPlan>(T_Sort, std::move(right), it->rhs_col,
+                                                       x->order->orderby_dir == ast::OrderBy_DESC);
+                    // 不用再生成 sort 算子来排序了
+                    x->has_sort = false;
+                }
                 table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
                                                                   std::move(join_conds));
             } else if (enable_sortmerge_join) {
@@ -312,9 +322,9 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                 if (x->has_sort) {
                     // TODO 检查排序列是否就是连接列，检查排序列上是否有索引
                     left = std::make_shared<SortPlan>(T_Sort, std::move(left), it->lhs_col,
-                                          x->order->orderby_dir == ast::OrderBy_DESC);
+                                                      x->order->orderby_dir == ast::OrderBy_DESC);
                     right = std::make_shared<SortPlan>(T_Sort, std::move(right), it->rhs_col,
-                                          x->order->orderby_dir == ast::OrderBy_DESC);
+                                                       x->order->orderby_dir == ast::OrderBy_DESC);
                     // 不用再生成 sort 算子来排序了
                     x->has_sort = false;
                 }
