@@ -158,12 +158,24 @@ public:
         records_.clear();
         temp_files_.clear();
         current_tuple_ = nullptr;
-        is_end_ = false;
 
         struct stat st;
         // 当前算子排序过了，已经存在排序结果文件
         if (stat(filename_.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            // 可能是算子结束进来的，也有可能是到一部分重新开始了
+            if (!is_end_) {
+                outfile_.close();
+            }
+
+            // 记得一定要重置，否则读到文件尾后算子会一直保持结束状态
+            is_end_ = false;
+
             outfile_.open(filename_, std::ios::in);
+            if (!outfile_.is_open()) {
+                std::stringstream s;
+                s << "Failed to open file: " << std::strerror(errno);
+                throw InternalError(s.str());
+            }
 
             // 缓存记录
             do {
@@ -185,6 +197,8 @@ public:
             }
             return;
         }
+
+        is_end_ = false;
 
         // ios::in 需要文件存在，ios::out文件不存在则创建
         // 两者同时存在且文件不存在时，会打开失败（文件不存在）
@@ -273,4 +287,6 @@ public:
     const std::vector<ColMeta> &cols() const override { return prev_->cols(); }
 
     size_t tupleLen() const override { return prev_->tupleLen(); }
+
+    std::string getType() { return "SortExecutor"; }
 };
