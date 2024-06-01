@@ -26,6 +26,8 @@ void IxScan::next() {
         iid_.slot_no = 0;
         iid_.page_no = node->get_next_leaf();
     }
+    // unpin page! 否则多次大量扫描读会出问题
+    bpm_->unpin_page(node->page->get_page_id(), false);
 }
 
 Rid IxScan::rid() const {

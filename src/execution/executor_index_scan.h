@@ -215,6 +215,9 @@ public:
         // sortmerge
         if (!conds_[0].is_rhs_val) {
             scan_->next();
+            if (scan_->is_end()) {
+                return;
+            }
             rid_ = scan_->rid();
             rm_record_ = fh_->get_record(rid_, context_);
             return;
