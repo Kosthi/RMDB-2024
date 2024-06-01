@@ -29,7 +29,7 @@ private:
         // 以期望格式写入 sorted_results.txt
         auto out_expected_file = std::fstream("sorted_results.txt", std::ios::out | std::ios::app);
 
-        // 打印表头
+        // 打印右表头
         out_expected_file << "|";
         for (auto &col_meta: right_->cols()) {
             out_expected_file << " " << col_meta.name << " |";
@@ -64,6 +64,13 @@ private:
             }
             out_expected_file << "\n";
         }
+
+        // 打印左表头
+        out_expected_file << "|";
+        for (auto &col_meta: left_->cols()) {
+            out_expected_file << " " << col_meta.name << " |";
+        }
+        out_expected_file << "\n";
 
         // 再左表
         for (left_->beginTuple(); !left_->is_end(); left_->nextTuple()) {
