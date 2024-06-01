@@ -344,4 +344,6 @@ public:
             return cmp_cond(rec, cond, rec_cols);
         });
     }
+
+    std::string getType() { return "IndexScanExecutor"; }
 };
