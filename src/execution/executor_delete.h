@@ -40,8 +40,13 @@ public:
     std::unique_ptr<RmRecord> Next() override {
         for (auto &rid: rids_) {
             auto &&rec = fh_->get_record(rid, context_);
+
+            // 写入事务写集
+            auto *write_record = new WriteRecord(WType::DELETE_TUPLE, tab_name_, rid, *rec);
+            context_->txn_->append_write_record(write_record);
+
             // 如果有索引，则必然是唯一索引
-            for (auto &[index_name, index] : tab_.indexes) {
+            for (auto &[index_name, index]: tab_.indexes) {
                 auto &&ih = sm_manager_->ihs_.at(index_name).get();
                 char *key = new char[index.col_tot_len];
                 int offset = 0;

@@ -73,6 +73,11 @@ public:
         // Insert into record file
         rid_ = fh_->insert_record(rec.data, context_);
 
+        // 写入事务写集
+        // may std::unique_ptr 优化，避免拷贝多次记录
+        auto *write_record = new WriteRecord(WType::INSERT_TUPLE, rid_, rec, tab_name_);
+        context_->txn_->append_write_record(write_record);
+
         // Unique Index -> Insert into index
         for (auto &[index_name, index]: tab_.indexes) {
             auto ih = sm_manager_->ihs_.at(index_name).get();

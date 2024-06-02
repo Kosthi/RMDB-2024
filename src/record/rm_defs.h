@@ -82,6 +82,16 @@ struct RmRecord {
         memcpy(data, data_ + sizeof(int), size);
     }
 
+    // for update log
+    void Deserialize(const char *data_, int size_) {
+        size = size_;
+        if (allocated_) {
+            delete[] data;
+        }
+        data = new char[size];
+        memcpy(data, data_, size);
+    }
+
     ~RmRecord() {
         if (allocated_) {
             delete[] data;

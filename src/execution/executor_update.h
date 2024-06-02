@@ -72,6 +72,10 @@ public:
                 delete []key;
             }
 
+            // 写入事务写集
+            auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record);
+            context_->txn_->append_write_record(write_record);
+
             // Unique Index -> Insert into index
             for (auto &[index_name, index]: tab_.indexes) {
                 auto ih = sm_manager_->ihs_.at(index_name).get();
