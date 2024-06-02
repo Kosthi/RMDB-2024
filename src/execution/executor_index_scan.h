@@ -10,6 +10,8 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#define MAX_RECORD_SIZE 81920
+
 #include <float.h>
 #include <limits.h>
 
@@ -34,10 +36,71 @@ private:
     std::unique_ptr<RecScan> scan_;
     SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
+    std::deque<std::unique_ptr<RmRecord> > records_;
+    // 实际二进制文件名
+    std::string filename_;
+    // 排序结果实际读取文件，二进制
+    std::fstream outfile_;
+    bool is_end_;
+    size_t id_;
     constexpr static int int_min_ = INT32_MIN;
     constexpr static int int_max_ = INT32_MAX;
     constexpr static float float_min_ = FLT_MIN;
     constexpr static float float_max_ = FLT_MAX;
+
+    static std::size_t generateID() {
+        static size_t current_id = 0;
+        return ++current_id;
+    }
+
+    // for index scan
+    void write_sorted_results() {
+        // 以期望格式写入 sorted_results.txt
+        auto out_expected_file = std::fstream("sorted_results.txt", std::ios::out | std::ios::app);
+        outfile_.open(filename_, std::ios::out);
+
+        // 打印右表头
+        out_expected_file << "|";
+        for (auto &col_meta: cols_) {
+            out_expected_file << " " << col_meta.name << " |";
+        }
+        out_expected_file << "\n";
+
+        // 右表先开始
+        for (; !scan_->is_end(); scan_->next()) {
+            // 打印记录
+            rm_record_ = fh_->get_record(scan_->rid(), context_);
+            // 写入文件中
+            outfile_.write(rm_record_->data, rm_record_->size);
+
+            std::vector<std::string> columns;
+            columns.reserve(cols_.size());
+
+            for (auto &col: cols_) {
+                std::string col_str;
+                char *rec_buf = rm_record_->data + col.offset;
+                if (col.type == TYPE_INT) {
+                    col_str = std::to_string(*(int *) rec_buf);
+                } else if (col.type == TYPE_FLOAT) {
+                    col_str = std::to_string(*(float *) rec_buf);
+                } else if (col.type == TYPE_STRING) {
+                    col_str = std::string((char *) rec_buf, col.len);
+                    col_str.resize(strlen(col_str.c_str()));
+                }
+                columns.emplace_back(col_str);
+            }
+
+            // 打印记录
+            out_expected_file << "|";
+            for (auto &col: columns) {
+                out_expected_file << " " << col << " |";
+            }
+            out_expected_file << "\n";
+        }
+
+        outfile_.close();
+        out_expected_file.close();
+    }
 
 public:
     IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
@@ -67,6 +130,8 @@ public:
         }
         fed_conds_ = conds_;
         std::reverse(fed_conds_.begin(), fed_conds_.end());
+        id_ = generateID();
+        filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
     }
 
     void beginTuple() override {
@@ -76,11 +141,74 @@ public:
         Iid lower = ih->leaf_begin(), upper = ih->leaf_end();
         // sortmerge
         if (!conds_[0].is_rhs_val) {
+            // 适用嵌套连接走索引的情况
+            struct stat st;
+            // 当前算子排序过了，已经存在排序结果文件
+            if (stat(filename_.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+                // 可能是算子结束进来的，也有可能是到一部分重新开始了
+                if (!is_end_) {
+                    outfile_.close();
+                }
+
+                // 记得一定要重置，否则读到文件尾后算子会一直保持结束状态
+                is_end_ = false;
+
+                outfile_.open(filename_, std::ios::in);
+                if (!outfile_.is_open()) {
+                    std::stringstream s;
+                    s << "Failed to open file: " << std::strerror(errno);
+                    throw InternalError(s.str());
+                }
+
+                // 缓存记录
+                do {
+                    rm_record_ = std::make_unique<RmRecord>(len_);
+                    outfile_.read(rm_record_->data, rm_record_->size);
+                    if (outfile_.gcount() == 0) {
+                        break;
+                    }
+                    records_.emplace_back(std::move(rm_record_));
+                } while (records_.size() < MAX_RECORD_SIZE);
+
+                if (!records_.empty()) {
+                    rm_record_ = std::move(records_.front());
+                    records_.pop_front();
+                } else {
+                    is_end_ = true;
+                    rm_record_ = nullptr;
+                    outfile_.close();
+                }
+                return;
+            }
+
+            is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
-            rid_ = scan_->rid();
-            rm_record_ = fh_->get_record(rid_, context_);
+            write_sorted_results();
+
+            outfile_.open(filename_, std::ios::in);
+
+            // 缓存记录
+            do {
+                rm_record_ = std::make_unique<RmRecord>(len_);
+                outfile_.read(rm_record_->data, rm_record_->size);
+                if (outfile_.gcount() == 0) {
+                    break;
+                }
+                records_.emplace_back(std::move(rm_record_));
+            } while (records_.size() < MAX_RECORD_SIZE);
+
+            if (!records_.empty()) {
+                rm_record_ = std::move(records_.front());
+                records_.pop_front();
+            } else {
+                is_end_ = true;
+                rm_record_ = nullptr;
+                outfile_.close();
+            }
             return;
         }
+
+        is_end_ = false;
 
         char *key = new char[index_meta_.col_tot_len];
 
@@ -202,33 +330,53 @@ public:
             rid_ = scan_->rid();
             rm_record_ = fh_->get_record(rid_, context_);
             if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
-                break;
+                return;
             }
             scan_->next();
         }
+        is_end_ = true;
     }
 
     void nextTuple() override {
-        if (scan_->is_end()) {
+        if (!records_.empty()) {
+            rm_record_ = std::move(records_.front());
+            records_.pop_front();
             return;
         }
         // sortmerge
         if (!conds_[0].is_rhs_val) {
-            scan_->next();
-            if (scan_->is_end()) {
-                return;
+            // 缓存记录
+            do {
+                rm_record_ = std::make_unique<RmRecord>(len_);
+                outfile_.read(rm_record_->data, rm_record_->size);
+                if (outfile_.gcount() == 0) {
+                    break;
+                }
+                records_.emplace_back(std::move(rm_record_));
+            } while (records_.size() < MAX_RECORD_SIZE);
+
+            if (!records_.empty()) {
+                rm_record_ = std::move(records_.front());
+                records_.pop_front();
+            } else {
+                is_end_ = true;
+                rm_record_ = nullptr;
+                outfile_.close();
             }
-            rid_ = scan_->rid();
-            rm_record_ = fh_->get_record(rid_, context_);
+            return;
+        }
+        if (scan_->is_end()) {
+            is_end_ = true;
             return;
         }
         for (scan_->next(); !scan_->is_end(); scan_->next()) {
             rid_ = scan_->rid();
             rm_record_ = fh_->get_record(rid_, context_);
             if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
-                break;
+                return;
             }
         }
+        is_end_ = true;
     }
 
     std::unique_ptr<RmRecord> Next() override {
@@ -237,7 +385,7 @@ public:
 
     Rid &rid() override { return rid_; }
 
-    bool is_end() const { return scan_->is_end(); }
+    bool is_end() const { return is_end_; }
 
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
