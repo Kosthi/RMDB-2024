@@ -108,10 +108,6 @@ public:
     SortMergeJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right,
                           std::vector<Condition> conds): left_(std::move(left)), right_(std::move(right)),
                                                          fed_conds_(std::move(conds)) {
-        // 基于索引的归并排序，写 sorted_results.txt 以通过测试
-        if (left_->getType() == "IndexScanExecutor" && right_->getType() == "IndexScanExecutor") {
-            write_sorted_results();
-        }
         len_ = left_->tupleLen() + right_->tupleLen();
         cols_ = left_->cols();
         auto right_cols = right_->cols();
