@@ -2,7 +2,7 @@
 
 #include <queue>
 
-#define MAX_CHUNK_SIZE 81920
+#define MAX_CHUNK_SIZE 5
 
 class SortExecutor : public AbstractExecutor {
 private:
@@ -20,7 +20,7 @@ private:
     std::fstream outfile_;
     // 实际二进制文件名
     std::string filename_;
-    std::vector<std::string> temp_files_;
+    std::deque<std::string> temp_files_;
     // 为每个 sort 算子实例分配一个 ID
     size_t id_;
     bool is_end_;
@@ -42,7 +42,7 @@ private:
                   });
 
         std::string temp_filename = "sorted_chunk_" + std::to_string(temp_files_.size()) + ".tmp";
-        std::ofstream temp_file(temp_filename, std::ios::binary | std::ios::trunc);
+        std::ofstream temp_file(temp_filename, std::ios::out | std::ios::binary);
         for (const auto &record: records_) {
             temp_file.write(record->data, record->size);
         }
@@ -66,21 +66,76 @@ private:
             std::vector<std::pair<std::unique_ptr<RmRecord>, std::ifstream *> >,
             decltype(compareRecords)> min_heap(compareRecords);
 
-        std::vector<std::ifstream> temp_file_streams;
-        // 读取每个块的第一条记录
-        temp_file_streams.reserve(temp_files_.size());
-        for (const auto &filename: temp_files_) {
-            temp_file_streams.emplace_back(filename, std::ios::binary);
+        // 必须要支持多级归并排序，因为系统可以使用的文件描述符有限，超过使用限制会发生阻塞
+        // 排序阶段，已经完成了第几级排序
+        std::size_t level = 1;
+        // 每个阶段的临时文件
+        std::deque<std::string> level_temp_files;
+
+        // 一次处理100个排序好的文件，原来2000个，处理完一趟后剩下20个文件，然后再用一次就都处理完了
+        const std::size_t batch_size = 2; // 二路归并
+
+        // 最后归并为一个排好序的文件
+        while (temp_files_.size() > 1) {
+            std::size_t total_files = temp_files_.size();
+            std::size_t processed_files = 0;
+
+            while (processed_files < total_files) {
+                std::vector<std::ifstream> temp_file_streams;
+                temp_file_streams.reserve(batch_size);
+
+                for (size_t i = 0; i < batch_size && processed_files < total_files; ++i, ++processed_files) {
+                    const auto &filename = temp_files_[processed_files];
+                    temp_file_streams.emplace_back(filename, std::ios::in | std::ios::binary);
+                }
+
+                for (auto &file_stream: temp_file_streams) {
+                    auto record = std::make_unique<RmRecord>(len_);
+                    file_stream.read(record->data, record->size);
+                    if (file_stream.gcount() > 0) {
+                        min_heap.emplace(std::move(record), &file_stream);
+                    }
+                }
+
+                std::string temp_filename = "sorted_ID" + std::to_string(id_) + "_chunk_" + std::to_string(level) + "_"
+                                            + std::to_string(level_temp_files.size()) + ".tmp";
+                std::ofstream temp_file(temp_filename, std::ios::out | std::ios::binary);
+                level_temp_files.emplace_back(std::move(temp_filename));
+
+                // 放到第 level 阶段临时文件中
+                while (!min_heap.empty()) {
+                    auto &[record, file_stream] = min_heap.top();
+                    temp_file.write(record->data, record->size);
+                    auto new_record = std::make_unique<RmRecord>(len_);
+                    file_stream->read(new_record->data, new_record->size);
+                    if (file_stream->gcount() > 0) {
+                        min_heap.emplace(std::move(new_record), file_stream);
+                    } else {
+                        file_stream->close();
+                    }
+                    min_heap.pop();
+                }
+
+                temp_file.close();
+            }
+
+            // 清除临时文件
+            for (auto &temp_file: temp_files_) {
+                unlink(temp_file.c_str());
+            }
+
+            temp_files_ = std::move(level_temp_files);
+            level_temp_files.clear();
+            ++level;
         }
 
-        for (auto &file_stream: temp_file_streams) {
-            auto record = std::make_unique<RmRecord>(len_);
-            file_stream.read(record->data, record->size);
-            // 有记录则放入小根堆中
-            if (file_stream.gcount() > 0) {
-                min_heap.emplace(std::move(record), &file_stream);
-            }
-        }
+        assert(temp_files_.size() == 1);
+
+        // 最终排序好的文件名
+        filename_ = std::move(temp_files_[0]);
+        temp_files_.clear();
+
+        outfile_.open(filename_, std::ios::in | std::ios::binary);
 
         // 以期望格式写入 sorted_results.txt
         out_expected_file_.open("sorted_results.txt", std::ios::out | std::ios::app);
@@ -92,53 +147,41 @@ private:
         }
         out_expected_file_ << "\n";
 
-        // 每次从小根堆中取出最小的记录，写入结果文件
-        while (!min_heap.empty()) {
-            auto &[record, file_stream] = min_heap.top();
+        while (true) {
+            current_tuple_ = std::make_unique<RmRecord>(len_);
+            outfile_.read(current_tuple_->data, current_tuple_->size);
+            if (outfile_.gcount() > 0) {
+                // 打印记录
+                std::vector<std::string> columns;
+                columns.reserve(prev_->cols().size());
 
-            // 打印记录
-            std::vector<std::string> columns;
-            columns.reserve(prev_->cols().size());
-
-            for (auto &col: prev_->cols()) {
-                std::string col_str;
-                char *rec_buf = record->data + col.offset;
-                if (col.type == TYPE_INT) {
-                    col_str = std::to_string(*(int *) rec_buf);
-                } else if (col.type == TYPE_FLOAT) {
-                    col_str = std::to_string(*(float *) rec_buf);
-                } else if (col.type == TYPE_STRING) {
-                    col_str = std::string((char *) rec_buf, col.len);
-                    col_str.resize(strlen(col_str.c_str()));
+                for (auto &col: prev_->cols()) {
+                    std::string col_str;
+                    char *rec_buf = current_tuple_->data + col.offset;
+                    if (col.type == TYPE_INT) {
+                        col_str = std::to_string(*(int *) rec_buf);
+                    } else if (col.type == TYPE_FLOAT) {
+                        col_str = std::to_string(*(float *) rec_buf);
+                    } else if (col.type == TYPE_STRING) {
+                        col_str = std::string((char *) rec_buf, col.len);
+                        col_str.resize(strlen(col_str.c_str()));
+                    }
+                    columns.emplace_back(col_str);
                 }
-                columns.emplace_back(col_str);
-            }
 
-            // 打印记录
-            out_expected_file_ << "|";
-            for (auto &col: columns) {
-                out_expected_file_ << " " << col << " |";
-            }
-            out_expected_file_ << "\n";
-
-            outfile_.write(record->data, record->size);
-            auto new_record = std::make_unique<RmRecord>(len_);
-            file_stream->read(new_record->data, new_record->size);
-            if (file_stream->gcount() > 0) {
-                min_heap.emplace(std::move(new_record), file_stream);
+                // 打印记录
+                out_expected_file_ << "|";
+                for (auto &col: columns) {
+                    out_expected_file_ << " " << col << " |";
+                }
+                out_expected_file_ << "\n";
             } else {
-                file_stream->close();
+                break;
             }
-
-            min_heap.pop();
         }
 
+        outfile_.close();
         out_expected_file_.close();
-
-        // 清除临时文件
-        for (auto &temp_file: temp_files_) {
-            unlink(temp_file.c_str());
-        }
     }
 
 public:
@@ -151,7 +194,7 @@ public:
         used_tuple.clear();
         len_ = prev_->tupleLen();
         id_ = generateID();
-        filename_ = "sorted_results" + std::to_string(id_) + ".txt";
+        // filename_ = "sorted_results" + std::to_string(id_) + ".txt";
     }
 
     void beginTuple() override {
@@ -159,9 +202,9 @@ public:
         temp_files_.clear();
         current_tuple_ = nullptr;
 
-        struct stat st;
+        // struct stat st;
         // 当前算子排序过了，已经存在排序结果文件
-        if (stat(filename_.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+        if (!filename_.empty()) {
             // 可能是算子结束进来的，也有可能是到一部分重新开始了
             if (!is_end_) {
                 outfile_.close();
@@ -170,7 +213,7 @@ public:
             // 记得一定要重置，否则读到文件尾后算子会一直保持结束状态
             is_end_ = false;
 
-            outfile_.open(filename_, std::ios::in);
+            outfile_.open(filename_, std::ios::in | std::ios::binary);
             if (!outfile_.is_open()) {
                 std::stringstream s;
                 s << "Failed to open file: " << std::strerror(errno);
@@ -202,12 +245,12 @@ public:
 
         // ios::in 需要文件存在，ios::out文件不存在则创建
         // 两者同时存在且文件不存在时，会打开失败（文件不存在）
-        outfile_.open(filename_, std::ios::out | std::ios::app);
-        if (!outfile_.is_open()) {
-            std::stringstream s;
-            s << "Failed to open file: " << std::strerror(errno);
-            throw InternalError(s.str());
-        }
+        // outfile_.open(filename_, std::ios::out | std::ios::app);
+        // if (!outfile_.is_open()) {
+        //     std::stringstream s;
+        //     s << "Failed to open file: " << std::strerror(errno);
+        //     throw InternalError(s.str());
+        // }
 
         // 内存中可能放不下，实现外部排序
         for (prev_->beginTuple(); !prev_->is_end(); prev_->nextTuple()) {
@@ -225,10 +268,8 @@ public:
         // 合并所有块
         mergeSortedChunks();
 
-        outfile_.close();
-
         // 读模式
-        outfile_.open(filename_, std::ios::in);
+        outfile_.open(filename_, std::ios::in | std::ios::binary);
 
         // 缓存记录
         do {
