@@ -371,8 +371,15 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                 table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
                                                                   std::move(join_conds));
             } else if (enable_sortmerge_join) {
-                table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
-                                                                  std::move(join_conds));
+                // 默认是 sortmerge，这里要判断是否真正满足
+                if ((left->tag == T_Sort || left->tag == T_IndexScan) && (
+                        right->tag == T_Sort || right->tag == T_IndexScan)) {
+                    table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
+                                                                      std::move(join_conds));
+                } else {
+                    table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
+                                                                      std::move(join_conds));
+                }
             } else {
                 // error
                 throw RMDBError("No join executor selected!");
