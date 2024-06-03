@@ -112,9 +112,9 @@ public:
 
     inline Rid *get_rid(int rid_idx) const { return &rids[rid_idx]; }
 
-    inline char *get_last_key() { get_key(get_size() - 1); }
+    inline char *get_last_key() { return get_key(get_size() - 1); }
 
-    inline Rid *get_last_rid() { get_rid(get_size() - 1); }
+    inline Rid *get_last_rid() { return get_rid(get_size() - 1); }
 
     void set_key(int key_idx, const char *key) {
         memcpy(keys + key_idx * file_hdr->col_tot_len_, key, file_hdr->col_tot_len_);
@@ -213,6 +213,8 @@ private:
 
         Operation op_type_;
     };
+
+    void release_all_index_latch_page(Transaction *);
 
 public:
     IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
