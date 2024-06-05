@@ -127,6 +127,10 @@ bool LockManager::lock_shared_on_record(Transaction *txn, const Rid &rid, int ta
     //     lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
     // }
 
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+    }
+
     // 将当前事务锁请求加到锁请求队列中
     lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED, true);
     // 更新锁请求队列锁模式为共享锁
@@ -242,6 +246,10 @@ bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int
         txn->get_lock_set()->emplace(lock_data_id);
         ul.release();
         return true;
+    }
+
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
     }
 
     // 将当前事务锁请求加到锁请求队列中
@@ -378,6 +386,10 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
         return true;
     }
 
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+    }
+
     // 将当前事务锁请求加到锁请求队列中
     lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED, true);
     // 更新锁请求队列锁模式为共享锁
@@ -487,6 +499,10 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
         return true;
     }
 
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+    }
+
     // 将当前事务锁请求加到锁请求队列中
     lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
     // 更新锁请求队列锁模式为排他锁
@@ -567,6 +583,10 @@ bool LockManager::lock_IS_on_table(Transaction *txn, int tab_fd) {
     // 只有队列没有锁才能设置为 IS 锁
     if (lock_request_queue.group_lock_mode_ == GroupLockMode::NON_LOCK) {
         lock_request_queue.group_lock_mode_ = GroupLockMode::IS;
+    }
+
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
     }
 
     // 将当前事务锁请求加到锁请求队列中
@@ -719,6 +739,10 @@ bool LockManager::lock_IX_on_table(Transaction *txn, int tab_fd) {
     //         }
     //     }
     // }
+
+    if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+    }
 
     ++lock_request_queue.IX_lock_num_;
     // 将当前事务锁请求加到锁请求队列中
