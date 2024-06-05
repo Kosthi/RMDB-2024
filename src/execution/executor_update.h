@@ -40,6 +40,12 @@ public:
         // 不如同时把 records 也给我
         rids_ = std::move(rids);
         context_ = context;
+
+        // S_IX 锁
+        if (!rids_.empty() && context_ != nullptr) {
+            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        }
     }
 
     // 这里 next 只会被调用一次

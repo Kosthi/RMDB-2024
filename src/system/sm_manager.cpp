@@ -260,6 +260,11 @@ void SmManager::create_table(const std::string &tab_name, const std::vector<ColD
     fhs_.emplace(tab_name, rm_manager_->open_file(tab_name));
 
     flush_meta();
+
+    // 表级 X 锁
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    }
 }
 
 /**
@@ -272,9 +277,23 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
         throw TableNotFoundError(tab_name);
     }
 
-    // 先关闭再删除文件
+    // 表级 X 锁
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    }
+
+    auto &tab_meta = db_.get_table(tab_name);
+
+    // 先关闭再删除表文件
     rm_manager_->close_file(fhs_[tab_name].get());
     rm_manager_->destroy_file(tab_name);
+
+    // 先关闭再删除索引文件
+    for (auto &[index_name, index_meta]: tab_meta.indexes) {
+        ix_manager_->close_index(ihs_[index_name].get());
+        ix_manager_->destroy_index(index_name);
+        ihs_.erase(index_name);
+    }
 
     fhs_.erase(tab_name);
     db_.tabs_.erase(tab_name);
@@ -292,6 +311,12 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
     auto &&ix_name = ix_manager_->get_index_name(tab_name, col_names);
     if (disk_manager_->is_file(ix_name)) {
         throw IndexExistsError(tab_name, col_names);
+    }
+
+    // 表级 S 锁
+    // 建立索引要读表上的所有记录，所以申请表级读锁
+    if (context != nullptr) {
+        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
     }
 
     auto &table_meta = db_.get_table(tab_name);
@@ -354,6 +379,12 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
         throw IndexNotFoundError(tab_name, col_names);
     }
 
+    // 表级 S 锁
+    // 删除索引时只允许对表读操作，写操作可能会误写将被删除的索引，所以申请表级读锁
+    if (context != nullptr) {
+        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    }
+
     ix_manager_->close_index(ihs_[ix_name].get());
     ix_manager_->destroy_index(ix_name);
     ihs_.erase(ix_name);
@@ -378,6 +409,12 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
             col_names.emplace_back(col.name);
         }
         throw IndexNotFoundError(tab_name, col_names);
+    }
+
+    // 表级 S 锁
+    // 删除索引时只允许对表读操作，写操作可能会误写将被删除的索引，所以申请表级读锁
+    if (context != nullptr) {
+        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
     }
 
     ix_manager_->close_index(ihs_[ix_name].get());

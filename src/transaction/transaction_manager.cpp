@@ -162,7 +162,8 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     delete []new_key;
                 }
                 // 生成插入日志
-                auto *update_log_record = new UpdateLogRecord(txn->get_transaction_id(), new_record, old_record, rid, table_name);
+                auto *update_log_record = new UpdateLogRecord(txn->get_transaction_id(), new_record, old_record, rid,
+                                                              table_name);
                 update_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(update_log_record));
                 break;
@@ -178,6 +179,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     for (auto &it: *lock_set) {
         lock_manager_->unlock(txn, it);
     }
+    lock_set->clear();
 
     auto *abort_log_record = new AbortLogRecord(txn->get_transaction_id());
     abort_log_record->prev_lsn_ = txn->get_prev_lsn();

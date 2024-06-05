@@ -132,6 +132,11 @@ public:
         std::reverse(fed_conds_.begin(), fed_conds_.end());
         id_ = generateID();
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
+
+        // S 锁
+        if (context_ != nullptr) {
+            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        }
     }
 
     void beginTuple() override {
