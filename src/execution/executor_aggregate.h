@@ -506,17 +506,18 @@ public:
                     }
                     case AGG_MAX:
                     case AGG_MIN:
-                    case AGG_SUM: {
-                        // 为了输出空改为字符串类型，原来 len 不变
-                        sel_cols_[i].type = TYPE_STRING;
-                        std::string s;
-                        memcpy(record->data + offset, s.c_str(), sel_cols_[i].len);
-                        offset += sel_cols_[i].len;
-                        break;
-                    }
+                    case AGG_SUM:
+                    // {
+                    //     // 为了输出空改为字符串类型，原来 len 不变
+                    //     sel_cols_[i].type = TYPE_STRING;
+                    //     std::string s;
+                    //     memcpy(record->data + offset, s.c_str(), sel_cols_[i].len);
+                    //     offset += sel_cols_[i].len;
+                    //     break;
+                    // }
                     case AGG_COL:
                     default:
-                        throw InternalError("Unexpected aggregate type！");
+                        throw InternalError("Unsupported aggregate null type！");
                 }
             }
             return std::move(record);
