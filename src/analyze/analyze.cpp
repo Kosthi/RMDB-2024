@@ -277,8 +277,6 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
             for (auto &value: expr->rhs_list) {
                 cond.rhs_value_list.emplace_back(convert_sv_value(value));
             }
-        } else {
-            throw InternalError("获取 where 右值错误！");
         }
         conds.emplace_back(cond);
     }
@@ -299,6 +297,7 @@ void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExp
         cond.op = convert_sv_comp_op(expr->op);
         if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
             cond.is_rhs_val = true;
+            cond.is_sub_query = false;
             cond.rhs_val = convert_sv_value(rhs_val);
         } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
             // 右边一定是数值

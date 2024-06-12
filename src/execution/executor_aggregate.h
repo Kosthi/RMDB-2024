@@ -451,7 +451,7 @@ public:
         // 空表
         if (it_ == ht_.hash_table_.end()) {
             // 空表且有group by，但是没有key直接输出空表
-            if (!group_bys_.empty()) {
+            if (!group_bys_.empty() && has_group_col_) {
                 return;
             }
             is_empty_table_ = true;
