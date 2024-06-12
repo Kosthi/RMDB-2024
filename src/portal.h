@@ -173,6 +173,19 @@ public:
             for (auto &cond: x->conds_) {
                 if (cond.is_sub_query && cond.sub_query_plan != nullptr) {
                     cond.prev = convert_plan_executor(cond.sub_query_plan, context);
+                    // 在算子执行之前就处理异常情况，否则会错误输出表头
+                    // 子查询为空抛错处理
+                    cond.prev->beginTuple();
+                    if (cond.prev->is_end()) {
+                        throw InternalError("Empty sub query!");
+                    }
+                    // 比较运算符的子查询，只能有一个元素
+                    if (cond.op != OP_IN) {
+                        cond.prev->nextTuple();
+                        if (!cond.prev->is_end()) {
+                            throw InternalError("Subquery returns more than 1 row!");
+                        }
+                    }
                 }
             }
             if (x->tag == T_SeqScan) {
