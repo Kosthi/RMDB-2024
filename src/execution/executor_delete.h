@@ -47,6 +47,13 @@ public:
         for (auto &rid: rids_) {
             auto &&rec = fh_->get_record(rid, context_);
 
+            auto *delete_log_record = new DeleteLogRecord(context_->txn_->get_transaction_id(), *rec, rid, tab_name_);
+            delete_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
+            context_->txn_->set_prev_lsn(context_->log_mgr_->add_log_to_buffer(delete_log_record));
+            auto &&page = fh_->fetch_page_handle(rid.page_no).page;
+            page->set_page_lsn(context_->txn_->get_prev_lsn());
+            sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
+
             // 写入事务写集
             auto *write_record = new WriteRecord(WType::DELETE_TUPLE, tab_name_, rid, *rec);
             context_->txn_->append_write_record(write_record);

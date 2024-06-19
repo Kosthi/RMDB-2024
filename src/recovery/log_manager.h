@@ -190,8 +190,9 @@ public:
         log_tot_len_ += insert_value_.size;
         log_tot_len_ += sizeof(Rid);
         table_name_size_ = table_name.length();
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, table_name.c_str(), table_name_size_);
+        table_name_[table_name_size_] = '\0';
         log_tot_len_ += sizeof(size_t) + table_name_size_;
     }
 
@@ -219,8 +220,9 @@ public:
         offset += sizeof(Rid);
         table_name_size_ = *reinterpret_cast<const size_t *>(src + offset);
         offset += sizeof(size_t);
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, src + offset, table_name_size_);
+        table_name_[table_name_size_] = '\0';
     }
 
     void format_print() override {
@@ -229,6 +231,10 @@ public:
         printf("insert value: %s\n", insert_value_.data);
         printf("insert rid: %d, %d\n", rid_.page_no, rid_.slot_no);
         printf("table name: %s\n", table_name_);
+    }
+
+    inline std::string get_table_name() const {
+        return table_name_;
     }
 
     RmRecord insert_value_; // 插入的记录
@@ -260,8 +266,9 @@ public:
         log_tot_len_ += delete_value_.size;
         log_tot_len_ += sizeof(Rid);
         table_name_size_ = table_name.length();
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, table_name.c_str(), table_name_size_);
+        table_name_[table_name_size_] = '\0';
         log_tot_len_ += sizeof(size_t) + table_name_size_;
     }
 
@@ -289,8 +296,9 @@ public:
         offset += sizeof(Rid);
         table_name_size_ = *reinterpret_cast<const size_t *>(src + offset);
         offset += sizeof(size_t);
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, src + offset, table_name_size_);
+        table_name_[table_name_size_] = '\0';
     }
 
     void format_print() override {
@@ -299,6 +307,10 @@ public:
         printf("delete value: %s\n", delete_value_.data);
         printf("delete rid: %d, %d\n", rid_.page_no, rid_.slot_no);
         printf("table name: %s\n", table_name_);
+    }
+
+    inline std::string get_table_name() {
+        return {table_name_};
     }
 
     RmRecord delete_value_; // 删除的记录
@@ -332,8 +344,9 @@ public:
         log_tot_len_ += sizeof(int) + old_value_.size + update_value_.size;
         log_tot_len_ += sizeof(Rid);
         table_name_size_ = table_name.length();
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, table_name.c_str(), table_name_size_);
+        table_name_[table_name_size_] = '\0';
         log_tot_len_ += sizeof(size_t) + table_name_size_;
     }
 
@@ -364,8 +377,9 @@ public:
         offset += sizeof(Rid);
         table_name_size_ = *reinterpret_cast<const size_t *>(src + offset);
         offset += sizeof(size_t);
-        table_name_ = new char[table_name_size_];
+        table_name_ = new char[table_name_size_ + 1];
         memcpy(table_name_, src + offset, table_name_size_);
+        table_name_[table_name_size_] = '\0';
     }
 
     void format_print() override {
@@ -375,6 +389,10 @@ public:
         printf("update value: %s\n", update_value_.data);
         printf("update rid: %d, %d\n", rid_.page_no, rid_.slot_no);
         printf("table name: %s\n", table_name_);
+    }
+
+    inline std::string get_table_name() const {
+        return {table_name_};
     }
 
     RmRecord old_value_; // 旧的记录
@@ -393,14 +411,14 @@ public:
         memset(buffer_, 0, sizeof(buffer_));
     }
 
-    bool is_full(int append_size) {
+    bool is_full(uint32_t append_size) const {
         if (offset_ + append_size > LOG_BUFFER_SIZE)
             return true;
         return false;
     }
 
     char buffer_[LOG_BUFFER_SIZE + 1];
-    int offset_; // 写入log的offset
+    uint32_t offset_; // 写入 log 的 offset
 };
 
 /* 日志管理器，负责把日志写入日志缓冲区，以及把日志缓冲区中的内容写入磁盘中 */
@@ -412,7 +430,9 @@ public:
 
     void flush_log_to_disk();
 
-    LogBuffer *get_log_buffer() { return &log_buffer_; }
+    inline LogBuffer *get_log_buffer() { return &log_buffer_; }
+    inline lsn_t get_persist_lsn() { return persist_lsn_; }
+    inline void set_global_lsn(lsn_t global_lsn) { global_lsn_.store(global_lsn); }
 
 private:
     std::atomic<lsn_t> global_lsn_{0}; // 全局lsn，递增，用于为每条记录分发lsn

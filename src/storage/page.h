@@ -83,7 +83,12 @@ public:
     inline int get_pin_count() const { return pin_count_; }
 
 private:
-    void reset_memory() { memset(data_, OFFSET_PAGE_START, PAGE_SIZE); } // 将data_的PAGE_SIZE个字节填充为0
+    void reset_memory() {
+        // 将 data_ 的 PAGE_SIZE 个字节填充为 0
+        memset(data_, OFFSET_PAGE_START, PAGE_SIZE);
+        // 设置初始 lsn
+        set_page_lsn(INVALID_LSN);
+    }
 
     /** page的唯一标识符 */
     PageId id_;

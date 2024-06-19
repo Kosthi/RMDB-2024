@@ -78,6 +78,14 @@ public:
                 delete []key;
             }
 
+            auto *update_log_record = new UpdateLogRecord(context_->txn_->get_transaction_id(), *old_record,
+                                                          *updated_record, rid, tab_name_);
+            update_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
+            context_->txn_->set_prev_lsn(context_->log_mgr_->add_log_to_buffer(update_log_record));
+            auto &&page = fh_->fetch_page_handle(rid.page_no).page;
+            page->set_page_lsn(context_->txn_->get_prev_lsn());
+            sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
+
             // 写入事务写集
             auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record);
             context_->txn_->append_write_record(write_record);

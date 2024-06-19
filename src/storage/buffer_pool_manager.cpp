@@ -9,8 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #include "buffer_pool_manager.h"
-
-#include <readline/readline.h>
+#include "recovery/log_manager.h"
 
 /**
  * @description: 从free_list或replacer中得到可淘汰帧页的 *frame_id
@@ -42,6 +41,10 @@ void BufferPoolManager::update_page(Page *page, PageId new_page_id, frame_id_t n
     // 2 更新page table
     // 3 重置page的data，更新page id
     if (page->is_dirty()) {
+        // 置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
+        if (page->get_page_lsn() > log_manager_->get_persist_lsn()) {
+            log_manager_->flush_log_to_disk();
+        }
         disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
         page->is_dirty_ = false;
     }
