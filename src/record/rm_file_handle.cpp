@@ -47,7 +47,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     // 4. 更新page_handle.page_hdr中的数据结构
     // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
     // TODO 不需要加行级写锁？
-    auto &&page_handle = create_new_page_handle();
+    // TODO 这里实际上是以一个页面放一个记录，太占用空间了！
+    auto &&page_handle = create_page_handle();
     auto &&slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
