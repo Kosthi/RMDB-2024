@@ -265,6 +265,12 @@ public:
             sortAndSaveChunk();
         }
 
+        // 空表
+        if (temp_files_.empty()) {
+            is_end_ = true;
+            return;
+        }
+
         // 合并所有块
         mergeSortedChunks();
 
