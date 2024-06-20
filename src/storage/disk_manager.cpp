@@ -266,6 +266,8 @@ int DiskManager::read_log(char *log_data, int size, int offset) {
     lseek(log_fd_, offset, SEEK_SET);
     ssize_t bytes_read = read(log_fd_, log_data, size);
     assert(bytes_read == size);
+    close_file(log_fd_);
+    log_fd_ = -1;
     return bytes_read;
 }
 
@@ -285,4 +287,6 @@ void DiskManager::write_log(char *log_data, int size) {
     if (bytes_write != size) {
         throw UnixError();
     }
+    close_file(log_fd_);
+    log_fd_ = -1;
 }

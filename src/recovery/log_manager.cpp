@@ -34,6 +34,9 @@ lsn_t LogManager::add_log_to_buffer(LogRecord *log_record) {
  */
 void LogManager::flush_log_to_disk() {
     std::lock_guard lock(latch_);
+    if (log_buffer_.offset_ == 0) {
+        return;
+    }
     disk_manager_->write_log(log_buffer_.buffer_, log_buffer_.offset_);
     log_buffer_.offset_ = 0;
     persist_lsn_ = global_lsn_ - 1;

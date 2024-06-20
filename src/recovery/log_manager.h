@@ -24,7 +24,8 @@ enum LogType: int {
     DELETE,
     BEGIN,
     COMMIT,
-    ABORT
+    ABORT,
+    STATIC_CHECKPOINT
 };
 
 static std::string LogTypeStr[] = {
@@ -33,7 +34,8 @@ static std::string LogTypeStr[] = {
     "DELETE",
     "BEGIN",
     "COMMIT",
-    "ABORT"
+    "ABORT",
+    "STATIC_CHECKPOINT"
 };
 
 class LogRecord {
@@ -71,6 +73,36 @@ public:
         printf("log_tot_len: %d\n", log_tot_len_);
         printf("log_tid: %d\n", log_tid_);
         printf("prev_lsn: %d\n", prev_lsn_);
+    }
+};
+
+class StaticCheckpointLogRecord : public LogRecord {
+public:
+    StaticCheckpointLogRecord() {
+        log_type_ = STATIC_CHECKPOINT;
+        lsn_ = INVALID_LSN;
+        log_tot_len_ = LOG_HEADER_SIZE;
+        log_tid_ = INVALID_TXN_ID;
+        prev_lsn_ = INVALID_LSN;
+    }
+
+    StaticCheckpointLogRecord(txn_id_t txn_id) : StaticCheckpointLogRecord() {
+        log_tid_ = txn_id;
+    }
+
+    // 序列化Begin日志记录到dest中
+    void serialize(char *dest) const override {
+        LogRecord::serialize(dest);
+    }
+
+    // 从src中反序列化出一条Begin日志记录
+    void deserialize(const char *src) override {
+        LogRecord::deserialize(src);
+    }
+
+    virtual void format_print() override {
+        std::cout << "log type in son_function: " << LogTypeStr[log_type_] << "\n";
+        LogRecord::format_print();
     }
 };
 
@@ -433,6 +465,7 @@ public:
     inline LogBuffer *get_log_buffer() { return &log_buffer_; }
     inline lsn_t get_persist_lsn() { return persist_lsn_; }
     inline void set_global_lsn(lsn_t global_lsn) { global_lsn_.store(global_lsn); }
+    inline void set_persist_lsn(lsn_t persist_lsn) { persist_lsn_ = persist_lsn; }
 
 private:
     std::atomic<lsn_t> global_lsn_{0}; // 全局lsn，递增，用于为每条记录分发lsn

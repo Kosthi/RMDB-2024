@@ -45,7 +45,8 @@ typedef enum PlanTag {
     T_SortMerge, // sort merge join
     T_Sort,
     T_Projection,
-    T_Aggregate
+    T_Aggregate,
+    T_CreateStaticCheckpoint
 } PlanTag;
 
 // 查询执行计划
@@ -228,6 +229,17 @@ public:
 
     ast::SetKnobType set_knob_type_;
     bool bool_value_;
+};
+
+// 静态检查点生成计划
+class StaticCheckpointPlan : public Plan {
+public:
+    StaticCheckpointPlan(PlanTag tag) {
+        Plan::tag = tag;
+    }
+
+    ~StaticCheckpointPlan() {
+    }
 };
 
 class plannerInfo {

@@ -129,6 +129,40 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
                 throw RMDBError("Not implemented!\n");
             }
         }
+    } else if (auto x = std::dynamic_pointer_cast<StaticCheckpointPlan>(plan)) {
+        // TODO 这里静态检查点作了优化，直接把检查点之前的日志清空，这样有检查点地址一定是日志文件头，且是最后一个检查点
+        // 先提交了再刷盘
+        // 1.停止接收新事务和正在运行事务
+        // 2.将仍保留在日志缓冲区中的内容写到日志文件中
+        // 如果是隐式事务执行，这里设置为显式，这样就不会多写一条 commit log，保证日志纯净
+        context->txn_->set_txn_mode(true);
+        context->txn_ = txn_mgr_->get_transaction(*txn_id);
+        txn_mgr_->commit(context->txn_, context->log_mgr_);
+
+        // 3.在日志文件中写入一个“检查点记录” 忽略
+        // auto *static_checkpoint_log_record = new StaticCheckpointLogRecord(context->txn_->get_transaction_id());
+        // static_checkpoint_log_record->prev_lsn_ = context->txn_->get_prev_lsn();
+        // context->txn_->set_prev_lsn(context->log_mgr_->add_log_to_buffer(static_checkpoint_log_record));
+        // log_manager->flush_log_to_disk();
+
+        // 4.将当前数据库缓冲区中的内容写到磁盘中
+        sm_manager_->flush_meta();
+
+        for (auto &[_, fh]: sm_manager_->fhs_) {
+            sm_manager_->get_rm_manager()->flush_file(fh.get());
+        }
+        for (auto &[_, ih]: sm_manager_->ihs_) {
+            sm_manager_->get_ix_manager()->flush_index(ih.get());
+        }
+
+        // 直接把日志清空
+        std::ofstream ofs(LOG_FILE_NAME, std::ios::trunc);
+        if (ofs.fail()) {
+            assert(false);
+        }
+        ofs.close();
+
+        // 5.把日志文件中检查点记录的地址写到“重新启动文件”中 忽略
     }
 }
 

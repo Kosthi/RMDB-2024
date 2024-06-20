@@ -190,6 +190,7 @@ void RecoveryManager::analyze() {
         memset(buffer_.buffer_, 0, sizeof(LOG_BUFFER_SIZE));
     }
     log_manager_->set_global_lsn(max_lsn + 1);
+    log_manager_->set_persist_lsn(max_lsn);
     transaction_manager_->set_next_txn_id(max_txn_id + 1);
 }
 

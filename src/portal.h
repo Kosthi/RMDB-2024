@@ -62,6 +62,10 @@ public:
 
     // 将查询执行计划转换成对应的算子树
     std::shared_ptr<PortalStmt> start(std::shared_ptr<Plan> plan, Context *context) {
+        if (auto x = std::dynamic_pointer_cast<StaticCheckpointPlan>(plan)) {
+            return std::make_shared<PortalStmt>(PORTAL_CMD_UTILITY, std::vector<TabCol>(),
+                                                std::unique_ptr<AbstractExecutor>(), plan);
+        }
         // 这里可以将select进行拆分，例如：一个select，带有return的select等
         if (auto x = std::dynamic_pointer_cast<OtherPlan>(plan)) {
             return std::make_shared<PortalStmt>(PORTAL_CMD_UTILITY, std::vector<TabCol>(),
@@ -184,7 +188,7 @@ public:
                     std::move(right), std::move(x->conds_));
             }
             return std::make_unique<SortMergeJoinExecutor>(std::move(left),
-                    std::move(right), std::move(x->conds_));
+                                                           std::move(right), std::move(x->conds_));
         }
         if (auto x = std::dynamic_pointer_cast<SortPlan>(plan)) {
             return std::make_unique<SortExecutor>(convert_plan_executor(x->subplan_, context),
