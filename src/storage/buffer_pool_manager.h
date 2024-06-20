@@ -80,6 +80,8 @@ public:
 
     void flush_all_pages(int fd);
 
+    void flush_all_pages_for_checkpoint(int fd);
+
     void delete_all_pages(int fd);
 
     auto FetchPageBasic(PageId page_id) -> BasicPageGuard;
