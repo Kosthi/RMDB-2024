@@ -23,7 +23,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
-COUNT MAX MIN SUM AS GROUP HAVING
+COUNT MAX MIN SUM AS GROUP HAVING STATIC_CHECKPOINT
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
@@ -130,6 +130,10 @@ ddl:
         CREATE TABLE tbName '(' fieldList ')'
     {
         $$ = std::make_shared<CreateTable>($3, $5);
+    }
+    |   CREATE STATIC_CHECKPOINT
+    {
+        $$ = std::make_shared<CreateStaticCheckpoint>();
     }
     |   DROP TABLE tbName
     {

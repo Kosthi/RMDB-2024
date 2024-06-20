@@ -136,6 +136,9 @@ namespace ast {
         }
     };
 
+    struct CreateStaticCheckpoint : public TreeNode {
+    };
+
     struct Expr : public TreeNode {
     };
 
