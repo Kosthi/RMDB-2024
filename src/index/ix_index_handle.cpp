@@ -581,7 +581,6 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     }
     if (transaction != nullptr) {
         for (auto &page: *transaction->get_index_deleted_page_set()) {
-            page->WUnlatch();
             buffer_pool_manager_->delete_page(page->get_page_id());
         }
         transaction->get_index_deleted_page_set()->clear();
