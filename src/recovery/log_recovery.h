@@ -10,7 +10,6 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include <map>
 #include <unordered_map>
 #include "log_manager.h"
 #include "storage/disk_manager.h"
@@ -29,8 +28,8 @@ class RecoveryManager {
 public:
     RecoveryManager(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, SmManager *sm_manager,
                     LogManager *log_manager, TransactionManager *transaction_manager) : disk_manager_(disk_manager),
-        buffer_pool_manager_(buffer_pool_manager), sm_manager_(sm_manager), transaction_(666),
-        log_manager_(log_manager), transaction_manager_(transaction_manager) {
+        buffer_pool_manager_(buffer_pool_manager), sm_manager_(sm_manager),
+        log_manager_(log_manager), transaction_manager_(transaction_manager), transaction_(666) {
     }
 
     void analyze();
@@ -38,6 +37,8 @@ public:
     void redo();
 
     void undo();
+
+    void redo_indexes();
 
 private:
     LogBuffer buffer_; // 读入日志
@@ -53,4 +54,5 @@ private:
     /** DPT for redo. */
     std::deque<lsn_t> dirty_page_table_;
     Transaction transaction_;
+    bool is_need_redo_indexes{false};
 };

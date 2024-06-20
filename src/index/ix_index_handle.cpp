@@ -240,6 +240,7 @@ IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffe
     disk_manager_->read_page(fd, IX_FILE_HDR_PAGE, buf, PAGE_SIZE);
     file_hdr_ = new IxFileHdr();
     file_hdr_->deserialize(buf);
+    delete []buf;
 
     // disk_manager管理的fd对应的文件中，设置从file_hdr_->num_pages开始分配page_no
     int now_page_no = disk_manager_->get_fd2pageno(fd);
@@ -449,12 +450,14 @@ bool IxIndexHandle::is_unique(const char *key, Rid &value, Transaction *transact
     int pos = leaf_node->lower_bound(key);
     if (pos == leaf_node->page_hdr->num_key || Compare(key, leaf_node->get_key(pos))) {
         // 释放写锁
+        release_all_index_latch_page(transaction);
         leaf_node->page->WUnlatch();
         buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
         return true;
     }
     value = *leaf_node->get_rid(pos);
     // 释放写锁
+    release_all_index_latch_page(transaction);
     leaf_node->page->WUnlatch();
     buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
     return false;
@@ -516,6 +519,7 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
         return return_page_id;
     }
 
+    release_all_index_latch_page(transaction);
     // 先解写锁 写锁不影响 pageId
     leaf_node->page->WUnlatch();
     // unpin 之后page可能会被替换 拷贝下页id
@@ -577,6 +581,7 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     }
     if (transaction != nullptr) {
         for (auto &page: *transaction->get_index_deleted_page_set()) {
+            page->WUnlatch();
             buffer_pool_manager_->delete_page(page->get_page_id());
         }
         transaction->get_index_deleted_page_set()->clear();
