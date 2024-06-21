@@ -17,7 +17,7 @@ See the Mulan PSL v2 for more details. */
  * @return {lsn_t} 返回该日志的日志记录号
  */
 lsn_t LogManager::add_log_to_buffer(LogRecord *log_record) {
-    std::lock_guard lock(latch_);
+    latch_.lock();
     if (log_buffer_.is_full(log_record->log_tot_len_)) {
         latch_.unlock();
         flush_log_to_disk();
@@ -26,6 +26,7 @@ lsn_t LogManager::add_log_to_buffer(LogRecord *log_record) {
     log_record->lsn_ = global_lsn_++;
     log_record->serialize(log_buffer_.buffer_ + log_buffer_.offset_);
     log_buffer_.offset_ += log_record->log_tot_len_;
+    latch_.unlock();
     return log_record->lsn_;
 }
 
