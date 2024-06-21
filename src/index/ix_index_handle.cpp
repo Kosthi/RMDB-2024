@@ -959,9 +959,7 @@ void IxIndexHandle::erase_leaf(IxNodeHandle *leaf) {
     assert(leaf->is_leaf_page());
 
     IxNodeHandle *prev = fetch_node(leaf->get_prev_leaf());
-    prev->page->WLatch();
     prev->set_next_leaf(leaf->get_next_leaf());
-    prev->page->WUnlatch();
     buffer_pool_manager_->unpin_page(prev->get_page_id(), true);
 
     IxNodeHandle *next = fetch_node(leaf->get_next_leaf());
