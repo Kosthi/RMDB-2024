@@ -122,7 +122,7 @@ void SmManager::open_db(const std::string &db_name) {
  */
 void SmManager::flush_meta() {
     // 默认清空文件
-    std::ofstream ofs(DB_META_NAME);
+    std::ofstream ofs(DB_META_NAME, std::ios::trunc);
     ofs << db_;
 }
 
@@ -423,4 +423,55 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
     table_meta.indexes.erase(ix_name);
     // 持久化
     flush_meta();
+}
+
+/**
+ * @description: 仅用于恢复索引
+ * @param {string&} tab_name 表名称
+ * @param {vector<ColMeta>&} 索引包含的字段元数据
+ * @param {Context*} context
+ */
+void SmManager::redo_index(const std::string &tab_name, TabMeta& table_meta, const std::vector<std::string> &col_names, const std::string &index_name, Context *context) {
+    ix_manager_->close_index(ihs_[index_name].get());
+    ix_manager_->destroy_index(index_name);
+
+    std::vector<ColMeta> col_metas;
+    col_metas.reserve(col_names.size());
+    auto total_len = 0;
+    for (auto &col_name: col_names) {
+        col_metas.emplace_back(*table_meta.get_col(col_name));
+        total_len += col_metas.back().len;
+    }
+
+    // auto ix_name = std::move(ix_manager_->get_index_name(tab_name, col_names));
+    ix_manager_->create_index(index_name, col_metas);
+    auto &&ih = ix_manager_->open_index(index_name);
+    auto &&fh = fhs_[tab_name];
+
+    int offset = 0;
+    char *key = new char[total_len];
+    for (auto &&scan = std::make_unique<RmScan>(fh.get()); !scan->is_end(); scan->next()) {
+        auto &&rid = scan->rid();
+        auto &&record = fh->get_record(rid, context);
+        offset = 0;
+        for (auto &col_meta: col_metas) {
+            memcpy(key + offset, record->data + col_meta.offset, col_meta.len);
+            offset += col_meta.len;
+        }
+        // 插入B+树
+        if (ih->insert_entry(key, rid, context->txn_) == IX_NO_PAGE) {
+            // 释放内存
+            delete []key;
+            // 重复了
+            ix_manager_->close_index(ih.get());
+            ix_manager_->destroy_index(index_name);
+            // drop_index(tab_name, col_names, context);
+            throw NonUniqueIndexError(tab_name, col_names);
+        }
+    }
+    // 释放内存
+    delete []key;
+
+    // 插入索引句柄
+    ihs_[index_name] = std::move(ih);
 }

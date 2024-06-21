@@ -112,9 +112,6 @@ void *client_handler(void *sock_fd) {
         if (strcmp(data_recv, "crash") == 0) {
             std::cout << "Server crash" << std::endl;
             delete []data_send;
-            for (auto &[_, txn]: txn_manager->txn_map) {
-                delete txn;
-            }
             exit(1);
         }
 
@@ -210,9 +207,6 @@ void *client_handler(void *sock_fd) {
 
     // release memory
     delete []data_send;
-    for (auto &[_, txn]: txn_manager->txn_map) {
-        delete txn;
-    }
 
     // Clear
     std::cout << "Terminating current client_connection..." << std::endl;

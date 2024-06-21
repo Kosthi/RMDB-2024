@@ -75,8 +75,6 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     txn->set_prev_lsn(log_manager->add_log_to_buffer(commit_log_record));
     log_manager->flush_log_to_disk();
     txn->set_state(TransactionState::COMMITTED);
-    delete txn_map[txn->get_transaction_id()];
-    txn_map.erase(txn->get_transaction_id());
     delete commit_log_record;
 }
 
@@ -198,7 +196,5 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     txn->set_prev_lsn(log_manager->add_log_to_buffer(abort_log_record));
     log_manager->flush_log_to_disk();
     txn->set_state(TransactionState::ABORTED);
-    delete txn_map[txn->get_transaction_id()];
-    txn_map.erase(txn->get_transaction_id());
     delete abort_log_record;
 }

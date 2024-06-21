@@ -151,7 +151,6 @@ bool BufferPoolManager::flush_page(PageId page_id) {
     }
 
     auto &page = pages_[it->second];
-    // 确保日志先落盘，页面数据再落盘，置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
     if (page.get_page_lsn() > log_manager_->get_persist_lsn()) {
         log_manager_->flush_log_to_disk();
     }
@@ -207,7 +206,6 @@ bool BufferPoolManager::delete_page(PageId page_id) {
     }
 
     if (page.is_dirty_) {
-        // 确保日志先落盘，页面数据再落盘，置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
         if (page.get_page_lsn() > log_manager_->get_persist_lsn()) {
             log_manager_->flush_log_to_disk();
         }
@@ -233,7 +231,6 @@ void BufferPoolManager::flush_all_pages(int fd) {
     for (auto &[pageId, frameId]: page_table_) {
         if (pageId.fd == fd) {
             auto &page = pages_[frameId];
-            // 确保日志先落盘，页面数据再落盘，置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
             if (page.get_page_lsn() > log_manager_->get_persist_lsn()) {
                 log_manager_->flush_log_to_disk();
             }

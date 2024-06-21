@@ -299,30 +299,35 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
             std::vector<Condition> join_conds{*it};
             left = pop_scan(scantbl, it->lhs_col.tab_name, joined_tables, table_scan_executors);
             right = pop_scan(scantbl, it->rhs_col.tab_name, joined_tables, table_scan_executors);
-
             // 检查左连接条件上是否有索引
             auto left_plan = std::dynamic_pointer_cast<ScanPlan>(left);
-            std::vector<std::string> index_col_names;
-            bool index_exist = get_index_cols(it->lhs_col.tab_name, join_conds, index_col_names);
-            if (index_exist) {
-                left_plan->tag = T_IndexScan;
-                left_plan->conds_ = join_conds;
-                left_plan->index_col_names_ = std::move(index_col_names);
+            // TODO 这里是优化成index
+            if (left_plan->tag != T_IndexScan) {
+                std::vector<std::string> index_col_names;
+                bool index_exist = get_index_cols(it->lhs_col.tab_name, join_conds, index_col_names);
+                if (index_exist) {
+                    left_plan->tag = T_IndexScan;
+                    left_plan->conds_ = join_conds;
+                    left_plan->index_col_names_ = std::move(index_col_names);
+                }
+                index_col_names.clear();
             }
-            index_col_names.clear();
 
             // 检查右连接条件上是否有索引
             // 交换连接左右列
             auto right_conds = join_conds;
             std::swap(right_conds[0].lhs_col, right_conds[0].rhs_col);
             auto right_plan = std::dynamic_pointer_cast<ScanPlan>(right);
-            index_exist = get_index_cols(it->rhs_col.tab_name, right_conds, index_col_names);
-            if (index_exist) {
-                right_plan->tag = T_IndexScan;
-                right_plan->conds_ = std::move(right_conds);
-                right_plan->index_col_names_ = std::move(index_col_names);
+            if (right_plan->tag != T_IndexScan) {
+                std::vector<std::string> index_col_names;
+                bool index_exist = get_index_cols(it->rhs_col.tab_name, right_conds, index_col_names);
+                if (index_exist) {
+                    right_plan->tag = T_IndexScan;
+                    right_plan->conds_ = std::move(right_conds);
+                    right_plan->index_col_names_ = std::move(index_col_names);
+                }
+                index_col_names.clear();
             }
-            index_col_names.clear();
 
             // TODO 优化 sort 转索引
             if (x->has_sort) {
@@ -378,11 +383,11 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                                                                       std::move(join_conds));
                 } else {
                     // ticky 把嵌套连接变成归并连接来加速
-                    left = std::make_shared<SortPlan>(T_Sort, std::move(left), it->lhs_col,
-                                                      false);
-                    right = std::make_shared<SortPlan>(T_Sort, std::move(right), it->rhs_col,
-                                                       false);
-                    table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
+                    // left = std::make_shared<SortPlan>(T_Sort, std::move(left), it->lhs_col,
+                    //                                   false);
+                    // right = std::make_shared<SortPlan>(T_Sort, std::move(right), it->rhs_col,
+                    //                                    false);
+                    table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
                                                                       std::move(join_conds));
                 }
             } else {

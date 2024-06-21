@@ -30,7 +30,7 @@ public:
     std::string get_index_name(const std::string &filename, const std::vector<std::string> &index_cols) {
         std::ostringstream oss;
         oss << filename;
-        for (const auto &col: index_cols) {
+        for (const auto &col : index_cols) {
             oss << "_" << col;
         }
         oss << ".idx";
@@ -40,7 +40,7 @@ public:
     std::string get_index_name(const std::string &filename, const std::vector<ColMeta> &index_cols) {
         std::ostringstream oss;
         oss << filename;
-        for (const auto &col: index_cols) {
+        for (const auto &col : index_cols) {
             oss << "_" << col.name;
         }
         oss << ".idx";
@@ -61,7 +61,7 @@ public:
         return disk_manager_->is_file(index_name);
     }
 
-    void create_index(std::string &ix_name, const std::vector<ColMeta> &index_cols) {
+    void create_index(const std::string &ix_name, const std::vector<ColMeta>& index_cols) {
         // Create index file
         disk_manager_->create_file(ix_name);
         // Open index file
@@ -98,9 +98,6 @@ public:
         fhdr->serialize(data);
 
         disk_manager_->write_page(fd, IX_FILE_HDR_PAGE, data, fhdr->tot_len_);
-
-        delete fhdr;
-        delete []data;
 
         char page_buf[PAGE_SIZE]; // 在内存中初始化page_buf中的内容，然后将其写入磁盘
         memset(page_buf, 0, PAGE_SIZE);

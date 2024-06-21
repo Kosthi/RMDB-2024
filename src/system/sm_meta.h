@@ -61,7 +61,7 @@ struct IndexMeta {
         for (int i = 0; i < index.col_num; ++i) {
             ColMeta col;
             is >> col;
-            index.cols.push_back(col);
+            index.cols.emplace_back(col);
         }
         return is;
     }
@@ -173,6 +173,8 @@ struct TabMeta {
             is >> index_name;
             is >> index;
             tab.indexes.emplace(index_name, index);
+            // TODO 注意这里要清空
+            index.cols.clear();
         }
         return is;
     }

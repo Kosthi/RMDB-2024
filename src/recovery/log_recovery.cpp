@@ -432,12 +432,12 @@ void RecoveryManager::redo_indexes() {
     std::vector<std::string> col_names;
     auto *context = new Context(nullptr, nullptr, &transaction_);
     for (auto &[table_name, _]: sm_manager_->fhs_) {
-        for (auto &[_, index_meta]: sm_manager_->db_.get_table(table_name).indexes) {
+        auto &table_meta = sm_manager_->db_.get_table(table_name);
+        for (auto &[index_name, index_meta]: table_meta.indexes) {
             for (auto &col: index_meta.cols) {
                 col_names.emplace_back(col.name);
             }
-            sm_manager_->drop_index(table_name, col_names, nullptr);
-            sm_manager_->create_index(table_name, col_names, context);
+            sm_manager_->redo_index(table_name, table_meta, col_names, index_name, context);
             col_names.clear();
         }
     }

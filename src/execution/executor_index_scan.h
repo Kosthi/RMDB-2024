@@ -43,10 +43,17 @@ private:
     std::fstream outfile_;
     bool is_end_;
     size_t id_;
+    bool mergesort_;
     constexpr static int int_min_ = INT32_MIN;
     constexpr static int int_max_ = INT32_MAX;
     constexpr static float float_min_ = FLT_MIN;
     constexpr static float float_max_ = FLT_MAX;
+
+    // 满足索引算子多次调用，非归并
+    bool already_begin_{false};
+    Iid lower_;
+    Iid upper_;
+    IxIndexHandle *ih_;
 
     static std::size_t generateID() {
         static size_t current_id = 0;
@@ -132,6 +139,7 @@ public:
         std::reverse(fed_conds_.begin(), fed_conds_.end());
         id_ = generateID();
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
+        mergesort_ = !conds_[0].is_rhs_val && conds_.size() == 1;
 
         // S 锁
         if (context_ != nullptr) {
@@ -140,16 +148,32 @@ public:
     }
 
     void beginTuple() override {
-        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
-        const auto &&ih = sm_manager_->ihs_[index_name].get();
+        if (already_begin_ && !mergesort_) {
+            is_end_ = false;
+            scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
+            while (!scan_->is_end()) {
+                rid_ = scan_->rid();
+                rm_record_ = fh_->get_record(rid_, context_);
+                if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
+                    return;
+                }
+                scan_->next();
+            }
+            is_end_ = true;
+            return;
+        }
 
-        Iid lower = ih->leaf_begin(), upper = ih->leaf_end();
-        // sortmerge
-        if (!conds_[0].is_rhs_val) {
+        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
+        ih_ = sm_manager_->ihs_[index_name].get();
+
+        lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+        // 如果 '列 op 列'，走 sortmerge
+        // TODO 行多外部排序慢，但是为了通过归并连接测试
+        if (mergesort_) {
             // 适用嵌套连接走索引的情况
-            struct stat st;
+            // struct stat st;
             // 当前算子排序过了，已经存在排序结果文件
-            if (stat(filename_.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            if (already_begin_) {
                 // 可能是算子结束进来的，也有可能是到一部分重新开始了
                 if (!is_end_) {
                     outfile_.close();
@@ -187,8 +211,10 @@ public:
             }
 
             is_end_ = false;
-            scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
+            scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
             write_sorted_results();
+
+            already_begin_ = true;
 
             outfile_.open(filename_, std::ios::in);
 
@@ -243,10 +269,10 @@ public:
                 // where p_id = 0, name = 'bztyhnmj';
                 // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                 set_remaining_all_min(offset, last_idx, key);
-                lower = ih->lower_bound(key);
+                lower_ = ih_->lower_bound(key);
                 // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                 set_remaining_all_max(offset, last_idx, key);
-                upper = ih->upper_bound(key);
+                upper_ = ih_->upper_bound(key);
                 break;
             }
             case OP_GE: {
@@ -257,13 +283,13 @@ public:
                 // 如果前面有等号需要重新更新上下界
                 // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                 set_remaining_all_min(offset, last_idx + 1, key);
-                lower = ih->lower_bound(key);
+                lower_ = ih_->lower_bound(key);
                 // where w_id = 0 and name >= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询置最大 找上限
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                     set_remaining_all_max(equal_offset, last_idx, key);
-                    upper = ih->upper_bound(key);
+                    upper_ = ih_->upper_bound(key);
                 }
                 break;
             }
@@ -274,14 +300,14 @@ public:
                 // where p_id = 3, name <= 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                 set_remaining_all_max(offset, last_idx + 1, key);
-                upper = ih->upper_bound(key);
+                upper_ = ih_->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name <= 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                     set_remaining_all_min(equal_offset, last_idx, key);
-                    lower = ih->lower_bound(key);
+                    lower_ = ih_->lower_bound(key);
                 }
                 break;
             }
@@ -292,14 +318,14 @@ public:
                 // where p_id = 3, name > 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                 set_remaining_all_max(offset, last_idx + 1, key);
-                lower = ih->upper_bound(key);
+                lower_ = ih_->upper_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name > 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找上限
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                     set_remaining_all_max(equal_offset, last_idx, key);
-                    upper = ih->upper_bound(key);
+                    upper_ = ih_->upper_bound(key);
                 }
                 break;
             }
@@ -310,14 +336,14 @@ public:
                 // where p_id = 3, name < 'bztyhnmj' and id = 1; last_idx = 1, + 1
                 // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                 set_remaining_all_min(offset, last_idx + 1, key);
-                upper = ih->lower_bound(key);
+                upper_ = ih_->lower_bound(key);
                 // 如果前面有等号需要重新更新上下界
                 // where w_id = 0 and name < 'bztyhnmj';
                 if (last_idx > 0) {
                     // 把后面的范围查询清 0 找下限
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                     set_remaining_all_min(equal_offset, last_idx, key);
-                    lower = ih->lower_bound(key);
+                    lower_ = ih_->lower_bound(key);
                 }
                 break;
             }
@@ -330,7 +356,8 @@ public:
         // 释放内存
         delete []key;
 
-        scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
+        scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
+        already_begin_ = true;
         while (!scan_->is_end()) {
             rid_ = scan_->rid();
             rm_record_ = fh_->get_record(rid_, context_);
@@ -349,7 +376,7 @@ public:
             return;
         }
         // sortmerge
-        if (!conds_[0].is_rhs_val) {
+        if (mergesort_) {
             // 缓存记录
             do {
                 rm_record_ = std::make_unique<RmRecord>(len_);

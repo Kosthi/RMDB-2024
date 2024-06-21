@@ -154,14 +154,19 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         for (auto &[_, ih]: sm_manager_->ihs_) {
             sm_manager_->get_ix_manager()->flush_index(ih.get());
         }
-
         // 直接把日志清空
-        std::ofstream ofs(LOG_FILE_NAME, std::ios::trunc);
-        if (ofs.fail()) {
-            assert(false);
+        // 如果日志文件已经开启，先关闭
+        auto disk_manager = sm_manager_->get_disk_manager();
+        auto log_fd = disk_manager->GetLogFd();
+        if (log_fd != -1) {
+            disk_manager->close_file(log_fd);
+            sm_manager_->get_disk_manager()->SetLogFd(-1);
         }
+
+        std::ofstream ofs(LOG_FILE_NAME, std::ios::trunc);
         ofs.close();
 
+        exit(1);
         // 5.把日志文件中检查点记录的地址写到“重新启动文件”中 忽略
     }
 }
