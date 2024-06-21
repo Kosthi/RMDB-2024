@@ -21,7 +21,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     // 1. 获取指定记录所在的page handle
     // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
     // 行级 S 锁
-    if (context != nullptr) {
+    if (context != nullptr && context->log_mgr_ != nullptr) {
         context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
     }
     auto &&page_handle = fetch_page_handle(rid.page_no);

@@ -442,20 +442,20 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
 // 检查是否是 unique key，只有 insert 操作会调用
 bool IxIndexHandle::is_unique(const char *key, Rid &value, Transaction *transaction) {
     // 操作应该为insert
-    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::INSERT, transaction, false);
+    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::FIND, transaction, false);
     if (is_root_locked) {
         root_latch_.unlock();
     }
     int pos = leaf_node->lower_bound(key);
     if (pos == leaf_node->page_hdr->num_key || Compare(key, leaf_node->get_key(pos))) {
         // 释放写锁
-        leaf_node->page->WUnlatch();
+        leaf_node->page->RUnlatch();
         buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
         return true;
     }
     value = *leaf_node->get_rid(pos);
     // 释放写锁
-    leaf_node->page->WUnlatch();
+    leaf_node->page->RUnlatch();
     buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
     return false;
 }

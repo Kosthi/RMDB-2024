@@ -315,7 +315,7 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
 
     // 表级 S 锁
     // 建立索引要读表上的所有记录，所以申请表级读锁
-    if (context != nullptr) {
+    if (context != nullptr && context->log_mgr_ != nullptr) {
         context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
     }
 

@@ -39,6 +39,8 @@ public:
 
     void undo();
 
+    void redo_indexes();
+
 private:
     LogBuffer buffer_; // 读入日志
     DiskManager *disk_manager_; // 用来读写文件

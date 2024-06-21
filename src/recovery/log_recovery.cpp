@@ -415,4 +415,28 @@ void RecoveryManager::undo() {
             lsn_heap.emplace(lsn);
         }
     }
+
+    // 重做索引
+    if (!dirty_page_table_.empty() || !active_txn_.empty()) {
+        redo_indexes();
+    }
+}
+
+/**
+ * @description: 重做每个表的索引
+ */
+void RecoveryManager::redo_indexes() {
+    std::vector<std::string> col_names;
+    auto *context = new Context(nullptr, nullptr, &transaction_);
+    for (auto &[table_name, _]: sm_manager_->fhs_) {
+        for (auto &[_, index_meta]: sm_manager_->db_.get_table(table_name).indexes) {
+            for (auto &col: index_meta.cols) {
+                col_names.emplace_back(col.name);
+            }
+            sm_manager_->drop_index(table_name, col_names, nullptr);
+            sm_manager_->create_index(table_name, col_names, context);
+            col_names.clear();
+        }
+    }
+    delete context;
 }
