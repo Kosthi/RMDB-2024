@@ -211,18 +211,18 @@ void RecoveryManager::redo() {
                 fh->insert_record(log->rid_, log->insert_value_.data);
 
                 // redo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(key + offset, log->insert_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->insert_entry(key, log->rid_, &transaction_);
-                    delete []key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(key + offset, log->insert_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->insert_entry(key, log->rid_, &transaction_);
+                //     delete []key;
+                // }
 
                 delete log;
                 break;
@@ -235,18 +235,18 @@ void RecoveryManager::redo() {
                 fh->delete_record(log->rid_, nullptr);
 
                 // redo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(key + offset, log->delete_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->delete_entry(key, &transaction_);
-                    delete []key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(key + offset, log->delete_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->delete_entry(key, &transaction_);
+                //     delete []key;
+                // }
 
                 delete log;
                 break;
@@ -259,22 +259,22 @@ void RecoveryManager::redo() {
                 fh->update_record(log->rid_, log->update_value_.data, nullptr);
 
                 // redo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *old_key = new char[index_meta.col_tot_len];
-                    char *new_key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(old_key + offset, log->old_value_.data + col_meta.offset, col_meta.len);
-                        memcpy(new_key + offset, log->update_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->delete_entry(old_key, &transaction_);
-                    ih->insert_entry(new_key, log->rid_, &transaction_);
-                    delete []old_key;
-                    delete []new_key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *old_key = new char[index_meta.col_tot_len];
+                //     char *new_key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(old_key + offset, log->old_value_.data + col_meta.offset, col_meta.len);
+                //         memcpy(new_key + offset, log->update_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->delete_entry(old_key, &transaction_);
+                //     ih->insert_entry(new_key, log->rid_, &transaction_);
+                //     delete []old_key;
+                //     delete []new_key;
+                // }
 
                 delete log;
                 break;
@@ -335,18 +335,18 @@ void RecoveryManager::undo() {
                 fh->delete_record(log->rid_, nullptr);
 
                 // undo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(key + offset, log->insert_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->delete_entry(key, &transaction_);
-                    delete []key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(key + offset, log->insert_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->delete_entry(key, &transaction_);
+                //     delete []key;
+                // }
 
                 lsn = log->prev_lsn_;
                 delete log;
@@ -360,18 +360,18 @@ void RecoveryManager::undo() {
                 fh->insert_record(log->rid_, log->delete_value_.data);
 
                 // undo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(key + offset, log->delete_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->insert_entry(key, log->rid_, &transaction_);
-                    delete []key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(key + offset, log->delete_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->insert_entry(key, log->rid_, &transaction_);
+                //     delete []key;
+                // }
 
                 lsn = log->prev_lsn_;
                 delete log;
@@ -386,22 +386,22 @@ void RecoveryManager::undo() {
                 fh->update_record(log->rid_, log->old_value_.data, nullptr);
 
                 // undo 索引
-                auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
-                for (auto &[index_name, index_meta]: indexes) {
-                    int offset = 0;
-                    char *old_key = new char[index_meta.col_tot_len];
-                    char *new_key = new char[index_meta.col_tot_len];
-                    auto &ih = sm_manager_->ihs_.at(index_name);
-                    for (auto &col_meta: index_meta.cols) {
-                        memcpy(old_key + offset, log->old_value_.data + col_meta.offset, col_meta.len);
-                        memcpy(new_key + offset, log->update_value_.data + col_meta.offset, col_meta.len);
-                        offset += col_meta.len;
-                    }
-                    ih->delete_entry(new_key, &transaction_);
-                    ih->insert_entry(old_key, log->rid_, &transaction_);
-                    delete []old_key;
-                    delete []new_key;
-                }
+                // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;
+                // for (auto &[index_name, index_meta]: indexes) {
+                //     int offset = 0;
+                //     char *old_key = new char[index_meta.col_tot_len];
+                //     char *new_key = new char[index_meta.col_tot_len];
+                //     auto &ih = sm_manager_->ihs_.at(index_name);
+                //     for (auto &col_meta: index_meta.cols) {
+                //         memcpy(old_key + offset, log->old_value_.data + col_meta.offset, col_meta.len);
+                //         memcpy(new_key + offset, log->update_value_.data + col_meta.offset, col_meta.len);
+                //         offset += col_meta.len;
+                //     }
+                //     ih->delete_entry(new_key, &transaction_);
+                //     ih->insert_entry(old_key, log->rid_, &transaction_);
+                //     delete []old_key;
+                //     delete []new_key;
+                // }
 
                 lsn = log->prev_lsn_;
                 delete log;
