@@ -40,6 +40,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
     begin_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(begin_log_record));
+    delete begin_log_record;
     return txn;
 }
 
@@ -57,7 +58,11 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     // 5. 更新事务状态
     std::lock_guard lock(latch_);
 
-    // txn->get_write_set()->clear();
+    // 释放写集指针
+    for (auto &it: *txn->get_write_set()) {
+        delete it;
+    }
+
     // 释放所有锁
     auto &&lock_set = txn->get_lock_set();
     for (auto &it: *lock_set) {
@@ -70,6 +75,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     txn->set_prev_lsn(log_manager->add_log_to_buffer(commit_log_record));
     log_manager->flush_log_to_disk();
     txn->set_state(TransactionState::COMMITTED);
+    delete txn_map[txn->get_transaction_id()];
+    txn_map.erase(txn->get_transaction_id());
+    delete commit_log_record;
 }
 
 /**
@@ -116,6 +124,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 auto *delete_log_record = new DeleteLogRecord(txn->get_transaction_id(), record, rid, table_name);
                 delete_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(delete_log_record));
+                delete delete_log_record;
                 break;
             }
             case WType::DELETE_TUPLE: {
@@ -138,6 +147,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 auto *insert_log_record = new InsertLogRecord(txn->get_transaction_id(), record, rid, table_name);
                 insert_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(insert_log_record));
+                delete insert_log_record;
                 break;
             }
             case WType::UPDATE_TUPLE: {
@@ -166,6 +176,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                                                               table_name);
                 update_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(update_log_record));
+                delete update_log_record;
                 break;
             }
             default:
@@ -187,4 +198,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     txn->set_prev_lsn(log_manager->add_log_to_buffer(abort_log_record));
     log_manager->flush_log_to_disk();
     txn->set_state(TransactionState::ABORTED);
+    delete txn_map[txn->get_transaction_id()];
+    txn_map.erase(txn->get_transaction_id());
+    delete abort_log_record;
 }

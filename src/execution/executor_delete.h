@@ -53,6 +53,7 @@ public:
             auto &&page = fh_->fetch_page_handle(rid.page_no).page;
             page->set_page_lsn(context_->txn_->get_prev_lsn());
             sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
+            delete delete_log_record;
 
             // 写入事务写集
             auto *write_record = new WriteRecord(WType::DELETE_TUPLE, tab_name_, rid, *rec);

@@ -53,8 +53,11 @@ public:
         if (txn_id == INVALID_TXN_ID) return nullptr;
 
         std::unique_lock<std::mutex> lock(latch_);
-        assert(TransactionManager::txn_map.find(txn_id) != TransactionManager::txn_map.end());
-        auto *res = TransactionManager::txn_map[txn_id];
+        if (txn_map.find(txn_id) == txn_map.end()) {
+            return nullptr;
+        }
+
+        auto *res = txn_map[txn_id];
         lock.unlock();
         assert(res != nullptr);
         assert(res->get_thread_id() == std::this_thread::get_id());

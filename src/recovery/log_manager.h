@@ -213,6 +213,10 @@ public:
         table_name_ = nullptr;
     }
 
+    ~InsertLogRecord() {
+        delete []table_name_;
+    }
+
     InsertLogRecord(txn_id_t txn_id, RmRecord &insert_value, Rid &rid, const std::string &table_name)
         : InsertLogRecord() {
         log_tid_ = txn_id;
@@ -289,6 +293,10 @@ public:
         table_name_ = nullptr;
     }
 
+    ~DeleteLogRecord() {
+        delete []table_name_;
+    }
+
     DeleteLogRecord(txn_id_t txn_id, RmRecord &delete_value, Rid &rid, const std::string &table_name)
         : DeleteLogRecord() {
         log_tid_ = txn_id;
@@ -363,6 +371,10 @@ public:
         log_tid_ = INVALID_TXN_ID;
         prev_lsn_ = INVALID_LSN;
         table_name_ = nullptr;
+    }
+
+    ~UpdateLogRecord() {
+        delete []table_name_;
     }
 
     UpdateLogRecord(txn_id_t txn_id, RmRecord &old_value, RmRecord &update_value, Rid &rid,

@@ -84,6 +84,7 @@ public:
         auto &&page = fh_->fetch_page_handle(rid_.page_no).page;
         page->set_page_lsn(context_->txn_->get_prev_lsn());
         sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
+        delete insert_log_record;
 
         // 写入事务写集
         // may std::unique_ptr 优化，避免拷贝多次记录

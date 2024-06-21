@@ -96,6 +96,7 @@ void *client_handler(void *sock_fd) {
             std::cout << "Maybe the client has closed" << std::endl;
             break;
         }
+
         if (i_recvBytes == -1) {
             std::cout << "Client read error!" << std::endl;
             break;
@@ -107,8 +108,13 @@ void *client_handler(void *sock_fd) {
             std::cout << "Client exit." << std::endl;
             break;
         }
+
         if (strcmp(data_recv, "crash") == 0) {
             std::cout << "Server crash" << std::endl;
+            delete []data_send;
+            for (auto &[_, txn]: txn_manager->txn_map) {
+                delete txn;
+            }
             exit(1);
         }
 
@@ -199,6 +205,13 @@ void *client_handler(void *sock_fd) {
         if (context->txn_->get_txn_mode() == false) {
             txn_manager->commit(context->txn_, context->log_mgr_);
         }
+        delete context;
+    }
+
+    // release memory
+    delete []data_send;
+    for (auto &[_, txn]: txn_manager->txn_map) {
+        delete txn;
     }
 
     // Clear
