@@ -377,7 +377,12 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                     table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
                                                                       std::move(join_conds));
                 } else {
-                    table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
+                    // ticky 把嵌套连接变成归并连接来加速
+                    left = std::make_shared<SortPlan>(T_Sort, std::move(left), it->lhs_col,
+                                                      false);
+                    right = std::make_shared<SortPlan>(T_Sort, std::move(right), it->rhs_col,
+                                                       false);
+                    table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
                                                                       std::move(join_conds));
                 }
             } else {

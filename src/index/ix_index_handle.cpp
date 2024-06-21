@@ -243,8 +243,12 @@ IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffe
     delete []buf;
 
     // disk_manager管理的fd对应的文件中，设置从file_hdr_->num_pages开始分配page_no
-    int now_page_no = disk_manager_->get_fd2pageno(fd);
-    disk_manager_->set_fd2pageno(fd, now_page_no + 1);
+    // 直接改成磁盘中存储 num_pages_
+    disk_manager_->set_fd2pageno(fd, file_hdr_->num_pages_);
+    // 只支持创建索引时同时打开，now_page_no 为 2
+    // 如果在启动时打开已经建立的索引，now_page_no 为 0，创建页面会使用用过的 page，会出现死锁
+    // int now_page_no = disk_manager_->get_fd2pageno(fd);
+    // disk_manager_->set_fd2pageno(fd, now_page_no + 1);
 }
 
 /**
@@ -443,22 +447,18 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
 // 检查是否是 unique key，只有 insert 操作会调用
 bool IxIndexHandle::is_unique(const char *key, Rid &value, Transaction *transaction) {
     // 操作应该为insert
-    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::INSERT, transaction, false);
+    auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::FIND, transaction, false);
     if (is_root_locked) {
         root_latch_.unlock();
     }
     int pos = leaf_node->lower_bound(key);
     if (pos == leaf_node->page_hdr->num_key || Compare(key, leaf_node->get_key(pos))) {
-        // 释放写锁
-        release_all_index_latch_page(transaction);
-        leaf_node->page->WUnlatch();
+        leaf_node->page->RUnlatch();
         buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
         return true;
     }
     value = *leaf_node->get_rid(pos);
-    // 释放写锁
-    release_all_index_latch_page(transaction);
-    leaf_node->page->WUnlatch();
+    leaf_node->page->RUnlatch();
     buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);
     return false;
 }
@@ -519,7 +519,6 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
         return return_page_id;
     }
 
-    release_all_index_latch_page(transaction);
     // 先解写锁 写锁不影响 pageId
     leaf_node->page->WUnlatch();
     // unpin 之后page可能会被替换 拷贝下页id
@@ -960,11 +959,15 @@ void IxIndexHandle::erase_leaf(IxNodeHandle *leaf) {
     assert(leaf->is_leaf_page());
 
     IxNodeHandle *prev = fetch_node(leaf->get_prev_leaf());
+    prev->page->WLatch();
     prev->set_next_leaf(leaf->get_next_leaf());
+    prev->page->WUnlatch();
     buffer_pool_manager_->unpin_page(prev->get_page_id(), true);
 
     IxNodeHandle *next = fetch_node(leaf->get_next_leaf());
+    next->page->WLatch();
     next->set_prev_leaf(leaf->get_prev_leaf()); // 注意此处是SetPrevLeaf()
+    next->page->WUnlatch();
     buffer_pool_manager_->unpin_page(next->get_page_id(), true);
 }
 
