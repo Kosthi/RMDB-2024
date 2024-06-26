@@ -50,14 +50,22 @@ public:
      * @param {txn_id_t} txn_id 事务ID
      */
     Transaction *get_transaction(txn_id_t txn_id) {
-        if (txn_id == INVALID_TXN_ID) return nullptr;
+        if (txn_id == INVALID_TXN_ID) {
+            return nullptr;
+        }
 
-        std::unique_lock<std::mutex> lock(latch_);
+        std::unique_lock lock(latch_);
         if (txn_map.find(txn_id) == txn_map.end()) {
             return nullptr;
         }
 
         auto *res = txn_map[txn_id];
+        if (res->get_state() == TransactionState::COMMITTED || res->get_state() == TransactionState::ABORTED) {
+            delete res;
+            txn_map.erase(txn_id);
+            return nullptr;
+        }
+
         lock.unlock();
         assert(res != nullptr);
         assert(res->get_thread_id() == std::this_thread::get_id());

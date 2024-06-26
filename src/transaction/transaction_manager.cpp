@@ -182,7 +182,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
         }
         delete write_record;
     }
+    delete context;
     write_set->clear();
+
     // 释放所有锁
     auto &&lock_set = txn->get_lock_set();
     for (auto &it: *lock_set) {

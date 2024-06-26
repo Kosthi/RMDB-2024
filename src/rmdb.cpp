@@ -71,6 +71,7 @@ void SetTransaction(txn_id_t *txn_id, Context *context) {
 
 void *client_handler(void *sock_fd) {
     int fd = *((int *) sock_fd);
+    free(sock_fd);
     pthread_mutex_unlock(sockfd_mutex);
 
     int i_recvBytes;
@@ -112,6 +113,9 @@ void *client_handler(void *sock_fd) {
         if (strcmp(data_recv, "crash") == 0) {
             std::cout << "Server crash" << std::endl;
             delete []data_send;
+            for (auto &[_, txn]: txn_manager->txn_map) {
+                delete txn;
+            }
             exit(1);
         }
 
@@ -250,25 +254,31 @@ void start_server() {
 
     while (!should_exit) {
         std::cout << "Waiting for new connection..." << std::endl;
+        // 解决局部变量析构问题
+        int *sockfd = (int *) malloc(sizeof(int));
+
         pthread_t thread_id;
         struct sockaddr_in s_addr_client{};
         int client_length = sizeof(s_addr_client);
 
         if (setjmp(jmpbuf)) {
+            free(sockfd);
             std::cout << "Break from Server Listen Loop\n";
             break;
         }
 
         // Block here. Until server accepts a new connection.
         pthread_mutex_lock(sockfd_mutex);
-        int sockfd = accept(sockfd_server, (struct sockaddr *) (&s_addr_client), (socklen_t *) (&client_length));
-        if (sockfd == -1) {
+        *sockfd = accept(sockfd_server, (struct sockaddr *) (&s_addr_client), (socklen_t *) (&client_length));
+        if (*sockfd == -1) {
+            free(sockfd);
             std::cout << "Accept error!" << std::endl;
             continue; // ignore current socket ,continue while loop.
         }
 
         // 和客户端建立连接，并开启一个线程负责处理客户端请求
-        if (pthread_create(&thread_id, nullptr, &client_handler, (void *) (&sockfd)) != 0) {
+        if (pthread_create(&thread_id, nullptr, &client_handler, (void *) (sockfd)) != 0) {
+            free(sockfd);
             std::cout << "Create thread fail!" << std::endl;
             break; // break while loop
         }
@@ -280,6 +290,11 @@ void start_server() {
     if (ret == -1) { printf("%s\n", strerror(errno)); }
     //    assert(ret != -1);
     sm_manager->close_db();
+
+    for (auto &[_, txn]: txn_manager->txn_map) {
+        delete txn;
+    }
+
     std::cout << " DB has been closed.\n";
     std::cout << "Server shuts down." << std::endl;
 }
