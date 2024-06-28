@@ -18,23 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
-#include "executor_aggregate.h"
 #include "index/ix.h"
 #include "system/sm.h"
-
-inline int ix_compare(char *&a, char *&b, const IndexMeta &index_meta) {
-    for (auto &[index_offset, col_meta]: index_meta.cols) {
-        int res = compare(a + index_offset, b + index_offset, col_meta.len, col_meta.type);
-        if (res != 0) return res;
-    }
-    return 0;
-}
-
-struct CondOp {
-    CompOp op = OP_INVALID;
-    Value rhs_val;
-    int offset;
-};
 
 // 解析列的谓词信息 first >, second <
 class PredicateManager {
@@ -157,6 +142,10 @@ public:
         }
 
         return {op, last_idx};
+    }
+
+    std::vector<std::pair<CondOp, CondOp> > &getIndexConds() {
+        return index_conds_;
     }
 
 private:
@@ -303,6 +292,13 @@ public:
                 }
             }
             ++it;
+        }
+
+        auto gap = Gap(predicate_manager_.getIndexConds());
+        if (gap_mode_) {
+            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        } else {
+            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
         }
 
         // S 锁

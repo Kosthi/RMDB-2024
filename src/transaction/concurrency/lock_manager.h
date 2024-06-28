@@ -44,15 +44,19 @@ class LockManager {
         bool upgrading_ = false;
         int shared_lock_num_ = 0;
         int IX_lock_num_ = 0;
-        txn_id_t oldest_txn_id_; // 维护等待队列中最老（时间戳最小）的事务id
+        txn_id_t oldest_txn_id_ = INT32_MAX; // 维护等待队列中最老（时间戳最小）的事务id
     };
 
 public:
-    LockManager() {
-    }
+    LockManager() = default;
 
-    ~LockManager() {
-    }
+    ~LockManager() = default;
+
+    bool lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Gap &gap, int tab_fd);
+
+    bool lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta, Gap &gap, int tab_fd);
+
+    bool isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord &record);
 
     bool lock_shared_on_record(Transaction *txn, const Rid &rid, int tab_fd);
 
@@ -66,9 +70,10 @@ public:
 
     bool lock_IX_on_table(Transaction *txn, int tab_fd);
 
-    bool unlock(Transaction *txn, LockDataId lock_data_id);
+    bool unlock(Transaction *txn, const LockDataId &lock_data_id);
 
 private:
     std::mutex latch_; // 用于锁表的并发
     std::unordered_map<LockDataId, LockRequestQueue> lock_table_; // 全局锁表
+    std::unordered_map<IndexMeta, std::unordered_map<LockDataId, LockRequestQueue> > gap_lock_table_; // 全局间隙锁表
 };

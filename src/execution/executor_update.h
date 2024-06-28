@@ -62,12 +62,10 @@ public:
             // 先检查 key 是否是 unique
             for (auto &[index_name, index]: tab_.indexes) {
                 auto &&ih = sm_manager_->ihs_.at(index_name).get();
-                int offset = 0;
                 // TODO 优化 放到容器中
                 char *key = new char[index.col_tot_len];
-                for (size_t i = 0; i < index.col_num; ++i) {
-                    memcpy(key + offset, updated_record->data + index.cols[i].offset, index.cols[i].len);
-                    offset += index.cols[i].len;
+                for (auto &[index_offset, col_meta]: index.cols) {
+                    memcpy(key + index_offset, updated_record->data + col_meta.offset, col_meta.len);
                 }
                 // TODO 如果 update a = 5 where a = 5，应该在优化器阶段优化掉
                 Rid unique_rid{};
@@ -96,11 +94,9 @@ public:
                 auto ih = sm_manager_->ihs_.at(index_name).get();
                 char *old_key = new char[index.col_tot_len];
                 char *new_key = new char[index.col_tot_len];
-                int offset = 0;
-                for (size_t i = 0; i < index.col_num; ++i) {
-                    memcpy(old_key + offset, old_record->data + index.cols[i].offset, index.cols[i].len);
-                    memcpy(new_key + offset, updated_record->data + index.cols[i].offset, index.cols[i].len);
-                    offset += index.cols[i].len;
+                for (auto &[index_offset, col_meta]: index.cols) {
+                    memcpy(old_key + index_offset, old_record->data + col_meta.offset, col_meta.len);
+                    memcpy(new_key + index_offset, updated_record->data + col_meta.offset, col_meta.len);
                 }
                 ih->delete_entry(old_key, context_->txn_);
                 ih->insert_entry(new_key, rid, context_->txn_);

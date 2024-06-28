@@ -107,7 +107,7 @@ public:
                                                         std::move(root), plan);
                 }
                 case T_Delete: {
-                    std::unique_ptr<AbstractExecutor> scan = convert_plan_executor(x->subplan_, context);
+                    std::unique_ptr<AbstractExecutor> scan = convert_plan_executor(x->subplan_, context, true);
                     std::vector<Rid> rids;
                     for (scan->beginTuple(); !scan->is_end(); scan->nextTuple()) {
                         rids.emplace_back(scan->rid());
@@ -162,7 +162,8 @@ public:
     void drop() {
     }
 
-    std::unique_ptr<AbstractExecutor> convert_plan_executor(std::shared_ptr<Plan> plan, Context *context) {
+    std::unique_ptr<AbstractExecutor> convert_plan_executor(std::shared_ptr<Plan> plan, Context *context,
+                                                            bool gap_mode = false) {
         if (auto x = std::dynamic_pointer_cast<ProjectionPlan>(plan)) {
             return std::make_unique<ProjectionExecutor>(convert_plan_executor(x->subplan_, context),
                                                         x->sel_cols_);
@@ -177,7 +178,7 @@ public:
                 return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context);
             }
             return std::make_unique<IndexScanExecutor>(sm_manager_, x->tab_name_, x->conds_, x->index_col_names_,
-                                                       context);
+                                                       context, gap_mode);
         }
         if (auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
             std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);

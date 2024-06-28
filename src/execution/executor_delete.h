@@ -36,10 +36,10 @@ public:
         context_ = context;
 
         // S_IX 锁
-        if (!rids_.empty() && context_ != nullptr) {
-            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
-        }
+        // if (!rids_.empty() && context_ != nullptr) {
+        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        // }
     }
 
     // 只执行一次
@@ -63,10 +63,8 @@ public:
             for (auto &[index_name, index]: tab_.indexes) {
                 auto &&ih = sm_manager_->ihs_.at(index_name).get();
                 char *key = new char[index.col_tot_len];
-                int offset = 0;
-                for (size_t i = 0; i < index.col_num; ++i) {
-                    memcpy(key + offset, rec->data + index.cols[i].offset, index.cols[i].len);
-                    offset += index.cols[i].len;
+                for (auto &[index_offset, col_meta]: index.cols) {
+                    memcpy(key + index_offset, rec->data + col_meta.offset, col_meta.len);
                 }
                 ih->delete_entry(key, context_->txn_);
                 delete []key;

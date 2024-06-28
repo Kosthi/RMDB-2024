@@ -235,7 +235,11 @@ void RecoveryManager::redo() {
                 log->deserialize(buffer_.buffer_);
 
                 auto fh = sm_manager_->fhs_.at(log->table_name_).get();
-                fh->delete_record(log->rid_, nullptr);
+                try {
+                    fh->delete_record(log->rid_, nullptr);
+                } catch (RecordNotFoundError& e) {
+
+                }
 
                 // redo 索引
                 // auto &indexes = sm_manager_->db_.get_table(log->table_name_).indexes;

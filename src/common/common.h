@@ -110,3 +110,37 @@ struct SetClause {
     TabCol lhs;
     Value rhs;
 };
+
+// Utility function to combine hashes
+template <typename T>
+inline void hash_combine(std::size_t& seed, const T& val) {
+    seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+// Custom hash function for Value
+namespace std {
+    template <>
+    struct hash<Value> {
+        std::size_t operator()(const Value& v) const noexcept {
+            std::size_t seed = 0;
+            hash_combine(seed, v.type);
+            switch (v.type) {
+                case TYPE_INT: {
+                    hash_combine(seed, v.int_val);
+                    break;
+                }
+                case TYPE_FLOAT: {
+                    hash_combine(seed, v.float_val);
+                    break;
+                }
+                case TYPE_STRING: {
+                    hash_combine(seed, v.str_val);
+                    break;
+                }
+                default:
+                    throw InternalError("Unexpected data type！");
+            }
+            return seed;
+        }
+    };
+}

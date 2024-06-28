@@ -37,10 +37,10 @@ public:
         context_ = context;
 
         // IX 锁
-        if (context_ != nullptr) {
-            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
-        }
-    };
+        // if (context_ != nullptr) {
+        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        // }
+    }
 
     std::unique_ptr<RmRecord> Next() override {
         // Make record buffer
@@ -60,12 +60,10 @@ public:
         // 先检查 key 是否是 unique
         for (auto &[index_name, index]: tab_.indexes) {
             auto ih = sm_manager_->ihs_.at(index_name).get();
-            int offset = 0;
             // TODO 优化 放到容器中
             char *key = new char[index.col_tot_len];
-            for (size_t i = 0; i < index.col_num; ++i) {
-                memcpy(key + offset, rec.data + index.cols[i].offset, index.cols[i].len);
-                offset += index.cols[i].len;
+            for (auto &[index_offset, col_meta]: index.cols) {
+                memcpy(key + index_offset, rec.data + col_meta.offset, col_meta.len);
             }
             Rid unique_rid{};
             if (!ih->is_unique(key, unique_rid, context_->txn_)) {
@@ -73,6 +71,16 @@ public:
                 throw NonUniqueIndexError("", {index_name});
             }
             delete []key;
+        }
+
+        // 再检查是否有间隙锁
+        for (auto &[index_name, index]: tab_.indexes) {
+            auto ih = sm_manager_->ihs_.at(index_name).get();
+            RmRecord rm_record(index.col_tot_len);
+            for (auto &[index_offset, col_meta]: index.cols) {
+                memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+            }
+            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
         }
 
         // Insert into record file
@@ -95,10 +103,8 @@ public:
         for (auto &[index_name, index]: tab_.indexes) {
             auto ih = sm_manager_->ihs_.at(index_name).get();
             char *key = new char[index.col_tot_len];
-            int offset = 0;
-            for (size_t i = 0; i < index.col_num; ++i) {
-                memcpy(key + offset, rec.data + index.cols[i].offset, index.cols[i].len);
-                offset += index.cols[i].len;
+            for (auto &[index_offset, col_meta]: index.cols) {
+                memcpy(key + index_offset, rec.data + col_meta.offset, col_meta.len);
             }
             ih->insert_entry(key, rid_, context_->txn_);
             delete []key;

@@ -49,6 +49,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     // TODO 不需要加行级写锁？
     // TODO 这里实际上是以一个页面放一个记录，太占用空间了！
     auto &&page_handle = create_page_handle();
+    // TODO 算法优化
     auto &&slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
@@ -102,9 +103,10 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context) {
     // 2. 更新page_handle.page_hdr中的数据结构
     // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
     // 行级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
-    }
+    // 有间隙锁保护，不需要行级X锁
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    // }
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
