@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <string>
+#include <sstream>
 
 #include "system/sm_meta.h"
 #include "ix_defs.h"

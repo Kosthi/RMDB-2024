@@ -20,6 +20,9 @@ struct CondOp {
     CompOp op = OP_INVALID;
     Value rhs_val;
     int offset = 0;
+
+    explicit CondOp(int offset_) : rhs_val(), offset(offset_) {
+    }
 };
 
 static inline int compare(const char *a, const char *b, int col_len, ColType col_type) {

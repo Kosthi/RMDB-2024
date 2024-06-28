@@ -15,7 +15,6 @@ See the Mulan PSL v2 for more details. */
 #include <list>
 #include <map>
 #include <unordered_map>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,7 +42,7 @@ struct ColMeta {
     }
 
     // 重载相等运算符
-    bool operator==(const ColMeta& other) const {
+    bool operator==(const ColMeta &other) const {
         return tab_name == other.tab_name && name == other.name;
     }
 };
@@ -53,15 +52,16 @@ struct IndexMeta {
     std::string tab_name; // 索引所属表名称
     int col_tot_len = 0; // 索引字段长度总和
     int col_num = 0; // 索引字段数量
-    std::vector<std::pair<int, ColMeta>> cols; // 索引包含的字段 在索引中的偏移量 -> 列元信息
-    std::unordered_map<std::string, std::pair<int, ColMeta>> cols_map;
+    std::vector<std::pair<int, ColMeta> > cols; // 索引包含的字段 在索引中的偏移量 -> 列元信息
+    std::unordered_map<std::string, std::pair<int, ColMeta> > cols_map;
 
     IndexMeta() = default;
 
-    IndexMeta(std::string &&tab_name_, int col_tot_len_, int col_num_, std::vector<ColMeta> &&cols_) :
-    tab_name(std::move(tab_name_)), col_tot_len(col_tot_len_), col_num(col_num_) {
+    IndexMeta(std::string &&tab_name_, int col_tot_len_, int col_num_,
+              std::vector<ColMeta> &&cols_) : tab_name(std::move(tab_name_)), col_tot_len(col_tot_len_),
+                                              col_num(col_num_) {
         int offset = 0;
-        for (auto &col : cols_) {
+        for (auto &col: cols_) {
             cols.emplace_back(offset, std::move(col));
             offset += cols.back().second.len;
         }
@@ -96,7 +96,7 @@ struct IndexMeta {
     }
 
     // 重载相等运算符
-    bool operator==(const IndexMeta& other) const {
+    bool operator==(const IndexMeta &other) const {
         return tab_name == other.tab_name && col_tot_len == other.col_tot_len &&
                col_num == other.col_num && cols == other.cols;
     }
@@ -104,13 +104,13 @@ struct IndexMeta {
 
 // 定义自定义哈希函数
 namespace std {
-    template <>
+    template<>
     struct hash<IndexMeta> {
-        std::size_t operator()(const IndexMeta& index) const {
+        std::size_t operator()(const IndexMeta &index) const {
             std::size_t hash = std::hash<std::string>{}(index.tab_name);
             hash ^= std::hash<int>{}(index.col_tot_len) << 1;
             hash ^= std::hash<int>{}(index.col_num) << 2;
-            for (const auto& [_, col] : index.cols) {
+            for (const auto &[_, col]: index.cols) {
                 hash ^= std::hash<std::string>{}(col.name) << 3;
             }
             return hash;
@@ -141,13 +141,11 @@ struct TabMeta {
     }
 
     std::string get_index_name(const std::vector<std::string> &index_cols) {
-        std::ostringstream oss;
-        oss << name;
+        std::string ix_name(name);
         for (const auto &col: index_cols) {
-            oss << "_" << col;
+            name.append("_").append(col);
         }
-        oss << ".idx";
-        return oss.str();
+        return std::move(name.append(".idx"));
     }
 
     /* 判断当前表上是否建有指定索引，索引包含的字段为col_names */
@@ -168,7 +166,7 @@ struct TabMeta {
     }
 
     /* 根据字段名称集合获取索引元数据 */
-    IndexMeta& get_index_meta(const std::vector<std::string> &col_names) {
+    IndexMeta &get_index_meta(const std::vector<std::string> &col_names) {
         // TODO 优化
         auto &&it = indexes.find(get_index_name(col_names));
         if (it != indexes.end()) {
@@ -252,7 +250,7 @@ public:
     }
 
     /* 获取指定名称表的元数据 */
-    TabMeta & get_table(const std::string &tab_name) {
+    TabMeta &get_table(const std::string &tab_name) {
         auto pos = tabs_.find(tab_name);
         if (pos == tabs_.end()) {
             throw TableNotFoundError(tab_name);
