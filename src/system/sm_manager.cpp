@@ -182,6 +182,10 @@ void SmManager::show_tables(Context *context) {
  * @param {String} table_name {Context*} context
  */
 void SmManager::show_indexs(std::string &table_name, Context *context) {
+    if (!db_.is_table(table_name)) {
+        throw TableNotFoundError(table_name);
+    }
+
     std::ofstream outfile("output.txt", std::ios::out | std::ios::app);
     RecordPrinter printer(3);
     std::vector<std::string> rec_str{table_name, "unique", ""};
@@ -313,13 +317,14 @@ void SmManager::create_index(std::string &tab_name, std::vector<std::string> &co
         throw IndexExistsError(tab_name, col_names);
     }
 
+    // 异常情况检查放前面
+    auto &table_meta = db_.get_table(tab_name);
+
     // 表级 S 锁
     // 建立索引要读表上的所有记录，所以申请表级读锁
     if (context != nullptr && context->lock_mgr_ != nullptr) {
         context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
     }
-
-    auto &table_meta = db_.get_table(tab_name);
 
     std::vector<ColMeta> col_metas;
     col_metas.reserve(col_names.size());
@@ -359,7 +364,8 @@ void SmManager::create_index(std::string &tab_name, std::vector<std::string> &co
     delete []key;
 
     // 更新表元索引数据
-    table_meta.indexes.emplace(ix_name, IndexMeta(std::move(tab_name), total_len, static_cast<int>(col_names.size()), std::move(col_metas)));
+    table_meta.indexes.emplace(ix_name, IndexMeta(std::move(tab_name), total_len, static_cast<int>(col_names.size()),
+                                                  std::move(col_metas)));
     // 插入索引句柄
     ihs_[std::move(ix_name)] = std::move(ih);
     // 持久化
@@ -431,7 +437,8 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
  * @param {vector<ColMeta>&} 索引包含的字段元数据
  * @param {Context*} context
  */
-void SmManager::redo_index(const std::string &tab_name, TabMeta& table_meta, const std::vector<std::string> &col_names, const std::string &index_name, Context *context) {
+void SmManager::redo_index(const std::string &tab_name, TabMeta &table_meta, const std::vector<std::string> &col_names,
+                           const std::string &index_name, Context *context) {
     ix_manager_->close_index(ihs_[index_name].get());
     ix_manager_->destroy_index(index_name);
 
