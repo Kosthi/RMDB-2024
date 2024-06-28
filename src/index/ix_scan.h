@@ -36,4 +36,10 @@ public:
     Rid rid() const override;
 
     const Iid &iid() const { return iid_; }
+
+    Iid prev_iid();
+
+    Iid prev_iid(const Iid &iid);
+
+    RmRecord get_key();
 };

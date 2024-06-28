@@ -58,7 +58,7 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
     for (auto &[index_name, index]: tab.indexes) {
         cur_len = cur_equals = 0;
         auto &cols = index.cols;
-        for (auto &col: index.cols) {
+        for (auto &[_, col]: index.cols) {
             if (index_set.count(col.name) == 0) {
                 break;
             }
@@ -75,14 +75,14 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
             max_len = cur_len;
             index_col_names.clear();
             for (int i = 0; i < index.cols.size(); ++i) {
-                index_col_names.emplace_back(index.cols[i].name);
+                index_col_names.emplace_back(index.cols[i].second.name);
             }
         } else if (cur_len == curr_conds.size()) {
             max_len = cur_len;
             // 最长前缀相等选择等号多的
             if (index_col_names.empty()) {
                 for (int i = 0; i < index.cols.size(); ++i) {
-                    index_col_names.emplace_back(index.cols[i].name);
+                    index_col_names.emplace_back(index.cols[i].second.name);
                 }
                 // for (int i = 0; i < cur_len; ++i) {
                 //     index_col_names.emplace_back(index.cols[i].name);
@@ -103,7 +103,7 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
                 // cur_len >= cur_equals;
                 index_col_names.clear();
                 for (int i = 0; i < index.cols.size(); ++i) {
-                    index_col_names.emplace_back(index.cols[i].name);
+                    index_col_names.emplace_back(index.cols[i].second.name);
                 }
                 // for (int i = 0; i < cur_len; ++i) {
                 //     index_col_names.emplace_back(index.cols[i].name);

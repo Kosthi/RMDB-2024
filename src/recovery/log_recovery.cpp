@@ -434,7 +434,7 @@ void RecoveryManager::redo_indexes() {
     for (auto &[table_name, _]: sm_manager_->fhs_) {
         auto &table_meta = sm_manager_->db_.get_table(table_name);
         for (auto &[index_name, index_meta]: table_meta.indexes) {
-            for (auto &col: index_meta.cols) {
+            for (auto &[_, col]: index_meta.cols) {
                 col_names.emplace_back(col.name);
             }
             sm_manager_->redo_index(table_name, table_meta, col_names, index_name, context);

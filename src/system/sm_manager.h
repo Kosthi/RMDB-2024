@@ -80,7 +80,7 @@ public:
 
     void drop_table(const std::string &tab_name, Context *context);
 
-    void create_index(const std::string &tab_name, const std::vector<std::string> &col_names, Context *context);
+    void create_index(std::string &tab_name, std::vector<std::string> &col_names, Context *context);
 
     void drop_index(const std::string &tab_name, const std::vector<std::string> &col_names, Context *context);
 

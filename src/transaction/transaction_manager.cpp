@@ -109,10 +109,8 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 // 删除索引
                 for (auto &[index_name, index_meta]: table_meta.indexes) {
                     char *key = new char[index_meta.col_tot_len];
-                    int offset = 0;
-                    for (auto &col: index_meta.cols) {
-                        memcpy(key + offset, record.data + col.offset, col.len);
-                        offset += col.len;
+                    for (auto &[index_offset, col_meta]: index_meta.cols) {
+                        memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
                     auto &&ih = sm_manager_->ihs_[index_name];
                     ih->delete_entry(key, txn);
@@ -132,10 +130,8 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 // 插入索引
                 for (auto &[index_name, index_meta]: table_meta.indexes) {
                     char *key = new char[index_meta.col_tot_len];
-                    int offset = 0;
-                    for (auto &col: index_meta.cols) {
-                        memcpy(key + offset, record.data + col.offset, col.len);
-                        offset += col.len;
+                    for (auto &[index_offset, col_meta]: index_meta.cols) {
+                        memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
                     auto &&ih = sm_manager_->ihs_[index_name];
                     ih->insert_entry(key, rid, txn);
@@ -157,11 +153,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 for (auto &[index_name, index_meta]: table_meta.indexes) {
                     char *old_key = new char[index_meta.col_tot_len];
                     char *new_key = new char[index_meta.col_tot_len];
-                    int offset = 0;
-                    for (auto &col: index_meta.cols) {
-                        memcpy(old_key + offset, old_record.data + col.offset, col.len);
-                        memcpy(new_key + offset, new_record.data + col.offset, col.len);
-                        offset += col.len;
+                    for (auto &[index_offset, col_meta] : index_meta.cols) {
+                        memcpy(old_key + index_offset, old_record.data + col_meta.offset, col_meta.len);
+                        memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
                     }
                     auto &&ih = sm_manager_->ihs_[index_name];
                     ih->delete_entry(new_key, txn);

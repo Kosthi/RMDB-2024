@@ -223,6 +223,9 @@ public:
         delete file_hdr_;
     }
 
+    // for gap lock
+    RmRecord get_key(const Iid &iid) const;
+    
     // for search
     bool get_value(const char *key, std::vector<Rid> *result, Transaction *transaction);
 
@@ -264,6 +267,9 @@ public:
 
     Iid leaf_begin() const;
 
+    // for index test
+    Rid get_rid(const Iid &iid) const;
+
 private:
     // 辅助函数
     void update_root_page_no(page_id_t root) { file_hdr_->root_page_ = root; }
@@ -283,9 +289,6 @@ private:
     void release_node_handle(IxNodeHandle &node);
 
     void maintain_child(std::shared_ptr<IxNodeHandle> &node, int child_idx);
-
-    // for index test
-    Rid get_rid(const Iid &iid) const;
 
     inline int Compare(const char *a, const char *b) const {
         return ix_compare(a, b, file_hdr_->col_types_, file_hdr_->col_lens_);

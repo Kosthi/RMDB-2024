@@ -95,7 +95,7 @@ struct Value {
     }
 };
 
-enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };
+enum CompOp { OP_INVALID, OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE };
 
 struct Condition {
     AggType agg_type;

@@ -189,11 +189,11 @@ void SmManager::show_indexs(std::string &table_name, Context *context) {
 
     std::ostringstream cols_stream;
     for (const auto &[_, index]: db_.tabs_[table_name].indexes) {
-        cols_stream << "(" << index.cols[0].name;
-        outfile << format << index.cols[0].name;
+        cols_stream << "(" << index.cols[0].second.name;
+        outfile << format << index.cols[0].second.name;
         for (size_t i = 1; i < index.cols.size(); ++i) {
-            cols_stream << "," << index.cols[i].name;
-            outfile << "," << index.cols[i].name;
+            cols_stream << "," << index.cols[i].second.name;
+            outfile << "," << index.cols[i].second.name;
         }
         outfile << ") |\n";
         cols_stream << ")";
@@ -307,7 +307,7 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
  * @param {vector<string>&} col_names 索引包含的字段名称
  * @param {Context*} context
  */
-void SmManager::create_index(const std::string &tab_name, const std::vector<std::string> &col_names, Context *context) {
+void SmManager::create_index(std::string &tab_name, std::vector<std::string> &col_names, Context *context) {
     auto &&ix_name = ix_manager_->get_index_name(tab_name, col_names);
     if (disk_manager_->is_file(ix_name)) {
         throw IndexExistsError(tab_name, col_names);
@@ -359,9 +359,9 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
     delete []key;
 
     // 更新表元索引数据
-    table_meta.indexes.emplace(ix_name, IndexMeta{tab_name, total_len, static_cast<int>(col_names.size()), col_metas});
+    table_meta.indexes.emplace(ix_name, IndexMeta(std::move(tab_name), total_len, static_cast<int>(col_names.size()), std::move(col_metas)));
     // 插入索引句柄
-    ihs_[ix_name] = std::move(ih);
+    ihs_[std::move(ix_name)] = std::move(ih);
     // 持久化
     flush_meta();
 }

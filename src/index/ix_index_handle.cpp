@@ -979,3 +979,14 @@ void IxIndexHandle::maintain_child(std::shared_ptr<IxNodeHandle> &node, int chil
         buffer_pool_manager_->unpin_page(child->get_page_id(), true);
     }
 }
+
+RmRecord IxIndexHandle::get_key(const Iid &iid) const {
+    auto node = fetch_node(iid.page_no);
+    if (iid.slot_no >= node->get_size()) {
+        buffer_pool_manager_->unpin_page(node->get_page_id(), false);
+        throw IndexEntryNotFoundError();
+    }
+    RmRecord record(node->get_key(iid.slot_no), file_hdr_->col_tot_len_);
+    buffer_pool_manager_->unpin_page(node->get_page_id(), false);
+    return std::move(record);
+}

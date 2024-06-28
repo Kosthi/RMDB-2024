@@ -12,10 +12,12 @@ See the Mulan PSL v2 for more details. */
 
 #include <algorithm>
 #include <iostream>
+#include <list>
 #include <map>
 #include <unordered_map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "errors.h"
@@ -39,18 +41,38 @@ struct ColMeta {
     friend std::istream &operator>>(std::istream &is, ColMeta &col) {
         return is >> col.tab_name >> col.name >> col.type >> col.len >> col.offset >> col.index;
     }
+
+    // 重载相等运算符
+    bool operator==(const ColMeta& other) const {
+        return tab_name == other.tab_name && name == other.name;
+    }
 };
 
 /* 索引元数据 */
 struct IndexMeta {
     std::string tab_name; // 索引所属表名称
-    int col_tot_len; // 索引字段长度总和
-    int col_num; // 索引字段数量
-    std::vector<ColMeta> cols; // 索引包含的字段
+    int col_tot_len = 0; // 索引字段长度总和
+    int col_num = 0; // 索引字段数量
+    std::vector<std::pair<int, ColMeta>> cols; // 索引包含的字段 在索引中的偏移量 -> 列元信息
+    std::unordered_map<std::string, std::pair<int, ColMeta>> cols_map;
+
+    IndexMeta() = default;
+
+    IndexMeta(std::string &&tab_name_, int col_tot_len_, int col_num_, std::vector<ColMeta> &&cols_) :
+    tab_name(std::move(tab_name_)), col_tot_len(col_tot_len_), col_num(col_num_) {
+        int offset = 0;
+        for (auto &col : cols_) {
+            cols.emplace_back(offset, std::move(col));
+            offset += cols.back().second.len;
+        }
+        for (auto it = cols.begin(); it != cols.end(); ++it) {
+            cols_map.emplace(it->second.name, *it);
+        }
+    }
 
     friend std::ostream &operator<<(std::ostream &os, const IndexMeta &index) {
         os << index.tab_name << " " << index.col_tot_len << " " << index.col_num;
-        for (auto &col: index.cols) {
+        for (auto &[_, col]: index.cols) {
             os << "\n" << col;
         }
         return os;
@@ -58,14 +80,43 @@ struct IndexMeta {
 
     friend std::istream &operator>>(std::istream &is, IndexMeta &index) {
         is >> index.tab_name >> index.col_tot_len >> index.col_num;
+        int offset = 0;
+        int len = 0;
         for (int i = 0; i < index.col_num; ++i) {
             ColMeta col;
             is >> col;
-            index.cols.emplace_back(col);
+            len = col.len;
+            index.cols.emplace_back(offset, std::move(col));
+            offset += len;
+        }
+        for (auto it = index.cols.begin(); it != index.cols.end(); ++it) {
+            index.cols_map.emplace(it->second.name, *it);
         }
         return is;
     }
+
+    // 重载相等运算符
+    bool operator==(const IndexMeta& other) const {
+        return tab_name == other.tab_name && col_tot_len == other.col_tot_len &&
+               col_num == other.col_num && cols == other.cols;
+    }
 };
+
+// 定义自定义哈希函数
+namespace std {
+    template <>
+    struct hash<IndexMeta> {
+        std::size_t operator()(const IndexMeta& index) const {
+            std::size_t hash = std::hash<std::string>{}(index.tab_name);
+            hash ^= std::hash<int>{}(index.col_tot_len) << 1;
+            hash ^= std::hash<int>{}(index.col_num) << 2;
+            for (const auto& [_, col] : index.cols) {
+                hash ^= std::hash<std::string>{}(col.name) << 3;
+            }
+            return hash;
+        }
+    };
+}
 
 /* 表元数据 */
 struct TabMeta {
@@ -117,7 +168,7 @@ struct TabMeta {
     }
 
     /* 根据字段名称集合获取索引元数据 */
-    IndexMeta get_index_meta(const std::vector<std::string> &col_names) {
+    IndexMeta& get_index_meta(const std::vector<std::string> &col_names) {
         // TODO 优化
         auto &&it = indexes.find(get_index_name(col_names));
         if (it != indexes.end()) {
@@ -172,9 +223,10 @@ struct TabMeta {
         for (size_t i = 0; i < n; ++i) {
             is >> index_name;
             is >> index;
-            tab.indexes.emplace(index_name, index);
+            tab.indexes.emplace(std::move(index_name), std::move(index));
             // TODO 注意这里要清空
             index.cols.clear();
+            index.cols_map.clear();
         }
         return is;
     }
