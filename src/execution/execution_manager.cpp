@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "executor_seq_scan.h"
 #include "executor_update.h"
 #include "executor_sortmerge_join.h"
+#include "execution/executor_load.h"
 #include "index/ix.h"
 #include "record_printer.h"
 
@@ -117,6 +118,10 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         }
     } else if (auto x = std::dynamic_pointer_cast<SetKnobPlan>(plan)) {
         switch (x->set_knob_type_) {
+            case ast::SetKnobType::EnableOutputFile: {
+                planner_->enable_output_file = x->bool_value_;
+                break;
+            }
             case ast::SetKnobType::EnableNestLoop: {
                 planner_->set_enable_nestedloop_join(x->bool_value_);
                 break;
@@ -187,12 +192,14 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     rec_printer.print_separator(context);
     // print header into file
     std::fstream outfile;
-    outfile.open("output.txt", std::ios::out | std::ios::app);
-    outfile << "|";
-    for (int i = 0; i < captions.size(); ++i) {
-        outfile << " " << captions[i] << " |";
+    if (planner_->enable_output_file) {
+        outfile.open("output.txt", std::ios::out | std::ios::app);
+        outfile << "|";
+        for (int i = 0; i < captions.size(); ++i) {
+            outfile << " " << captions[i] << " |";
+        }
+        outfile << "\n";
     }
-    outfile << "\n";
 
     // Print records
     size_t num_rec = 0;
@@ -216,11 +223,13 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
         // print record into buffer
         rec_printer.print_record(columns, context);
         // print record into file
-        outfile << "|";
-        for (int i = 0; i < columns.size(); ++i) {
-            outfile << " " << columns[i] << " |";
+        if (planner_->enable_output_file) {
+            outfile << "|";
+            for (int i = 0; i < columns.size(); ++i) {
+                outfile << " " << columns[i] << " |";
+            }
+            outfile << "\n";
         }
-        outfile << "\n";
         num_rec++;
     }
     outfile.close();

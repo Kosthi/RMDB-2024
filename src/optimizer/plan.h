@@ -46,7 +46,8 @@ typedef enum PlanTag {
     T_Sort,
     T_Projection,
     T_Aggregate,
-    T_CreateStaticCheckpoint
+    T_CreateStaticCheckpoint,
+    T_Load
 } PlanTag;
 
 // 查询执行计划
@@ -160,6 +161,21 @@ public:
 
     std::vector<TabCol> group_bys_;
     std::vector<Condition> havings_;
+};
+
+// load 语句，用于数据载入
+class LoadPlan : public Plan {
+public:
+    LoadPlan(PlanTag tag, std::string &filename, std::string &tab_name) {
+        Plan::tag = tag;
+        filename_ = std::move(filename);
+        tab_name_ = std::move(tab_name);
+    }
+
+    ~LoadPlan() override = default;
+
+    std::string filename_;
+    std::string tab_name_;
 };
 
 // dml语句，包括insert; delete; update; select语句　
