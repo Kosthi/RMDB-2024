@@ -106,11 +106,19 @@ public:
                 auto &lhs_rec = lhs_cond.rhs_val.raw;
                 auto &rhs_rec = rhs_cond.rhs_val.raw;
                 int cmp = compare(lhs_rec->data, rhs_rec->data, lhs_rec->size, type);
-                // 1. > 5 < 5 不相交
-                // 2. > 5 <= 5 不相交
-                // 3. >= 5 < 5 不相交
-                // 3. >= 5 <= 5 相交
-                if (cmp > 0 || (cmp == 0 && (lhs_cond.op != OP_GE || lhs_cond.op != OP_LE))) {
+                // 1.1 > 5 < 5 不相交
+                // 1.2 > 5 = 5 不相交
+                // 1.3 > 5 <= 5 不相交
+
+                // 2.1 >= 5 < 5 不相交
+                // 2.2 >= 5 = 5 相交
+                // 2.3 >= 5 <= 5 相交
+
+                // 3.1 = 5 < 5 不相交
+                // 3.2 = 5 = 5 相交
+                // 3.3 = 5 <= 5 相交
+                // (OP_GE || OP_EQ) && (OP_LE || OP_EQ) -> (!OP_GE && !OP_EQ) || (!OP_LE && !OP_EQ) -> (OP_GT) || (OP_LT)
+                if (cmp > 0 || (cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
             }
@@ -124,11 +132,19 @@ public:
                 auto &lhs_rec = lhs_cond.rhs_val.raw;
                 auto &rhs_rec = rhs_cond.rhs_val.raw;
                 int cmp = compare(lhs_rec->data, rhs_rec->data, lhs_rec->size, type);
-                // 1. > 5 < 5 不相交
-                // 2. > 5 <= 5 不相交
-                // 3. >= 5 < 5 不相交
-                // 3. >= 5 <= 5 相交
-                if (cmp > 0 || (cmp == 0 && (lhs_cond.op != OP_GE || lhs_cond.op != OP_LE))) {
+                // 1.1 > 5 < 5 不相交
+                // 1.2 > 5 = 5 不相交
+                // 1.3 > 5 <= 5 不相交
+
+                // 2.1 >= 5 < 5 不相交
+                // 2.2 >= 5 = 5 相交
+                // 2.3 >= 5 <= 5 相交
+
+                // 3.1 = 5 < 5 不相交
+                // 3.2 = 5 = 5 相交
+                // 3.3 = 5 <= 5 相交
+                // !(OP_GE || OP_EQ) && (OP_LE || OP_EQ) -> (!OP_GE && !OP_EQ) || (!OP_LE && !OP_EQ) -> (OP_GT) || (OP_LT)
+                if (cmp > 0 || (cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
             }
