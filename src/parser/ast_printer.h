@@ -73,6 +73,19 @@ namespace ast {
             return m.at(op);
         }
 
+        static std::string knobType2str(SetKnobType type) {
+            static std::map<SetKnobType, std::string> m{
+                {EnableNestLoop, "EnableNestLoop"},
+                {EnableSortMerge, "EnableSortMerge"},
+                {EnableOutputFile, "EnableOutputFile"}
+            };
+            return m.at(type);
+        }
+
+        static std::string boolType2str(bool type) {
+            return type ? "true" : "false";
+        }
+
         template<typename T>
         static void print_node_list(std::vector<T> nodes, int offset) {
             std::cout << offset2string(offset);
@@ -161,6 +174,14 @@ namespace ast {
                 print_node(x->lhs, offset);
                 print_val(op2str(x->op), offset);
                 print_node(x->rhs, offset);
+            } else if (auto x = std::dynamic_pointer_cast<LoadStmt>(node)) {
+                std::cout << "LOAD\n";
+                print_val(x->file_name, offset);
+                print_val(x->table_name, offset);
+            } else if (auto x = std::dynamic_pointer_cast<SetStmt>(node)) {
+                std::cout << "SET_KNOB\n";
+                print_val(knobType2str(x->set_knob_type_), offset);
+                print_val(boolType2str(x->bool_val_), offset);
             } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
                 std::cout << "INSERT\n";
                 print_val(x->tab_name, offset);

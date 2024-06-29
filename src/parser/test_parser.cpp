@@ -59,7 +59,16 @@ int main() {
         "select id from grade where score >= (999.0);", // 多级嵌套
         "select id from grade where name in (1, 3.45, '4');"
     };
-    for (auto &sql: constValueSubquerySqls) {
+    std::vector<std::string> PerformanceSqls = {
+        // 为了减少编写词法规则工作量，在分析阶段判断非法 sqls
+        "load ../../src/test/performance_test/table_data/warehouse.csv into warehouse;",
+        "load ../../src/test/performance_test/table_data/city.csv into city;",
+        "load ../../src/test/performance_test/table_data/city.csv into orders;",
+        "load ../my.csv into your;",
+        "set output_file off",
+        "set output_file on"
+    };
+    for (auto &sql: PerformanceSqls) {
         std::cout << sql << std::endl;
         YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
         assert(yyparse() == 0);

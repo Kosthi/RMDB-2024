@@ -91,15 +91,20 @@ extern int yydebug;
     HAVING = 297,
     IN = 298,
     STATIC_CHECKPOINT = 299,
-    LEQ = 300,
-    NEQ = 301,
-    GEQ = 302,
-    T_EOF = 303,
-    IDENTIFIER = 304,
-    VALUE_STRING = 305,
-    VALUE_INT = 306,
-    VALUE_FLOAT = 307,
-    VALUE_BOOL = 308
+    LOAD = 300,
+    OUTPUT_FILE = 301,
+    ON = 302,
+    OFF = 303,
+    LEQ = 304,
+    NEQ = 305,
+    GEQ = 306,
+    T_EOF = 307,
+    FILE_PATH = 308,
+    IDENTIFIER = 309,
+    VALUE_STRING = 310,
+    VALUE_INT = 311,
+    VALUE_FLOAT = 312,
+    VALUE_BOOL = 313
   };
 #endif
 

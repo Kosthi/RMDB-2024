@@ -23,13 +23,13 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
-COUNT MAX MIN SUM AS GROUP HAVING IN STATIC_CHECKPOINT
+COUNT MAX MIN SUM AS GROUP HAVING IN STATIC_CHECKPOINT LOAD OUTPUT_FILE ON OFF
 
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
 // type-specific tokens
-%token <sv_str> IDENTIFIER VALUE_STRING
+%token <sv_str> FILE_PATH IDENTIFIER VALUE_STRING
 %token <sv_int> VALUE_INT
 %token <sv_float> VALUE_FLOAT
 %token <sv_bool> VALUE_BOOL
@@ -63,6 +63,16 @@ start:
         stmt ';'
     {
         parse_tree = $1;
+        YYACCEPT;
+    }
+    |   SET set_knob_type OFF
+    {
+        parse_tree = std::make_shared<SetStmt>($2, false);
+        YYACCEPT;
+    }
+    |   SET set_knob_type ON
+    {
+        parse_tree = std::make_shared<SetStmt>($2, true);
         YYACCEPT;
     }
     |   HELP
@@ -155,7 +165,11 @@ ddl:
     ;
 
 dml:
-        INSERT INTO tbName VALUES '(' valueList ')'
+        LOAD FILE_PATH INTO tbName
+    {
+        $$ = std::make_shared<LoadStmt>($2, $4);
+    }
+    |   INSERT INTO tbName VALUES '(' valueList ')'
     {
         $$ = std::make_shared<InsertStmt>($3, $6);
     }
@@ -478,8 +492,9 @@ having_clauses:
     ;
 
 set_knob_type:
-    ENABLE_NESTLOOP { $$ = EnableNestLoop; }
+        ENABLE_NESTLOOP { $$ = EnableNestLoop; }
     |   ENABLE_SORTMERGE { $$ = EnableSortMerge; }
+    |   OUTPUT_FILE { $$ = EnableOutputFile; }
     ;
 
 tbName: IDENTIFIER;
