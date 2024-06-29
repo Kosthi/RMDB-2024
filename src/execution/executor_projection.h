@@ -29,6 +29,12 @@ public:
                        const std::vector<TabCol> &proj_cols): prev_(std::move(prev)), prev_cols_(prev_->cols()) {
         if (prev_->getType() == "AggregateExecutor") {
             is_agg_ = true;
+            int offset = 0;
+            for (auto &col_meta: prev_cols_) {
+                proj_cols_.emplace_back(col_meta);
+                proj_cols_.back().offset = offset;
+                offset += col_meta.len;
+            }
             // 这里是引用不能拷贝，聚合调用 begin 后会自动调整 offset
             // proj_cols_ = prev_cols_;
         } else {
@@ -75,7 +81,7 @@ public:
     bool is_end() const { return prev_->is_end(); }
 
     // 需要实现
-    const std::vector<ColMeta> &cols() const override { return is_agg_ ? prev_cols_ : proj_cols_; }
+    const std::vector<ColMeta> &cols() const override { return proj_cols_; }
 
     size_t tupleLen() const override { return len_; }
 };

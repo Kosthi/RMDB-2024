@@ -94,6 +94,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "AS" { return AS; }
 "GROUP" { return GROUP; }
 "HAVING" { return HAVING; }
+"IN" { return IN; }
 "STATIC_CHECKPOINT" { return STATIC_CHECKPOINT; }
 "TRUE" { 
     yylval->sv_bool = true;
@@ -107,6 +108,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 ">=" { return GEQ; }
 "<=" { return LEQ; }
 "<>" { return NEQ; }
+"!=" { return NEQ; }
 {single_op} { return yytext[0]; }
     /* id */
 {identifier} {

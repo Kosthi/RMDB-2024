@@ -22,6 +22,10 @@ See the Mulan PSL v2 for more details. */
 #include "defs.h"
 #include "record/rm_defs.h"
 
+class Plan;
+// 这里使用前置声明避免头文件互相包含 common.h - analyze.h
+class Query;
+class AbstractExecutor;
 
 struct TabCol {
     std::string tab_name;
@@ -80,7 +84,7 @@ struct Value {
         }
     }
 
-    bool operator==(const Value& other) const {
+    bool operator==(const Value &other) const {
         if (type != other.type) return false;
         switch (type) {
             case TYPE_INT:
@@ -95,15 +99,20 @@ struct Value {
     }
 };
 
-enum CompOp { OP_INVALID, OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE };
+enum CompOp { OP_INVALID, OP_IN, OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE };
 
 struct Condition {
     AggType agg_type;
     TabCol lhs_col; // left-hand side column
     CompOp op; // comparison operator
     bool is_rhs_val; // true if right-hand side is a value (not a column)
+    bool is_sub_query; // 是否是子查询
+    std::shared_ptr<Query> sub_query; // 子查询
+    std::shared_ptr<Plan> sub_query_plan; // 子查询计划
+    std::shared_ptr<AbstractExecutor> prev; // 子查询算子
     TabCol rhs_col; // right-hand side column
     Value rhs_val; // right-hand side value
+    std::vector<Value> rhs_value_list; // 值列表
 };
 
 struct SetClause {
@@ -112,16 +121,16 @@ struct SetClause {
 };
 
 // Utility function to combine hashes
-template <typename T>
-inline void hash_combine(std::size_t& seed, const T& val) {
+template<typename T>
+inline void hash_combine(std::size_t &seed, const T &val) {
     seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
 // Custom hash function for Value
 namespace std {
-    template <>
+    template<>
     struct hash<Value> {
-        std::size_t operator()(const Value& v) const noexcept {
+        std::size_t operator()(const Value &v) const noexcept {
             std::size_t seed = 0;
             hash_combine(seed, v.type);
             switch (v.type) {

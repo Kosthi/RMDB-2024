@@ -31,7 +31,7 @@ namespace ast {
     };
 
     enum SvCompOp {
-        SV_OP_EQ, SV_OP_NE, SV_OP_LT, SV_OP_GT, SV_OP_LE, SV_OP_GE
+        SV_OP_EQ, SV_OP_NE, SV_OP_LT, SV_OP_GT, SV_OP_LE, SV_OP_GE, SV_OP_IN
     };
 
     enum OrderByDir {
@@ -194,10 +194,16 @@ namespace ast {
     struct BinaryExpr : public TreeNode {
         std::shared_ptr<Col> lhs;
         SvCompOp op;
-        std::shared_ptr<Expr> rhs;
+        std::shared_ptr<Expr> rhs; // 可能是列也可能是值
+        std::vector<std::shared_ptr<Value> > rhs_list; // 数值列表
 
         BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_) : lhs(std::move(lhs_)), op(op_),
             rhs(std::move(rhs_)) {
+        }
+
+        BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_,
+                   std::vector<std::shared_ptr<Value> > rhs_list_) : lhs(std::move(lhs_)), op(op_),
+                                                                     rhs_list(std::move(rhs_list_)) {
         }
     };
 
@@ -284,7 +290,7 @@ namespace ast {
         }
     };
 
-    struct SelectStmt : public TreeNode {
+    struct SelectStmt : public TreeNode, public Expr {
         std::vector<std::shared_ptr<BoundExpr> > select_list;
         std::vector<std::string> tabs;
         std::vector<std::shared_ptr<JoinExpr> > jointree;

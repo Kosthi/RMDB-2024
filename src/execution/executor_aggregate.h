@@ -319,6 +319,8 @@ public:
     }
 
     void beginTuple() override {
+        // 子查询要清空，也可以直接缓存？
+        ht_.hash_table_.clear();
         prev_->beginTuple();
 
         std::vector<Value> keys(group_bys_.size());
@@ -371,6 +373,7 @@ public:
                             const float a = *reinterpret_cast<const float *>(rm_record_->data + sel_cols_[i].offset);
                             v.set_float(a);
                         } else if (sel_cols_[i].type == TYPE_STRING) {
+                            throw InternalError("You cant aggreagte string with max/min/sum");
                             std::string s(rm_record_->data + sel_cols_[i].offset, sel_cols_[i].len);
                             v.set_str(s);
                         }
@@ -425,18 +428,11 @@ public:
             prev_->nextTuple();
         }
 
-        // 聚合完成后修改 sel_cols 的偏移量，使之适应投影
-        int offset = 0;
-        for (auto &sel_col: sel_cols_) {
-            sel_col.offset = offset;
-            offset += sel_col.len;
-        }
-
         it_ = ht_.hash_table_.begin();
         // 空表
         if (it_ == ht_.hash_table_.end()) {
             // 空表且有group by，但是没有key直接输出空表
-            if (!group_bys_.empty()) {
+            if (!group_bys_.empty() && has_group_col_) {
                 return;
             }
             is_empty_table_ = true;
@@ -491,17 +487,18 @@ public:
                     }
                     case AGG_MAX:
                     case AGG_MIN:
-                    case AGG_SUM: {
-                        // 为了输出空改为字符串类型，原来 len 不变
-                        sel_cols_[i].type = TYPE_STRING;
-                        std::string s;
-                        memcpy(record->data + offset, s.c_str(), sel_cols_[i].len);
-                        offset += sel_cols_[i].len;
-                        break;
-                    }
+                    case AGG_SUM:
+                    // {
+                    //     // 为了输出空改为字符串类型，原来 len 不变
+                    //     sel_cols_[i].type = TYPE_STRING;
+                    //     std::string s;
+                    //     memcpy(record->data + offset, s.c_str(), sel_cols_[i].len);
+                    //     offset += sel_cols_[i].len;
+                    //     break;
+                    // }
                     case AGG_COL:
                     default:
-                        throw InternalError("Unexpected aggregate type！");
+                        throw InternalError("Unsupported aggregate null type！");
                 }
             }
             return std::move(record);

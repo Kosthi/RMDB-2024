@@ -60,7 +60,7 @@ public:
 class ScanPlan : public Plan {
 public:
     ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-             std::vector<std::string> index_col_names) {
+             std::vector<std::string> index_col_names, bool is_sub_query = false) {
         Plan::tag = tag;
         tab_name_ = std::move(tab_name);
         conds_ = std::move(conds);

@@ -179,13 +179,13 @@ void *client_handler(void *sock_fd) {
             }
         } else {
             // 遇到异常，需要打印failure到output.txt文件中，并发异常信息返回给客户端
-            std::string str = "语法层解析错误";
-            std::cerr << str << std::endl;
+            // std::string str = "语法层解析错误";
+            // std::cerr << str << std::endl;
 
-            memcpy(data_send, str.c_str(), str.size());
-            data_send[str.size()] = '\n';
-            data_send[str.size() + 1] = '\0';
-            offset = str.size() + 1;
+            // memcpy(data_send, str.c_str(), str.size());
+            // data_send[str.size()] = '\n';
+            // data_send[str.size() + 1] = '\0';
+            // offset = str.size() + 1;
 
             // 将报错信息写入output.txt
             std::fstream outfile;

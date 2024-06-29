@@ -49,7 +49,7 @@ private:
 
     std::shared_ptr<Plan> physical_optimization(std::shared_ptr<Query> query, Context *context);
 
-    std::shared_ptr<Plan> make_one_rel(std::shared_ptr<Query> query);
+    std::shared_ptr<Plan> make_one_rel(std::shared_ptr<Query> query, Context *context);
 
     std::shared_ptr<Plan> generate_sort_plan(std::shared_ptr<Query> query, std::shared_ptr<Plan> plan);
 
@@ -57,6 +57,8 @@ private:
 
     std::shared_ptr<Plan> pop_scan(int *scantbl, const std::string &table, std::vector<std::string> &joined_tables,
                                    std::vector<std::shared_ptr<Plan> > plans);
+
+    std::vector<Condition> pop_conds(std::vector<Condition> &conds, const std::string &tab_names, Context *context);
 
     // int get_indexNo(std::string tab_name, std::vector<Condition> curr_conds);
     bool get_index_cols(std::string &tab_name, std::vector<Condition> &curr_conds,

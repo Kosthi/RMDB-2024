@@ -235,10 +235,53 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &s
         cond.op = convert_sv_comp_op(expr->op);
         if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
             cond.is_rhs_val = true;
+            cond.is_sub_query = false;
             cond.rhs_val = convert_sv_value(rhs_val);
         } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
             cond.is_rhs_val = false;
+            cond.is_sub_query = false;
             cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
+        } else if (auto rhs_select = std::dynamic_pointer_cast<ast::SelectStmt>(expr->rhs)) {
+            // 子查询只能有一列或者
+            // select * 需要进一步查表看看是否是单列
+            // select * 和至少两个表，至少有两列，直接抛出异常
+            // 这里应该只用保证单列就行，是否单行具体由算子检查
+            if (rhs_select->select_list.empty()) {
+                throw InternalError("Operand should contain 1 column!");
+                if (rhs_select->tabs.size() > 1) {
+                    throw InternalError("Operand should contain 1 column!");
+                }
+                std::vector<ColMeta> all_cols;
+                get_all_cols(rhs_select->tabs, all_cols);
+                // select * 一个表但是包括多行
+                if (all_cols.size() > 1) {
+                    throw InternalError("Operand should contain 1 column!");
+                }
+                // 如果 select * 只有单列 col，则补全为 select col
+                auto bound_expr = std::make_shared<ast::BoundExpr>(
+                    std::make_shared<ast::Col>(all_cols[0].tab_name, all_cols[0].name), AGG_COL);
+                rhs_select->select_list.emplace_back(std::move(bound_expr));
+            }
+            if (rhs_select->select_list.size() > 1) {
+                throw InternalError("Operand should contain 1 column!");
+            }
+            // 带有比较运算符的标量子查询右侧不一定是单一聚合函数，有可能是单列，只用保证返回单列单行就行
+            // if (cond.op != OP_IN && rhs_select->select_list[0]->type == AGG_COL) {
+            //     throw InternalError("Subquery returns more than 1 row!");
+            // }
+            cond.is_rhs_val = false;
+            cond.is_sub_query = true;
+            cond.sub_query = do_analyze(expr->rhs);
+        } else if (!expr->rhs_list.empty()) {
+            if (cond.op != OP_IN && (expr->rhs_list.size() > 1 || expr->rhs_list.empty())) {
+                throw InternalError("Operand should contain 1 column!");
+            }
+            cond.is_rhs_val = false;
+            cond.is_sub_query = true;
+            // > 只有一个 或者 in 有多个
+            for (auto &value: expr->rhs_list) {
+                cond.rhs_value_list.emplace_back(convert_sv_value(value));
+            }
         }
         conds.emplace_back(cond);
     }
@@ -259,6 +302,7 @@ void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExp
         cond.op = convert_sv_comp_op(expr->op);
         if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
             cond.is_rhs_val = true;
+            cond.is_sub_query = false;
             cond.rhs_val = convert_sv_value(rhs_val);
         } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
             // 右边一定是数值
@@ -277,6 +321,7 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
     // Get raw values in where clause
     for (auto &cond: conds) {
         // count(*)
+        // TODO having 支持子查询
         if (cond.agg_type == AGG_COUNT && cond.lhs_col.tab_name.empty() && cond.lhs_col.col_name.empty()) {
             if (cond.rhs_val.type == TYPE_INT) {
                 cond.rhs_val.init_raw(sizeof(int));
@@ -287,7 +332,7 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
         }
         // Infer table name from column name
         cond.lhs_col = check_column(all_cols, cond.lhs_col);
-        if (!cond.is_rhs_val) {
+        if (!cond.is_rhs_val && !cond.is_sub_query) {
             cond.rhs_col = check_column(all_cols, cond.rhs_col);
         }
         TabMeta &lhs_tab = sm_manager_->db_.get_table(cond.lhs_col.tab_name);
@@ -325,6 +370,41 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
                 }
             }
             rhs_type = cond.rhs_val.type;
+        } else if (cond.is_sub_query) {
+            // 子查询是个值列表
+            if (cond.sub_query == nullptr) {
+                assert(!cond.rhs_value_list.empty());
+                // 检查列表中值的类型是否都相同
+                // int 可以转换为float
+                for (auto &value: cond.rhs_value_list) {
+                    if (lhs_type != value.type) {
+                        if (lhs_type == TYPE_FLOAT && value.type == TYPE_INT) {
+                            value.set_float(static_cast<float>(value.int_val));
+                        } else {
+                            throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(value.type));
+                        }
+                    }
+                    value.init_raw(lhs_col->len);
+                }
+                continue;
+            }
+            // 子查询右边是唯一列
+            auto &table_name = cond.sub_query->cols[0].tab_name;
+            auto &col_name = cond.sub_query->cols[0].col_name;
+            // where name = (select count(*) from grade);
+            // count 右边类型是 int
+            if (cond.sub_query->agg_types[0] == AGG_COUNT) {
+                rhs_type = lhs_type == TYPE_FLOAT ? TYPE_FLOAT : TYPE_INT;
+            } else {
+                // where name = (select MAX(score) from grade);
+                TabMeta &rhs_tab = sm_manager_->db_.get_table(table_name);
+                auto rhs_col = rhs_tab.get_col(col_name);
+                if (lhs_type == TYPE_FLOAT && rhs_col->type == TYPE_INT) {
+                    rhs_type = TYPE_FLOAT;
+                } else {
+                    rhs_type = rhs_col->type;
+                }
+            }
         } else {
             TabMeta &rhs_tab = sm_manager_->db_.get_table(cond.rhs_col.tab_name);
             auto rhs_col = rhs_tab.get_col(cond.rhs_col.col_name);
@@ -354,6 +434,7 @@ CompOp Analyze::convert_sv_comp_op(ast::SvCompOp op) {
     std::map<ast::SvCompOp, CompOp> m = {
         {ast::SV_OP_EQ, OP_EQ}, {ast::SV_OP_NE, OP_NE}, {ast::SV_OP_LT, OP_LT},
         {ast::SV_OP_GT, OP_GT}, {ast::SV_OP_LE, OP_LE}, {ast::SV_OP_GE, OP_GE},
+        {ast::SV_OP_IN, OP_IN}
     };
     return m.at(op);
 }

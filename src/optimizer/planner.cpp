@@ -12,13 +12,6 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 
-#include "execution/executor_delete.h"
-#include "execution/executor_index_scan.h"
-#include "execution/executor_insert.h"
-#include "execution/executor_nestedloop_join.h"
-#include "execution/executor_projection.h"
-#include "execution/executor_seq_scan.h"
-#include "execution/executor_update.h"
 #include "index/ix.h"
 #include "record_printer.h"
 
@@ -157,22 +150,27 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
  * @param tab_names 表名
  * @return std::vector<Condition>
  */
-std::vector<Condition> pop_conds(std::vector<Condition> &conds, std::string tab_names) {
+std::vector<Condition>
+Planner::pop_conds(std::vector<Condition> &conds, const std::string &tab_names, Context *context) {
     // auto has_tab = [&](const std::string &tab_name) {
     //     return std::find(tab_names.begin(), tab_names.end(), tab_name) != tab_names.end();
     // };
+    // 根据表不同在表上生成谓词
     std::vector<Condition> solved_conds;
-    auto it = conds.begin();
-    while (it != conds.end()) {
-        if ((tab_names.compare(it->lhs_col.tab_name) == 0 && it->is_rhs_val) || (
-                it->lhs_col.tab_name.compare(it->rhs_col.tab_name) == 0)) {
+    for (auto &&it = conds.begin(); it != conds.end();) {
+        if ((tab_names == it->lhs_col.tab_name && (it->is_rhs_val || it->is_sub_query)) || (
+                it->lhs_col.tab_name == it->rhs_col.tab_name)) {
+            // 如果是子查询且不为值列表，先生成子查询计划
+            if (it->is_sub_query && it->sub_query != nullptr) {
+                it->sub_query_plan = generate_select_plan(it->sub_query, context);
+            }
             solved_conds.emplace_back(std::move(*it));
             it = conds.erase(it);
         } else {
-            it++;
+            ++it;
         }
     }
-    return solved_conds;
+    return std::move(solved_conds);
 }
 
 int push_conds(Condition *cond, std::shared_ptr<Plan> plan) {
@@ -234,7 +232,7 @@ std::shared_ptr<Query> Planner::logical_optimization(std::shared_ptr<Query> quer
 }
 
 std::shared_ptr<Plan> Planner::physical_optimization(std::shared_ptr<Query> query, Context *context) {
-    std::shared_ptr<Plan> plan = make_one_rel(query);
+    std::shared_ptr<Plan> plan = make_one_rel(query, context);
 
     // 其他物理优化
 
@@ -244,14 +242,13 @@ std::shared_ptr<Plan> Planner::physical_optimization(std::shared_ptr<Query> quer
     return plan;
 }
 
-std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
+std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Context *context) {
     auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
     std::vector<std::string> tables = query->tables;
     // // Scan table , 生成表算子列表tab_nodes
     std::vector<std::shared_ptr<Plan> > table_scan_executors(tables.size());
     for (size_t i = 0; i < tables.size(); i++) {
-        // 检查表上的谓词，连接谓词要后面查
-        auto curr_conds = pop_conds(query->conds, tables[i]);
+        auto curr_conds = pop_conds(query->conds, tables[i], context);
         // int index_no = get_indexNo(tables[i], curr_conds);
         std::vector<std::string> index_col_names;
         bool index_exist = get_index_cols(tables[i], curr_conds, index_col_names);
@@ -275,6 +272,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
                     std::make_shared<ScanPlan>(T_IndexScan, sm_manager_, tables[i], curr_conds, index_col_names);
         }
     }
+    // TODO 这里先假设子查询不需要 join
     // 只有一个表，不需要join。
     if (tables.size() == 1) {
         return table_scan_executors[0];
@@ -602,6 +600,7 @@ std::shared_ptr<Plan> Planner::do_planner(std::shared_ptr<Query> query, Context 
         std::shared_ptr<plannerInfo> root = std::make_shared<plannerInfo>(x);
         // 生成select语句的查询执行计划
         std::shared_ptr<Plan> projection = generate_select_plan(std::move(query), context);
+        // 子查询也只能有一个 DMLPlan，投影计划会有多个在 conds 里
         plannerRoot = std::make_shared<DMLPlan>(T_select, projection, std::string(), std::vector<Value>(),
                                                 std::vector<Condition>(), std::vector<SetClause>());
     } else {
