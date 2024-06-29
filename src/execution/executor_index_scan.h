@@ -161,9 +161,7 @@ private:
     RmFileHandle *fh_; // 表的数据文件句柄
     std::vector<ColMeta> cols_; // 需要读取的字段
     size_t len_; // 选取出来的一条记录的长度
-    std::vector<Condition> fed_conds_; // 扫描条件，和conds_字段相同
     std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
-    std::set<std::string> index_cols_;
     IndexMeta index_meta_; // index scan涉及到的索引元数据
     Rid rid_;
     std::unique_ptr<IxScan> scan_;
@@ -258,7 +256,6 @@ public:
         tab_ = sm_manager_->db_.get_table(tab_name_);
         // index_no_ = index_no;
         index_meta_ = tab_.get_index_meta(index_col_names_);
-        index_cols_.insert(index_col_names_.begin(), index_col_names_.end());
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         cols_ = tab_.cols;
         len_ = cols_.back().offset + cols_.back().len;
@@ -275,8 +272,6 @@ public:
                 cond.op = swap_op.at(cond.op);
             }
         }
-        // fed_conds_ = conds_;
-        std::reverse(fed_conds_.begin(), fed_conds_.end());
         id_ = generateID();
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
         mergesort_ = !conds_[0].is_rhs_val && conds_.size() == 1;
@@ -285,7 +280,7 @@ public:
 
         // TODO 支持更多谓词的解析 > >
         for (auto it = conds_.begin(); it != conds_.end();) {
-            if (it->lhs_col.tab_name == tab_name_ && it->is_rhs_val) {
+            if (it->lhs_col.tab_name == tab_name_ && it->op != OP_NE && it->is_rhs_val) {
                 if (predicate_manager_.addPredicate(it->lhs_col.col_name, *it)) {
                     it = conds_.erase(it);
                     continue;
@@ -408,17 +403,6 @@ public:
 
         char *left_key = new char[index_meta_.col_tot_len];
         char *right_key = new char[index_meta_.col_tot_len];
-
-        // 查询剩下的谓词上的列是否都有索引
-        bool is_remaining_index = std::all_of(fed_conds_.begin(), fed_conds_.end(), [&](Condition &cond) {
-            return index_cols_.count(cond.lhs_col.col_name);
-        });
-        if (!is_remaining_index) {
-            // S 表锁
-            if (context_ != nullptr) {
-                context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-            }
-        }
 
         // 找出下界 [
         auto last_left_tuple = predicate_manager_.getLeftLastTuple(left_key);
