@@ -1020,14 +1020,89 @@ public:
     bool cmp_cond(const RmRecord *rec, const Condition &cond, const std::vector<ColMeta> &rec_cols) {
         const auto &lhs_col_meta = get_col(rec_cols, cond.lhs_col);
         const char *lhs_data = rec->data + lhs_col_meta->offset;
-        const char *rhs_data;
+        char *rhs_data;
         ColType rhs_type;
-
+        // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
+        std::unique_ptr<RmRecord> record;
         // 提取左值与右值的数据和类型
         // 常值
         if (cond.is_rhs_val) {
             rhs_type = cond.rhs_val.type;
             rhs_data = cond.rhs_val.raw->data;
+        } else if (cond.is_sub_query) {
+            // 查的是值列表
+            if (!cond.rhs_value_list.empty()) {
+                // in 谓词
+                if (cond.op == OP_IN) {
+                    // 前面已经强制转换和检查类型匹配过了，这里不需要
+                    for (auto &value: cond.rhs_value_list) {
+                        rhs_data = value.raw->data;
+                        if (compare(lhs_data, rhs_data, lhs_col_meta->len, value.type) == 0) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                // 比较谓词
+                assert(cond.rhs_value_list.size() == 1);
+                auto &value = cond.rhs_value_list[0];
+                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta->len, value.type);
+                switch (cond.op) {
+                    case OP_EQ: return cmp == 0;
+                    case OP_NE: return cmp != 0;
+                    case OP_LT: return cmp < 0;
+                    case OP_GT: return cmp > 0;
+                    case OP_LE: return cmp <= 0;
+                    case OP_GE: return cmp >= 0;
+                    default:
+                        throw InternalError("Unexpected op type！");
+                }
+            }
+            // 查的是子算子，在算子生成阶段已经检查了合法性
+            cond.prev->beginTuple();
+
+            // where id <= (select count(*) from grade);
+            // where id <= (select id from grade where id = 1); // 返回单列单行
+            ColMeta rhs_col_meta;
+            if (cond.sub_query->agg_types[0] == AGG_COUNT && cond.sub_query->cols[0].tab_name.empty() && cond.sub_query
+                ->cols[0].col_name.empty()) {
+                rhs_type = TYPE_INT;
+            } else {
+                // ！子查询右边的列值类型应该由子算子决定
+                rhs_col_meta = cond.prev->cols()[0];
+                // where id > (select count(id) from grade);
+                if (cond.sub_query->agg_types[0] == AGG_COUNT) {
+                    rhs_type = TYPE_INT;
+                } else {
+                    rhs_type = rhs_col_meta.type;
+                }
+            }
+
+            // 处理 in 谓词，扫描算子直到找到一个完全相等的
+            if (cond.op == OP_IN) {
+                for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
+                    record = cond.prev->Next();
+                    rhs_data = record->data;
+                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+                        rhs_type = TYPE_FLOAT;
+                        const float a = *reinterpret_cast<const int *>(rhs_data);
+                        memcpy(rhs_data, &a, sizeof(float));
+                    }
+                    if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // 聚合或列值只能有一行
+            record = cond.prev->Next();
+            rhs_data = record->data;
+            if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+                rhs_type = TYPE_FLOAT;
+                const float a = *reinterpret_cast<const int *>(rhs_data);
+                memcpy(rhs_data, &a, sizeof(float));
+            }
         } else {
             // 列值
             const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
