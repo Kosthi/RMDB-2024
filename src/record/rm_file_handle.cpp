@@ -92,6 +92,26 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
 }
 
+/** 为 load 载入数据 免检查 直接找到插入位置
+ * @description: 在当前表中的指定位置插入一条记录
+ * @param {Rid&} rid 要插入记录的位置
+ * @param {char*} buf 要插入记录的数据
+ */
+void RmFileHandle::load_record(int &page_no, char *&data, int nums_record, int page_size) {
+    PageId page_id{fd_, page_no};
+    auto &&page_handle = RmPageHandle{&file_hdr_, buffer_pool_manager_->new_page(&page_id)};
+    assert(page_id.page_no == page_no);
+    memcpy(page_handle.slots, data, page_size);
+    for (int i = 0; i < nums_record; ++i) {
+        Bitmap::set(page_handle.bitmap, i);
+    }
+    page_handle.page_hdr->num_records += nums_record;
+    page_handle.page_hdr->next_free_page_no = INVALID_PAGE_ID;
+    ++file_hdr_.num_pages;
+    // file_hdr_.first_free_page_no = page_handle.page_hdr->next_free_page_no;
+    buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
+}
+
 /**
  * @description: 删除记录文件中记录号为rid的记录
  * @param {Rid&} rid 要删除的记录的记录号（位置）

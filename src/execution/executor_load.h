@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/mman.h>
+
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -9,12 +11,12 @@
 class LoadExecutor : public AbstractExecutor {
 private:
     TabMeta tab_; // 表的元数据
-    // std::vector<Value> values_; // 需要插入的数据
     RmFileHandle *fh_; // 表的数据文件句柄
     std::string filename_; // 载入文件名
     std::string tab_name_; // 表名称
-    Rid rid_; // 插入的位置，由于系统默认插入时不指定位置，因此当前rid_在插入后才赋值
     SmManager *sm_manager_;
+    int record_len_; // 记录大小
+    int max_nums_; // 一个页面能放入的最大记录数量
 
 public:
     LoadExecutor(SmManager *sm_manager, std::string &filename, std::string &tab_name,
@@ -23,17 +25,124 @@ public:
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
-
-        // IX 锁
-        // if (context_ != nullptr) {
-        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
-        // }
+        record_len_ = fh_->get_file_hdr().record_size;
+        max_nums_ = fh_->get_file_hdr().num_records_per_page;
     }
 
     std::unique_ptr<RmRecord> Next() override {
-        printf("load success file: %s, tab: %s\n", filename_.c_str(), tab_name_.c_str());
+        int fd = open(filename_.c_str(), O_RDONLY);
+        if (fd == -1) {
+            perror("Error opening file");
+            return nullptr;
+        }
+
+        // 得到文件大小
+        struct stat sb;
+        if (fstat(fd, &sb) == -1) {
+            perror("Error getting file size");
+            close(fd);
+            return nullptr;
+        }
+
+        size_t file_size = sb.st_size;
+
+        // Memory map the file
+        char *file_content = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+        if (file_content == MAP_FAILED) {
+            perror("Error mapping file");
+            close(fd);
+            return nullptr;
+        }
+
+        // Parse the CSV content
+        std::vector<std::vector<std::string> > csvData;
+        std::string currentLine;
+
+        // 跳过表头
+        size_t i = 0;
+        // 使用 std::find 查找换行符的位置
+        const char *newlinePos = std::find(file_content, file_content + file_size, '\n');
+        // 一定存在表头
+        // if (newlinePos != file_content + file_size) {
+        i = newlinePos - file_content + 1; // 跳过换行符
+        // }
+
+        // 按页刷入
+        auto page_size = max_nums_ * record_len_;
+        char *data = new char[page_size * 2];
+        char *cur = data;
+        // 从第一页开始放数据
+        int page_no = 1;
+
+        // 读取到 csvdata 中
+        for (; i < file_size; ++i) {
+            if (file_content[i] == '\n' || i == file_size - 1) {
+                if (i == file_size - 1 && file_content[i] != '\n') {
+                    currentLine += file_content[i];
+                }
+                csvData.emplace_back(split(currentLine, ','));
+                currentLine.clear();
+            } else {
+                currentLine += file_content[i];
+            }
+        }
+
+        // Unmap the file and close the file descriptor
+        if (munmap(file_content, file_size) == -1) {
+            perror("Error unmapping file");
+        }
+        close(fd);
+
+        // 解析 CSV data 并生成记录满足一页就插入
+        auto &cols = tab_.cols;
+        for (int row = 0; row < csvData.size(); ++row) {
+            for (int col = 0; col < csvData[row].size(); ++col) {
+                switch (cols[col].type) {
+                    case TYPE_INT: {
+                        *(int *) (cur + cols[col].offset) = std::stoi(csvData[row][col]);
+                        break;
+                    }
+                    case TYPE_FLOAT: {
+                        *(float *) (cur + cols[col].offset) = std::stof(csvData[row][col]);
+                        break;
+                    }
+                    case TYPE_STRING: {
+                        memcpy(cur + cols[col].offset, csvData[row][col].c_str(), csvData[row][col].size());
+                        break;
+                    }
+                }
+            }
+            cur += record_len_;
+            // 满足一页或者读到最后了，刷进去
+            if ((row + 1) % max_nums_ == 0 || row == csvData.size() - 1) {
+                int nums_record = (row + 1) % max_nums_ == 0 ? (row == 0 ? 1 : max_nums_) : (row + 1) % max_nums_;
+                fh_->load_record(page_no, data, nums_record, cur - data);
+                ++page_no;
+                cur = data;
+            }
+            // for (const auto &cell : row) {
+            //     std::cout << cell << " ";
+            // }
+            // std::cout << std::endl;
+        }
+
+        delete []data;
+        // sm_manager_->get_disk_manager()->set_fd2pageno(fh_->GetFd(), page_no);
+
+        // printf("load success file: %s, tab: %s\n", filename_.c_str(), tab_name_.c_str());
         return nullptr;
     }
 
-    Rid &rid() override { return rid_; }
+    // Function to split a string by a delimiter
+    static std::vector<std::string> split(const std::string &s, char delimiter) {
+        std::vector<std::string> tokens;
+        std::string token;
+        std::istringstream tokenStream(s);
+        while (std::getline(tokenStream, token, delimiter)) {
+            tokens.emplace_back(token);
+        }
+        return tokens;
+    }
+
+    Rid &rid() override { return _abstract_rid; }
 };

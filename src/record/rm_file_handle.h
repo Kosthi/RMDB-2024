@@ -73,6 +73,8 @@ public:
 
     std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
+    void load_record(int &page_no, char *&data, int nums_record, int page_size);
+    
     Rid insert_record(char *buf, Context *context);
 
     void insert_record(const Rid &rid, char *buf);
