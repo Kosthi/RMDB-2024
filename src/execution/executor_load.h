@@ -92,7 +92,7 @@ public:
             perror("Error unmapping file");
         }
         close(fd);
-
+        int nums_record = 0;
         // 解析 CSV data 并生成记录满足一页就插入
         auto &cols = tab_.cols;
         for (int row = 0; row < csvData.size(); ++row) {
@@ -112,10 +112,23 @@ public:
                     }
                 }
             }
+
+            // Unique Index -> Insert into index
+            for (auto &[index_name, index]: tab_.indexes) {
+                auto ih = sm_manager_->ihs_.at(index_name).get();
+                char *key = new char[index.col_tot_len];
+                for (auto &[index_offset, col_meta]: index.cols) {
+                    memcpy(key + index_offset, cur + col_meta.offset, col_meta.len);
+                }
+                ih->insert_entry(key, {page_no, row % max_nums_}, context_->txn_);
+                delete []key;
+            }
+
             cur += record_len_;
+
             // 满足一页或者读到最后了，刷进去
             if ((row + 1) % max_nums_ == 0 || row == csvData.size() - 1) {
-                int nums_record = (row + 1) % max_nums_ == 0 ? (row == 0 ? 1 : max_nums_) : (row + 1) % max_nums_;
+                nums_record = (row + 1) % max_nums_ == 0 ? (row == 0 ? 1 : max_nums_) : (row + 1) % max_nums_;
                 fh_->load_record(page_no, data, nums_record, cur - data);
                 ++page_no;
                 cur = data;
@@ -124,6 +137,10 @@ public:
             //     std::cout << cell << " ";
             // }
             // std::cout << std::endl;
+        }
+
+        if (nums_record < max_nums_) {
+            fh_->file_hdr_.first_free_page_no = page_no - 1;
         }
 
         delete []data;
