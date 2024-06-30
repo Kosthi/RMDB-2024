@@ -54,9 +54,8 @@ public:
             return nullptr;
         }
 
-        // Parse the CSV content
-        std::vector<std::vector<std::string> > csvData;
         std::string currentLine;
+        std::vector<std::string> cols;
 
         // 跳过表头
         size_t i = 0;
@@ -74,13 +73,58 @@ public:
         // 从第一页开始放数据
         int page_no = 1;
 
-        // 读取到 csvdata 中
+        int row = 0;
+        int nums_record = 0;
+
+        // 读取到 data 中
+        auto &cols_meta = tab_.cols;
         for (; i < file_size; ++i) {
             if (file_content[i] == '\n' || i == file_size - 1) {
                 if (i == file_size - 1 && file_content[i] != '\n') {
                     currentLine += file_content[i];
                 }
-                csvData.emplace_back(split(currentLine, ','));
+                cols = std::move(split(currentLine, ','));
+                for (int col = 0; col < cols.size(); ++col) {
+                    switch (cols_meta[col].type) {
+                        case TYPE_INT: {
+                            *(int *) (cur + cols_meta[col].offset) = std::stoi(cols[col]);
+                            break;
+                        }
+                        case TYPE_FLOAT: {
+                            *(float *) (cur + cols_meta[col].offset) = std::stof(cols[col]);
+                            break;
+                        }
+                        case TYPE_STRING: {
+                            memcpy(cur + cols_meta[col].offset, cols[col].c_str(), cols[col].size());
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                }
+
+                // Unique Index -> Insert into index
+                for (auto &[index_name, index]: tab_.indexes) {
+                    auto ih = sm_manager_->ihs_.at(index_name).get();
+                    char *key = new char[index.col_tot_len];
+                    for (auto &[index_offset, col_meta]: index.cols) {
+                        memcpy(key + index_offset, cur + col_meta.offset, col_meta.len);
+                    }
+                    ih->insert_entry(key, {page_no, row % max_nums_}, context_->txn_);
+                    delete []key;
+                }
+
+                cur += record_len_;
+
+                // 满足一页或者读到最后了，刷进去
+                if ((row + 1) % max_nums_ == 0 || i == file_size - 1) {
+                    nums_record = (row + 1) % max_nums_ == 0 ? (row == 0 ? 1 : max_nums_) : (row + 1) % max_nums_;
+                    fh_->load_record(page_no, data, nums_record, cur - data);
+                    ++page_no;
+                    cur = data;
+                }
+
+                ++row;
                 currentLine.clear();
             } else {
                 currentLine += file_content[i];
@@ -92,52 +136,6 @@ public:
             perror("Error unmapping file");
         }
         close(fd);
-        int nums_record = 0;
-        // 解析 CSV data 并生成记录满足一页就插入
-        auto &cols = tab_.cols;
-        for (int row = 0; row < csvData.size(); ++row) {
-            for (int col = 0; col < csvData[row].size(); ++col) {
-                switch (cols[col].type) {
-                    case TYPE_INT: {
-                        *(int *) (cur + cols[col].offset) = std::stoi(csvData[row][col]);
-                        break;
-                    }
-                    case TYPE_FLOAT: {
-                        *(float *) (cur + cols[col].offset) = std::stof(csvData[row][col]);
-                        break;
-                    }
-                    case TYPE_STRING: {
-                        memcpy(cur + cols[col].offset, csvData[row][col].c_str(), csvData[row][col].size());
-                        break;
-                    }
-                }
-            }
-
-            // Unique Index -> Insert into index
-            for (auto &[index_name, index]: tab_.indexes) {
-                auto ih = sm_manager_->ihs_.at(index_name).get();
-                char *key = new char[index.col_tot_len];
-                for (auto &[index_offset, col_meta]: index.cols) {
-                    memcpy(key + index_offset, cur + col_meta.offset, col_meta.len);
-                }
-                ih->insert_entry(key, {page_no, row % max_nums_}, context_->txn_);
-                delete []key;
-            }
-
-            cur += record_len_;
-
-            // 满足一页或者读到最后了，刷进去
-            if ((row + 1) % max_nums_ == 0 || row == csvData.size() - 1) {
-                nums_record = (row + 1) % max_nums_ == 0 ? (row == 0 ? 1 : max_nums_) : (row + 1) % max_nums_;
-                fh_->load_record(page_no, data, nums_record, cur - data);
-                ++page_no;
-                cur = data;
-            }
-            // for (const auto &cell : row) {
-            //     std::cout << cell << " ";
-            // }
-            // std::cout << std::endl;
-        }
 
         if (nums_record < max_nums_) {
             fh_->file_hdr_.first_free_page_no = page_no - 1;
