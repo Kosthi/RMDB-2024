@@ -25,21 +25,23 @@ private:
     std::vector<Rid> rids_; // 需要删除的记录的位置
     std::string tab_name_; // 表名称
     SmManager *sm_manager_;
+    bool is_index_scan_{false};
 
 public:
     DeleteExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-                   std::vector<Rid> rids, Context *context): sm_manager_(sm_manager), tab_name_(std::move(tab_name)),
-                                                             conds_(std::move(conds)),
-                                                             rids_(std::move(rids)) {
+                   std::vector<Rid> rids, Context *context, bool is_index_scan = false): sm_manager_(sm_manager),
+        tab_name_(std::move(tab_name)),
+        conds_(std::move(conds)),
+        rids_(std::move(rids)), is_index_scan_(is_index_scan) {
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
 
         // S_IX 锁
-        // if (!rids_.empty() && context_ != nullptr) {
-        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
-        // }
+        if (!rids_.empty() && !is_index_scan_ && context_ != nullptr) {
+            // context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        }
     }
 
     // 只执行一次

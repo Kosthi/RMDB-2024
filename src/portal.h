@@ -122,7 +122,8 @@ public:
                     }
                     std::unique_ptr<AbstractExecutor> root =
                             std::make_unique<DeleteExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->conds_),
-                                                             std::move(rids), context);
+                                                             std::move(rids), context,
+                                                             scan->getType() == "IndexScanExecutor");
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), plan);
                 }
