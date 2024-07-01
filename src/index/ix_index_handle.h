@@ -223,6 +223,9 @@ public:
         delete file_hdr_;
     }
 
+    // for safe look empty table
+    bool is_empty();
+
     // for gap lock
     RmRecord get_key(const Iid &iid) const;
     
@@ -273,8 +276,6 @@ public:
 private:
     // 辅助函数
     void update_root_page_no(page_id_t root) { file_hdr_->root_page_ = root; }
-
-    bool is_empty() const { return file_hdr_->root_page_ == IX_NO_PAGE; }
 
     // for get/create node
     std::shared_ptr<IxNodeHandle> fetch_node(int page_no) const;

@@ -190,6 +190,8 @@ private:
     bool gap_mode_;
     PredicateManager predicate_manager_;
 
+    bool is_empty_btree_{false};
+
     static std::size_t generateID() {
         static size_t current_id = 0;
         return ++current_id;
@@ -276,6 +278,9 @@ public:
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
         mergesort_ = !conds_[0].is_rhs_val && conds_.size() == 1;
 
+        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
+        ih_ = sm_manager_->ihs_[index_name].get();
+
         predicate_manager_ = PredicateManager(index_meta_);
 
         // TODO 支持更多谓词的解析 > >
@@ -303,6 +308,9 @@ public:
     }
 
     void beginTuple() override {
+        if (is_empty_btree_) {
+            return;
+        }
         if (already_begin_ && !mergesort_) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
@@ -323,8 +331,11 @@ public:
             return;
         }
 
-        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
-        ih_ = sm_manager_->ihs_[index_name].get();
+        // 空树
+        if (ih_->is_empty()) {
+            is_empty_btree_ = is_end_ = true;
+            return;
+        }
 
         lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
         // 如果 '列 op 列'，走 sortmerge
