@@ -68,7 +68,12 @@ int main() {
         "set output_file off",
         "set output_file on"
     };
-    for (auto &sql: PerformanceSqls) {
+    std::vector<std::string> DatetimeSqls = {
+        // 为了减少编写词法规则工作量，在分析阶段判断非法 sqls
+        "create table t(id int , time datetime);",
+        "insert into t values(1, '2023-05-18 09:12:19');"
+    };
+    for (auto &sql: DatetimeSqls) {
         std::cout << sql << std::endl;
         YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
         assert(yyparse() == 0);
