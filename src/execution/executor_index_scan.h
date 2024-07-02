@@ -160,6 +160,7 @@ private:
     std::vector<Condition> conds_; // 扫描条件
     RmFileHandle *fh_; // 表的数据文件句柄
     std::vector<ColMeta> cols_; // 需要读取的字段
+    std::vector<ColMeta> cond_cols_; // 谓词需要读取的字段
     size_t len_; // 选取出来的一条记录的长度
     std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
     IndexMeta index_meta_; // index scan涉及到的索引元数据
@@ -292,6 +293,10 @@ public:
                 }
             }
             ++it;
+        }
+
+        for (auto &cond: conds_) {
+            cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
         }
 
         auto gap = Gap(predicate_manager_.getIndexConds());
@@ -1012,9 +1017,9 @@ public:
     }
 
     // 判断是否满足单个谓词条件
-    bool cmp_cond(const RmRecord *rec, const Condition &cond, const std::vector<ColMeta> &rec_cols) {
-        const auto &lhs_col_meta = get_col(rec_cols, cond.lhs_col);
-        const char *lhs_data = rec->data + lhs_col_meta->offset;
+    bool cmp_cond(int i, const RmRecord *rec, const Condition &cond) {
+        const auto &lhs_col_meta = cond_cols_[i];
+        const char *lhs_data = rec->data + lhs_col_meta.offset;
         char *rhs_data;
         ColType rhs_type;
         // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
@@ -1032,7 +1037,7 @@ public:
                     // 前面已经强制转换和检查类型匹配过了，这里不需要
                     for (auto &value: cond.rhs_value_list) {
                         rhs_data = value.raw->data;
-                        if (compare(lhs_data, rhs_data, lhs_col_meta->len, value.type) == 0) {
+                        if (compare(lhs_data, rhs_data, lhs_col_meta.len, value.type) == 0) {
                             return true;
                         }
                     }
@@ -1041,7 +1046,7 @@ public:
                 // 比较谓词
                 assert(cond.rhs_value_list.size() == 1);
                 auto &value = cond.rhs_value_list[0];
-                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta->len, value.type);
+                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta.len, value.type);
                 switch (cond.op) {
                     case OP_EQ: return cmp == 0;
                     case OP_NE: return cmp != 0;
@@ -1078,12 +1083,12 @@ public:
                 for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
                     record = cond.prev->Next();
                     rhs_data = record->data;
-                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+                    if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                         rhs_type = TYPE_FLOAT;
                         const float a = *reinterpret_cast<const int *>(rhs_data);
                         memcpy(rhs_data, &a, sizeof(float));
                     }
-                    if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
+                    if (compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type) == 0) {
                         return true;
                     }
                 }
@@ -1093,23 +1098,25 @@ public:
             // 聚合或列值只能有一行
             record = cond.prev->Next();
             rhs_data = record->data;
-            if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+            if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                 rhs_type = TYPE_FLOAT;
                 const float a = *reinterpret_cast<const int *>(rhs_data);
                 memcpy(rhs_data, &a, sizeof(float));
             }
         } else {
             // 列值
-            const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
-            rhs_type = rhs_col_meta->type;
-            rhs_data = rec->data + rhs_col_meta->offset;
+            assert(0);
+            // 没有 id1 = id2 的情况
+            // const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
+            // rhs_type = rhs_col_meta->type;
+            // rhs_data = rec->data + rhs_col_meta->offset;
         }
 
-        if (lhs_col_meta->type != rhs_type) {
-            throw IncompatibleTypeError(coltype2str(lhs_col_meta->type), coltype2str(rhs_type));
+        if (lhs_col_meta.type != rhs_type) {
+            throw IncompatibleTypeError(coltype2str(lhs_col_meta.type), coltype2str(rhs_type));
         }
 
-        int cmp = compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type);
+        int cmp = compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type);
         switch (cond.op) {
             case OP_EQ: return cmp == 0;
             case OP_NE: return cmp != 0;
@@ -1123,9 +1130,12 @@ public:
     }
 
     bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds, const std::vector<ColMeta> &rec_cols) {
-        return std::all_of(conds.begin(), conds.end(), [&](const Condition &cond) {
-            return cmp_cond(rec, cond, rec_cols);
-        });
+        for (int i = 0; i < conds.size(); ++i) {
+            if (!cmp_cond(i, rec, conds[i])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     std::string getType() { return "IndexScanExecutor"; }
