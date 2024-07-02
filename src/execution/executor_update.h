@@ -76,6 +76,15 @@ public:
                 delete []key;
             }
 
+            // 再检查是否有间隙锁
+            for (auto &[index_name, index]: tab_.indexes) {
+                RmRecord rm_record(index.col_tot_len);
+                for (auto &[index_offset, col_meta]: index.cols) {
+                    memcpy(rm_record.data + index_offset, updated_record->data + col_meta.offset, col_meta.len);
+                }
+                context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+            }
+
             auto *update_log_record = new UpdateLogRecord(context_->txn_->get_transaction_id(), *old_record,
                                                           *updated_record, rid, tab_name_);
             update_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
