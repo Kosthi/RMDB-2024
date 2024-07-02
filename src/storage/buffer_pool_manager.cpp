@@ -41,10 +41,12 @@ void BufferPoolManager::update_page(Page *page, PageId new_page_id, frame_id_t n
     // 2 更新page table
     // 3 重置page的data，更新page id
     if (page->is_dirty()) {
+#ifdef ENABLE_LOGGING
         // 置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
         if (log_manager_ != nullptr && page->get_page_lsn() > log_manager_->get_persist_lsn()) {
             log_manager_->flush_log_to_disk();
         }
+#endif
         disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
         page->is_dirty_ = false;
     }
@@ -151,9 +153,11 @@ bool BufferPoolManager::flush_page(PageId page_id) {
     }
 
     auto &page = pages_[it->second];
+#ifdef ENABLE_LOGGING
     if (log_manager_ != nullptr && page.get_page_lsn() > log_manager_->get_persist_lsn()) {
         log_manager_->flush_log_to_disk();
     }
+#endif
     disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
     page.is_dirty_ = false;
     return true;
@@ -206,9 +210,11 @@ bool BufferPoolManager::delete_page(PageId page_id) {
     }
 
     if (page.is_dirty_) {
+#ifdef ENABLE_LOGGING
         if (log_manager_ != nullptr && page.get_page_lsn() > log_manager_->get_persist_lsn()) {
             log_manager_->flush_log_to_disk();
         }
+#endif
         disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
         page.is_dirty_ = false;
     }
@@ -231,9 +237,11 @@ void BufferPoolManager::flush_all_pages(int fd) {
     for (auto &[pageId, frameId]: page_table_) {
         if (pageId.fd == fd) {
             auto &page = pages_[frameId];
+#ifdef ENABLE_LOGGING
             if (log_manager_ != nullptr && page.get_page_lsn() > log_manager_->get_persist_lsn()) {
                 log_manager_->flush_log_to_disk();
             }
+#endif
             disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
             page.is_dirty_ = false;
         }

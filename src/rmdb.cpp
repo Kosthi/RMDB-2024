@@ -335,10 +335,11 @@ int main(int argc, char **argv) {
         sm_manager->open_db(db_name);
 
         // recovery database
+#ifdef ENABLE_LOGGING
         recovery->analyze();
         recovery->redo();
         recovery->undo();
-
+#endif
         // 开启服务端，开始接受客户端连接
         start_server();
     } catch (RMDBError &e) {

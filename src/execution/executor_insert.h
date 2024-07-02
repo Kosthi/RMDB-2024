@@ -86,6 +86,7 @@ public:
         // Insert into record file
         rid_ = fh_->insert_record(rec.data, context_);
 
+#ifdef ENABLE_LOGGING
         auto *insert_log_record = new InsertLogRecord(context_->txn_->get_transaction_id(), rec, rid_, tab_name_);
         insert_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
         context_->txn_->set_prev_lsn(context_->log_mgr_->add_log_to_buffer(insert_log_record));
@@ -93,7 +94,7 @@ public:
         page->set_page_lsn(context_->txn_->get_prev_lsn());
         sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
         delete insert_log_record;
-
+#endif
         // 写入事务写集
         // may std::unique_ptr 优化，避免拷贝多次记录
         auto *write_record = new WriteRecord(WType::INSERT_TUPLE, rid_, rec, tab_name_);
