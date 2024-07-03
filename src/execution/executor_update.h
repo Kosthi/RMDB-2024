@@ -26,6 +26,7 @@ private:
     std::string tab_name_;
     std::vector<SetClause> set_clauses_;
     SmManager *sm_manager_;
+    std::vector<std::vector<ColMeta>::iterator> set_cols_;
 
 public:
     UpdateExecutor(SmManager *sm_manager, std::string tab_name, std::vector<SetClause> set_clauses,
@@ -41,6 +42,10 @@ public:
         rids_ = std::move(rids);
         context_ = context;
 
+        for (auto &set: set_clauses_) {
+            set_cols_.emplace_back(tab_.get_col(set.lhs.col_name));
+        }
+
         // S_IX 锁
         if (!rids_.empty() && context_ != nullptr) {
             context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
@@ -54,9 +59,13 @@ public:
             auto &&updated_record = fh_->get_record(rid, context_);
             auto old_record = std::make_unique<RmRecord>(*updated_record);
 
-            for (auto &set: set_clauses_) {
-                auto &&col_meta = tab_.get_col(set.lhs.col_name);
-                memcpy(updated_record->data + col_meta->offset, set.rhs.raw->data, col_meta->len);
+            for (int i = 0; i < set_clauses_.size(); ++i) {
+                auto &col_meta = set_cols_[i];
+                if (set_clauses_[i].is_incr) {
+                    add(updated_record->data + col_meta->offset, set_clauses_[i].rhs.raw->data, col_meta->type);
+                } else {
+                    memcpy(updated_record->data + col_meta->offset, set_clauses_[i].rhs.raw->data, col_meta->len);
+                }
             }
 
             // 先检查 key 是否是 unique

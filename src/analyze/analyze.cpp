@@ -146,7 +146,9 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         // 构造set_clauses
         for (auto &set: x->set_clauses) {
             // set语句只对某个表修改，不需要表名
-            query->set_clauses.emplace_back(SetClause{TabCol{"", set->col_name}, convert_sv_value(set->val)});
+            query->set_clauses.emplace_back(SetClause{
+                TabCol{"", set->col_name}, convert_sv_value(set->val), set->is_incr
+            });
         }
 
         // 检查set左右值类型是否相同

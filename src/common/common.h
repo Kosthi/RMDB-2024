@@ -118,6 +118,8 @@ struct Condition {
 struct SetClause {
     TabCol lhs;
     Value rhs;
+    // 是否是 v=v+1
+    bool is_incr;
 };
 
 // Utility function to combine hashes

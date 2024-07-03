@@ -51,3 +51,25 @@ inline int ix_compare(char *&a, char *&b, const IndexMeta &index_meta) {
     }
     return 0;
 }
+
+static inline void add(char *a, const char *b, ColType col_type) {
+    switch (col_type) {
+        case TYPE_INT: {
+            const int ai = *reinterpret_cast<const int *>(a);
+            const int bi = *reinterpret_cast<const int *>(b);
+            const int res = ai + bi;
+            memcpy(a, &res, sizeof(int));
+            break;
+        }
+        case TYPE_FLOAT: {
+            const float af = *reinterpret_cast<const float *>(a);
+            const float bf = *reinterpret_cast<const float *>(b);
+            const float res = af + bf;
+            memcpy(a, &res, sizeof(float));
+            break;
+        }
+        case TYPE_STRING:
+        default:
+            throw InternalError("Unexpected data type to add！");
+    }
+}
