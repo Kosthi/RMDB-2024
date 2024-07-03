@@ -73,7 +73,13 @@ int main() {
         "create table t(id int , time datetime);",
         "insert into t values(1, '2023-05-18 09:12:19');"
     };
-    for (auto &sql: DatetimeSqls) {
+    std::vector<std::string> UpdateSqls = {
+        "update tb set a = a+1 where x = 2;",
+        "update tb set a = a+1, b = 2.2 where x = 2;",
+        "update tb set a = a-1, b = -2.2 where x = 2;",
+        "update tb set a = -1, b = -2.2 where x = 2;"
+    };
+    for (auto &sql: UpdateSqls) {
         std::cout << sql << std::endl;
         YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
         assert(yyparse() == 0);

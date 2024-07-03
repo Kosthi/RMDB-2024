@@ -128,7 +128,7 @@ namespace ast {
                 std::cout << "DROP_INDEX\n";
                 print_val(x->tab_name, offset);
                 // print_val(x->col_name, offset);
-                for (auto col_name: x->col_names)
+                for (auto &col_name: x->col_names)
                     print_val(col_name, offset);
             } else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
                 std::cout << "COL_DEF\n";
@@ -155,6 +155,7 @@ namespace ast {
                 std::cout << "SET_CLAUSE\n";
                 print_val(x->col_name, offset);
                 print_node(x->val, offset);
+                print_val(boolType2str(x->is_incr), offset);
             } else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
                 std::cout << "BINARY_EXPR\n";
                 print_node(x->lhs, offset);

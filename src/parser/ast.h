@@ -186,9 +186,11 @@ namespace ast {
     struct SetClause : public TreeNode {
         std::string col_name;
         std::shared_ptr<Value> val;
+        bool is_incr;
 
-        SetClause(std::string col_name_, std::shared_ptr<Value> val_) : col_name(std::move(col_name_)),
-                                                                        val(std::move(val_)) {
+        SetClause(std::string col_name_, std::shared_ptr<Value> val_,
+                  bool is_incr_ = false) : col_name(std::move(col_name_)),
+                                           val(std::move(val_)), is_incr(is_incr_) {
         }
     };
 
