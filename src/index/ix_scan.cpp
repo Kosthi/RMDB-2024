@@ -15,19 +15,21 @@ See the Mulan PSL v2 for more details. */
  * @todo 加上读锁（需要使用缓冲池得到page）
  */
 void IxScan::next() {
-    assert(!is_end());
-    auto &&node = ih_->fetch_node(iid_.page_no);
-    assert(node->is_leaf_page());
-    assert(iid_.slot_no < node->get_size());
+    // assert(!is_end());
+    // cur_node_handle_ = ih_->fetch_node(iid_.page_no);
+    // assert(node->is_leaf_page());
+    // assert(iid_.slot_no < node->get_size());
     // increment slot no
-    iid_.slot_no++;
-    if (iid_.page_no != ih_->file_hdr_->last_leaf_ && iid_.slot_no == node->get_size()) {
+    ++iid_.slot_no;
+    if (iid_.page_no != ih_->file_hdr_->last_leaf_ && iid_.slot_no == cur_node_handle_->get_size()) {
         // go to next leaf
         iid_.slot_no = 0;
-        iid_.page_no = node->get_next_leaf();
+        iid_.page_no = cur_node_handle_->get_next_leaf();
+        bpm_->unpin_page(cur_node_handle_->page->get_page_id(), false);
+        cur_node_handle_ = ih_->fetch_node(iid_.page_no);
     }
     // unpin page! 否则多次大量扫描读会出问题
-    bpm_->unpin_page(node->page->get_page_id(), false);
+    // bpm_->unpin_page(node->page->get_page_id(), false);
 }
 
 Rid IxScan::rid() const {

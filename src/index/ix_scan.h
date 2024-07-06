@@ -23,15 +23,23 @@ class IxScan : public RecScan {
     Iid iid_; // 初始为lower（用于遍历的指针）
     Iid end_; // 初始为upper
     BufferPoolManager *bpm_;
+    std::shared_ptr<IxNodeHandle> cur_node_handle_;
 
 public:
     IxScan(const IxIndexHandle *ih, const Iid &lower, const Iid &upper, BufferPoolManager *bpm)
         : ih_(ih), iid_(lower), end_(upper), bpm_(bpm) {
+        cur_node_handle_ = ih_->fetch_node(iid_.page_no);
     }
 
     void next() override;
 
-    bool is_end() const override { return iid_ == end_; }
+    bool is_end() const override {
+        if (iid_ == end_) {
+            bpm_->unpin_page(cur_node_handle_->get_page_id(), false);
+            return true;
+        }
+        return false;
+    }
 
     Rid rid() const override;
 

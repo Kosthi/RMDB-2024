@@ -51,27 +51,48 @@ public:
 
     void print_record(const std::vector<std::string> &rec_str, Context *context) const {
         assert(rec_str.size() == num_cols);
-        for (auto col: rec_str) {
+        std::stringstream ss;
+
+        for (auto col : rec_str) {
             if (col.size() > COL_WIDTH) {
                 col = col.substr(0, COL_WIDTH - 3) + "...";
             }
-            // std::cout << "| " << std::setw(COL_WIDTH) << col << ' ';
-            std::stringstream ss;
             ss << "| " << std::setw(COL_WIDTH) << col << " ";
-            if (context->ellipsis_ == false && *context->offset_ + RECORD_COUNT_LENGTH + ss.str().length() <
-                BUFFER_LENGTH) {
-                memcpy(context->data_send_ + *(context->offset_), ss.str().c_str(), ss.str().length());
-                *(context->offset_) = *(context->offset_) + ss.str().length();
-            } else {
-                context->ellipsis_ = true;
-            }
         }
-        // std::cout << "|\n";
-        std::string str = "|\n";
-        if (context->ellipsis_ == false && *context->offset_ + RECORD_COUNT_LENGTH + str.length() < BUFFER_LENGTH) {
-            memcpy(context->data_send_ + *(context->offset_), str.c_str(), str.length());
-            *(context->offset_) = *(context->offset_) + str.length();
+        ss << "|\n";
+
+        std::string output = ss.str();
+        size_t output_length = output.length();
+
+        if (context->ellipsis_ == false && *context->offset_ + RECORD_COUNT_LENGTH + output_length < BUFFER_LENGTH) {
+            memcpy(context->data_send_ + *(context->offset_), output.c_str(), output_length);
+            *(context->offset_) += output_length;
+        } else {
+            context->ellipsis_ = true;
         }
+
+        // assert(rec_str.size() == num_cols);
+        // for (auto col: rec_str) {
+        //     if (col.size() > COL_WIDTH) {
+        //         col = col.substr(0, COL_WIDTH - 3) + "...";
+        //     }
+        //     // std::cout << "| " << std::setw(COL_WIDTH) << col << ' ';
+        //     std::stringstream ss;
+        //     ss << "| " << std::setw(COL_WIDTH) << col << " ";
+        //     if (context->ellipsis_ == false && *context->offset_ + RECORD_COUNT_LENGTH + ss.str().length() <
+        //         BUFFER_LENGTH) {
+        //         memcpy(context->data_send_ + *(context->offset_), ss.str().c_str(), ss.str().length());
+        //         *(context->offset_) = *(context->offset_) + ss.str().length();
+        //     } else {
+        //         context->ellipsis_ = true;
+        //     }
+        // }
+        // // std::cout << "|\n";
+        // std::string str = "|\n";
+        // if (context->ellipsis_ == false && *context->offset_ + RECORD_COUNT_LENGTH + str.length() < BUFFER_LENGTH) {
+        //     memcpy(context->data_send_ + *(context->offset_), str.c_str(), str.length());
+        //     *(context->offset_) = *(context->offset_) + str.length();
+        // }
     }
 
     void print_indexs(const std::vector<std::string> &indexs, Context *context) const {
