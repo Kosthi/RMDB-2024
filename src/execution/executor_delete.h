@@ -36,11 +36,10 @@ public:
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
-
-        // S_IX 锁
-        if (!rids_.empty() && !is_index_scan_ && context_ != nullptr) {
+        // X 锁
+        if (!rids_.empty() && context_ != nullptr) {
             // context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+            context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
         }
     }
 

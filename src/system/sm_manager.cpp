@@ -266,9 +266,9 @@ void SmManager::create_table(const std::string &tab_name, const std::vector<ColD
     flush_meta();
 
     // 表级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    // }
 }
 
 /**
@@ -282,9 +282,9 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
     }
 
     // 表级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    // }
 
     auto &tab_meta = db_.get_table(tab_name);
 
@@ -322,9 +322,9 @@ void SmManager::create_index(std::string &tab_name, std::vector<std::string> &co
 
     // 表级 S 锁
     // 建立索引要读表上的所有记录，所以申请表级读锁
-    if (context != nullptr && context->lock_mgr_ != nullptr) {
-        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
-    }
+    // if (context != nullptr && context->lock_mgr_ != nullptr) {
+    //     context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    // }
 
     std::vector<ColMeta> col_metas;
     col_metas.reserve(col_names.size());
@@ -387,9 +387,9 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
 
     // 表级 S 锁
     // 删除索引时只允许对表读操作，写操作可能会误写将被删除的索引，所以申请表级读锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    // }
 
     ix_manager_->close_index(ihs_[ix_name].get());
     ix_manager_->destroy_index(ix_name);
@@ -419,9 +419,9 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
 
     // 表级 S 锁
     // 删除索引时只允许对表读操作，写操作可能会误写将被删除的索引，所以申请表级读锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_shared_on_table(context->txn_, fhs_[tab_name]->GetFd());
+    // }
 
     ix_manager_->close_index(ihs_[ix_name].get());
     ix_manager_->destroy_index(ix_name);

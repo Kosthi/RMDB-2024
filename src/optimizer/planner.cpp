@@ -134,10 +134,10 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
     curr_conds = std::move(fed_conds);
 
     // 检查正确与否
-    for (auto &index_name: index_col_names) {
-        std::cout << index_name << ",";
-    }
-    std::cout << "\n";
+    // for (auto &index_name: index_col_names) {
+    //     std::cout << index_name << ",";
+    // }
+    // std::cout << "\n";
 
     // if (tab.is_index(index_col_names)) return true;
     return true;

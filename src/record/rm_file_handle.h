@@ -67,7 +67,7 @@ public:
         // cur_page_handle_ = create_page_handle();
     }
 
-    RmFileHdr get_file_hdr() { return file_hdr_; }
+    RmFileHdr &get_file_hdr() { return file_hdr_; }
     int GetFd() { return fd_; }
 
     /* 判断指定位置上是否已经存在一条记录，通过Bitmap来判断 */
@@ -79,6 +79,8 @@ public:
     std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
     void load_record(int &page_no, char *&data, int nums_record, int page_size);
+
+    void set_first_free_page_no(page_id_t page_no) { file_hdr_.first_free_page_no = page_no; }
 
     Rid insert_record(char *buf, Context *context);
 

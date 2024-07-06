@@ -299,16 +299,16 @@ public:
             cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
         }
 
-        auto gap = Gap(predicate_manager_.getIndexConds());
-        if (gap_mode_) {
-            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-        } else {
-            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // S 锁
+        if (context_ != nullptr) {
+            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
         }
 
-        // S 锁
-        // if (context_ != nullptr) {
-        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        // auto gap = Gap(predicate_manager_.getIndexConds());
+        // if (gap_mode_) {
+        //     context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // } else {
+        //     context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
         // }
     }
 
@@ -322,14 +322,14 @@ public:
             while (!scan_->is_end()) {
                 // 不回表
                 // 全是等号或最后一个谓词是比较，不需要再扫索引
-                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-                    // 回表，查不在索引里的谓词
-                    rid_ = scan_->rid();
-                    rm_record_ = fh_->get_record(rid_, context_);
-                    if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                        return;
-                    }
+                // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                // 回表，查不在索引里的谓词
+                rid_ = scan_->rid();
+                rm_record_ = fh_->get_record(rid_, context_);
+                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                    return;
                 }
+                // }
                 scan_->next();
             }
             is_end_ = true;
@@ -904,14 +904,14 @@ public:
         while (!scan_->is_end()) {
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
-            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-                // 回表，查不在索引里的谓词
-                rid_ = scan_->rid();
-                rm_record_ = fh_->get_record(rid_, context_);
-                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                    return;
-                }
+            // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+            // 回表，查不在索引里的谓词
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
+            if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                return;
             }
+            // }
             scan_->next();
         }
         is_end_ = true;
@@ -953,14 +953,14 @@ public:
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
             // TODO 待优化
-            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-                // 回表，查不在索引里的谓词
-                rid_ = scan_->rid();
-                rm_record_ = fh_->get_record(rid_, context_);
-                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                    return;
-                }
+            // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+            // 回表，查不在索引里的谓词
+            rid_ = scan_->rid();
+            rm_record_ = fh_->get_record(rid_, context_);
+            if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                return;
             }
+            // }
         }
         is_end_ = true;
     }

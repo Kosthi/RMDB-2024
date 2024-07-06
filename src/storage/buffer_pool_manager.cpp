@@ -280,6 +280,7 @@ void BufferPoolManager::delete_all_pages(int fd) {
             page.reset_memory();
             page.is_dirty_ = false;
             page.pin_count_ = 0;
+            page.id_.page_no = INVALID_PAGE_ID;
             // 记得把页框还回去
             free_list_.push_back(it->second);
             it = page_table_.erase(it);

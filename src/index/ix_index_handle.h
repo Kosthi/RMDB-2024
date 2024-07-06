@@ -108,6 +108,8 @@ public:
 
     inline void set_parent_page_no(page_id_t parent) { page_hdr->parent = parent; }
 
+    inline void set_is_leaf_page(bool val) { page_hdr->is_leaf = val; }
+
     inline char *get_key(int key_idx) const { return keys + key_idx * file_hdr->col_tot_len_; }
 
     inline Rid *get_rid(int rid_idx) const { return &rids[rid_idx]; }
@@ -169,7 +171,7 @@ public:
                 break;
             }
         }
-        assert(rid_idx < page_hdr->num_key);
+        // assert(rid_idx < page_hdr->num_key);
         return rid_idx;
     }
 
@@ -187,11 +189,13 @@ class IxIndexHandle {
     friend class IxScan;
     friend class IxManager;
 
+public:
+    int fd_; // 存储B+树的文件
+
 private:
     DiskManager *disk_manager_;
     BufferPoolManager *buffer_pool_manager_;
-    int fd_; // 存储B+树的文件
-    IxFileHdr *file_hdr_; // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
+    // IxFileHdr *file_hdr_; // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
     std::mutex root_latch_;
 
     class Context {
@@ -223,12 +227,23 @@ public:
         delete file_hdr_;
     }
 
+    void Draw(BufferPoolManager *bpm, const std::string &outf);
+
+    IxFileHdr *file_hdr_; // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
+
+    std::shared_ptr<IxNodeHandle> create_node();
+
+    // for get/create node
+    std::shared_ptr<IxNodeHandle> fetch_node(int page_no) const;
+
+    void create_upper_parent_nodes(char *key, Rid *rid, int first_parent_page_no, int sum);
+
     // for safe look empty table
     bool is_empty();
 
     // for gap lock
     RmRecord get_key(const Iid &iid) const;
-    
+
     // for search
     bool get_value(const char *key, std::vector<Rid> *result, Transaction *transaction);
 
@@ -277,10 +292,7 @@ private:
     // 辅助函数
     void update_root_page_no(page_id_t root) { file_hdr_->root_page_ = root; }
 
-    // for get/create node
-    std::shared_ptr<IxNodeHandle> fetch_node(int page_no) const;
-
-    std::shared_ptr<IxNodeHandle> create_node();
+    // std::shared_ptr<IxNodeHandle> create_node();
 
     // for maintain data structure
     void maintain_parent(std::shared_ptr<IxNodeHandle> &node);
