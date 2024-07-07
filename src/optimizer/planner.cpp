@@ -305,7 +305,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
                 bool index_exist = get_index_cols(it->lhs_col.tab_name, join_conds, index_col_names);
                 if (index_exist) {
                     left_plan->tag = T_IndexScan;
-                    left_plan->conds_ = join_conds;
+                    left_plan->conds_.emplace(left_plan->conds_.begin(), join_conds[0]);
                     left_plan->index_col_names_ = std::move(index_col_names);
                 }
                 index_col_names.clear();

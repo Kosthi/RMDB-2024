@@ -193,6 +193,8 @@ private:
 
     bool is_empty_btree_{false};
 
+    bool scan_index_{false};
+
     static std::size_t generateID() {
         static size_t current_id = 0;
         return ++current_id;
@@ -279,6 +281,14 @@ public:
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
         mergesort_ = !conds_[0].is_rhs_val && conds_.size() == 1;
 
+        // where w_id=:w_id and c_w_id=w_id and c_d_id=:d_id and c_id=:c_id;
+        // 全表走索引 加 merge
+        if (!conds_[0].is_rhs_val && conds_.size() > 1) {
+            scan_index_ = true;
+            // 擦掉第一个
+            conds_.erase(conds_.begin());
+        }
+
         const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
         ih_ = sm_manager_->ihs_[index_name].get();
 
@@ -316,20 +326,20 @@ public:
         if (is_empty_btree_) {
             return;
         }
-        if (already_begin_ && !mergesort_) {
+        if (already_begin_ && (!mergesort_ || scan_index_)) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
             while (!scan_->is_end()) {
                 // 不回表
                 // 全是等号或最后一个谓词是比较，不需要再扫索引
-                // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-                // 回表，查不在索引里的谓词
-                rid_ = scan_->rid();
-                rm_record_ = fh_->get_record(rid_, context_);
-                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                    return;
+                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                    // 回表，查不在索引里的谓词
+                    rid_ = scan_->rid();
+                    rm_record_ = fh_->get_record(rid_, context_);
+                    if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                        return;
+                    }
                 }
-                // }
                 scan_->next();
             }
             is_end_ = true;
@@ -343,6 +353,30 @@ public:
         }
 
         lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+
+        // 全表扫索引
+        if (scan_index_) {
+            scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
+            already_begin_ = true;
+
+            // where a > 1, c < 1
+            while (!scan_->is_end()) {
+                // 不回表
+                // 全是等号或最后一个谓词是比较，不需要再扫索引
+                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                    // 回表，查不在索引里的谓词
+                    rid_ = scan_->rid();
+                    rm_record_ = fh_->get_record(rid_, context_);
+                    if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                        return;
+                    }
+                }
+                scan_->next();
+            }
+            is_end_ = true;
+            return;
+        }
+
         // 如果 '列 op 列'，走 sortmerge
         // TODO 行多外部排序慢，但是为了通过归并连接测试
         if (mergesort_) {
@@ -904,14 +938,14 @@ public:
         while (!scan_->is_end()) {
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
-            // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-            // 回表，查不在索引里的谓词
-            rid_ = scan_->rid();
-            rm_record_ = fh_->get_record(rid_, context_);
-            if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                return;
+            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                // 回表，查不在索引里的谓词
+                rid_ = scan_->rid();
+                rm_record_ = fh_->get_record(rid_, context_);
+                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                    return;
+                }
             }
-            // }
             scan_->next();
         }
         is_end_ = true;
@@ -953,14 +987,14 @@ public:
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
             // TODO 待优化
-            // if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
-            // 回表，查不在索引里的谓词
-            rid_ = scan_->rid();
-            rm_record_ = fh_->get_record(rid_, context_);
-            if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
-                return;
+            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                // 回表，查不在索引里的谓词
+                rid_ = scan_->rid();
+                rm_record_ = fh_->get_record(rid_, context_);
+                if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                    return;
+                }
             }
-            // }
         }
         is_end_ = true;
     }
