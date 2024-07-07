@@ -65,7 +65,7 @@ std::unordered_map<std::string, std::string> sort_map = {
     {"item", "none"},
     {"stock", "sort -n -t, -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
     {"district", "sort -n -t, -k2,2 -k1,1 "},
-    {"customer", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
+    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
     {"history", "none"},
     {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
     {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
@@ -476,11 +476,11 @@ int getFileLineCount(const std::string &filename) {
 
     // Extract the number of lines from the result string
     // 记得减去表头
-    return std::stoi(result);
+    return std::stoi(result) - 1;
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
