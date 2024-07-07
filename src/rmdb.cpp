@@ -539,10 +539,28 @@ void load_data(std::string filename, std::string tabname) {
         // 只有一个索引
         int num_lines = getFileLineCount(filename);
 
+        if (tabname == "customer") {
+            auto &ix_name = tab_.indexes.begin()->first;
+            auto &&ih = sm_manager->ihs_.at(ix_name);
+
+            ix_manager->close_index(ih.get());
+            ix_manager->destroy_index(ix_name);
+            sm_manager->ihs_.erase(ix_name);
+            tab_.indexes.erase(ix_name);
+
+            std::vector<std::string> index_names;
+            index_names.reserve(3);
+            for (int j = 0; j < 3; ++j) {
+                index_names.emplace_back(tab_.cols[j].name);
+            }
+
+            sm_manager->create_index(tab_.name, index_names, nullptr);
+        }
+
         auto &ix_name = tab_.indexes.begin()->first;
         auto &&ih = sm_manager->ihs_.at(ix_name);
 
-        auto &index_meta = tab_.indexes.begin()->second;;
+        auto &index_meta = tab_.indexes.begin()->second;
         int &tot_len = index_meta.col_tot_len;
 
         // 直接设置开始分配的页面号
