@@ -80,5 +80,5 @@ Rid RmScan::rid() const {
 
 // 像 ixscan 一样直接得到记录，减少缓冲池访问加锁
 std::unique_ptr<RmRecord> RmScan::get_record() {
-    return std::make_unique<RmRecord>(cur_page_handle_.get_slot(rid_.slot_no));
+    return std::make_unique<RmRecord>(cur_page_handle_.get_slot(rid_.slot_no), file_handle_->file_hdr_.record_size, true);
 }

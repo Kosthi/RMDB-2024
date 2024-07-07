@@ -476,11 +476,11 @@ int getFileLineCount(const std::string &filename) {
 
     // Extract the number of lines from the result string
     // 记得减去表头
-    return std::stoi(result) - 1;
+    return std::stoi(result);
 }
 
 void load_data(std::string filename, std::string tabname) {
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
