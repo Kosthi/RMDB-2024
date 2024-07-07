@@ -37,10 +37,10 @@ public:
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
         // X 锁
-        // if (!rids_.empty() && context_ != nullptr) {
-        //     // context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-        // }
+        if (!rids_.empty() && context_ != nullptr) {
+            // context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+            context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+        }
     }
 
     // 只执行一次

@@ -464,11 +464,11 @@ int getFileLineCount(const std::string &filename) {
 
     // Extract the number of lines from the result string
     // 记得减去表头
-    return std::stoi(result);
+    return std::stoi(result) - 1;
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
@@ -739,7 +739,7 @@ void load_data(std::string filename, std::string tabname) {
             ih->create_upper_parent_nodes(key_temp, rid_temp, blocks + 2, blocks);
         }
 
-        // ih->Draw(buffer_pool_manager.get(), "orders_Graph.dot");
+        // ih->Draw(buffer_pool_manager.get(), "dis_Graph.dot");
     } else {
         // i 慢指针，j 快指针
         for (std::size_t j = i; j < file_size; ++j) {
