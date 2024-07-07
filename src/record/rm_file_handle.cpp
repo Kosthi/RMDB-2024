@@ -28,7 +28,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
     }
-    auto &&record = std::make_unique<RmRecord>(file_hdr_.record_size, page_handle.get_slot(rid.slot_no));
+    auto &&record = std::make_unique<RmRecord>( page_handle.get_slot(rid.slot_no));
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), false);
     return std::move(record);
 }
@@ -173,7 +173,7 @@ RmPageHandle RmFileHandle::fetch_page_handle(int page_no) const {
     // 使用缓冲池获取指定页面，并生成page_handle返回给上层
     // if page_no is invalid, throw PageNotExistError exception
     if (page_no >= file_hdr_.num_pages || page_no < 0) {
-        printf("%d %d\n", page_no, file_hdr_.num_pages);
+        // printf("%d %d\n", page_no, file_hdr_.num_pages);
         throw PageNotExistError(disk_manager_->get_file_name(fd_), page_no);
     }
     auto &&page = buffer_pool_manager_->fetch_page({fd_, page_no});
