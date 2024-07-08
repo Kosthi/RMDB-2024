@@ -86,6 +86,8 @@ std::unordered_map<std::string, std::string> index_map = {
 
 void load_data(std::string filename, std::string tabname);
 
+int fast_count_star(std::string &tabname, Context *context);
+
 static jmp_buf jmpbuf;
 
 void sigint_handler(int signo) {
@@ -219,12 +221,20 @@ void *client_handler(void *sock_fd) {
                     yy_delete_buffer(buf);
                     finish_analyze = true;
                     pthread_mutex_unlock(buffer_mutex);
-                    // 优化器
-                    std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
-                    // portal
-                    std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
-                    portal->run(portalStmt, ql_manager.get(), &txn_id, context);
-                    portal->drop();
+                    // 全表 count 走 fast_count
+                    if (query->agg_types.size() == 1 && query->agg_types[0] == AGG_COUNT && query->conds.empty()) {
+                        // 后续支持笛卡尔积 count，这里先简化只有单个表
+                        auto &col_name = query->alias.empty() ? query->cols[0].col_name : query->alias[0];
+                        ql_manager->select_fast_count_star(fast_count_star(query->tables[0], context), col_name,
+                                                           context);
+                    } else {
+                        // 优化器
+                        std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
+                        // portal
+                        std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
+                        portal->run(portalStmt, ql_manager.get(), &txn_id, context);
+                        portal->drop();
+                    }
                 } catch (TransactionAbortException &e) {
                     // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
                     std::string str = "abort\n";
@@ -838,4 +848,19 @@ void load_data(std::string filename, std::string tabname) {
 
     // 释放内存
     delete []data;
+}
+
+int fast_count_star(std::string &tabname, Context *context) {
+    auto &&fh = sm_manager->fhs_[tabname];
+    context->lock_mgr_->lock_shared_on_table(context->txn_, fh->GetFd());
+
+    int count = 0;
+    auto first_page = RM_FIRST_RECORD_PAGE;
+    auto &total_pages = fh->get_file_hdr().num_pages;
+    while (first_page < total_pages) {
+        auto &&page_handle = fh->fetch_page_handle(first_page++);
+        count += page_handle.page_hdr->num_records;
+    }
+
+    return count;
 }
