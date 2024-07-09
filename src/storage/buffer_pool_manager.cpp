@@ -47,14 +47,14 @@ void BufferPoolManager::update_page(Page *page, PageId new_page_id, frame_id_t n
             log_manager_->flush_log_to_disk();
         }
 #endif
-        disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
-        page->is_dirty_ = false;
+        // disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
+        // page->is_dirty_ = false;
     }
 
-    page_table_.erase(page->get_page_id());
+    // page_table_.erase(page->get_page_id());
     page_table_[new_page_id] = new_frame_id;
 
-    page->reset_memory();
+    // page->reset_memory();
     page->id_ = new_page_id;
     page->pin_count_ = 0;
 }
@@ -115,20 +115,21 @@ bool BufferPoolManager::unpin_page(PageId page_id, bool is_dirty) {
     // 2.2 若pin_count_大于0，则pin_count_自减一
     // 2.2.1 若自减后等于0，则调用replacer_的Unpin
     // 3 根据参数is_dirty，更改P的is_dirty_
-    std::lock_guard lock(latch_);
-
-    auto &&it = page_table_.find(page_id);
-    // 不在页表中
-    if (it == page_table_.end()) {
-        return false;
-    }
-    if (pages_[it->second].pin_count_ == 0) {
-        return false;
-    }
-    if (--pages_[it->second].pin_count_ == 0) {
-        replacer_->unpin(it->second);
-    }
-    pages_[it->second].is_dirty_ |= is_dirty;
+    // 缓冲池够用 没必要 unpin
+    // std::lock_guard lock(latch_);
+    //
+    // auto &&it = page_table_.find(page_id);
+    // // 不在页表中
+    // if (it == page_table_.end()) {
+    //     return false;
+    // }
+    // if (pages_[it->second].pin_count_ == 0) {
+    //     return false;
+    // }
+    // if (--pages_[it->second].pin_count_ == 0) {
+    //     replacer_->unpin(it->second);
+    // }
+    // pages_[it->second].is_dirty_ |= is_dirty;
     return true;
 }
 
@@ -182,6 +183,26 @@ Page *BufferPoolManager::new_page(PageId *page_id) {
         update_page(&pages_[frame_id], *page_id, frame_id);
         // 不知道是从freelist还是replacer来的，都pin一下，待优化
         replacer_->pin(frame_id);
+        pages_[frame_id].pin_count_ = 1;
+        return &pages_[frame_id];
+    }
+    return nullptr;
+}
+
+Page *BufferPoolManager::load_new_page(PageId *page_id) {
+    // 1.   获得一个可用的frame，若无法获得则返回nullptr
+    // 2.   在fd对应的文件分配一个新的page_id
+    // 3.   将frame的数据写回磁盘
+    // 4.   固定frame，更新pin_count_
+    // 5.   返回获得的page
+
+    frame_id_t frame_id = -1;
+    if (find_victim_page(&frame_id)) {
+        page_id->page_no = disk_manager_->allocate_page(page_id->fd);
+        update_page(&pages_[frame_id], *page_id, frame_id);
+        // 不知道是从freelist还是replacer来的，都pin一下，待优化
+        // 不需要 pin 了
+        // replacer_->pin(frame_id);
         pages_[frame_id].pin_count_ = 1;
         return &pages_[frame_id];
     }

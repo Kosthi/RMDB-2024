@@ -31,20 +31,26 @@ struct PageId {
         return "{fd: " + std::to_string(fd) + " page_no: " + std::to_string(page_no) + "}";
     }
 
-    inline int64_t Get() const {
-        return (static_cast<int64_t>(fd << 16) | page_no);
-    }
+    // inline int64_t Get() const {
+    //     return (static_cast<int64_t>(fd << 16) | page_no);
+    // }
 };
 
 // PageId的自定义哈希算法, 用于构建unordered_map<PageId, frame_id_t, PageIdHash>
-struct PageIdHash {
-    size_t operator()(const PageId &x) const { return (x.fd << 16) | x.page_no; }
-};
+// struct PageIdHash {
+//     size_t operator()(const PageId &x) const { return (x.fd << 16) | x.page_no; }
+// };
 
-template<>
-struct std::hash<PageId> {
-    size_t operator()(const PageId &obj) const { return std::hash<int64_t>()(obj.Get()); }
-};
+namespace std {
+    template<>
+    struct hash<PageId> {
+        size_t operator()(const PageId &obj) const {
+            std::size_t h1 = std::hash<int>{}(obj.fd);
+            std::size_t h2 = std::hash<page_id_t>{}(obj.page_no);
+            return h1 ^ (h2 << 1);
+        }
+    };
+}
 
 /**
  * @description: Page类声明, Page是RMDB数据块的单位、是负责数据操作Record模块的操作对象，
