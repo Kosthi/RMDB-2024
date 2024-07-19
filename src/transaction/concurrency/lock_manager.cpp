@@ -77,8 +77,17 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
     bool contain_X = false;
     for (auto &[data_id, queue]: it->second) {
         if (queue.group_lock_mode_ == GroupLockMode::X && gap.isCoincide(data_id.gap_)) {
-            contain_X = true;
-            break;
+            bool is_only_txn = true;
+            for (auto &req: queue.request_queue_) {
+                if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                    is_only_txn = false;
+                    break;
+                }
+            }
+            if (!is_only_txn) {
+                contain_X = true;
+                break;
+            }
         }
     }
 
@@ -114,8 +123,17 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
             bool contain_X = false;
             for (auto &[data_id, queue]: it->second) {
                 if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
-                    contain_X = true;
-                    break;
+                    bool is_only_txn = true;
+                    for (auto &req: queue.request_queue_) {
+                        if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                            is_only_txn = false;
+                            break;
+                        }
+                    }
+                    if (!is_only_txn) {
+                        contain_X = true;
+                        break;
+                    }
                 }
             }
             return !contain_X;
@@ -173,9 +191,10 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
     }
 
     bool contain = false;
+    // 检查索引上是否存在互斥的相交区间
     // 独占锁只要有区间相交就得等待
     for (auto &[data_id, queue]: it->second) {
-        if (queue.group_lock_mode_ == GroupLockMode::NON_LOCK) {
+        if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
             if (gap.isCoincide(data_id.gap_)) {
                 bool is_only_txn = true;
                 for (auto &req: queue.request_queue_) {
@@ -319,7 +338,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
 
             bool contain = false;
             for (auto &[data_id, queue]: it->second) {
-                if (queue.group_lock_mode_ == GroupLockMode::NON_LOCK) {
+                if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
                     if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
                         bool is_only_txn = true;
                         for (auto &req: queue.request_queue_) {
