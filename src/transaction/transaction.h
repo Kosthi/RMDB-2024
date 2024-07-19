@@ -19,8 +19,40 @@ See the Mulan PSL v2 for more details. */
 
 #include "txn_defs.h"
 
+/** Represents a link to a previous version of this tuple */
+struct UndoLink {
+    /* Previous version can be found in which txn */
+    txn_id_t prev_txn_{INVALID_TXN_ID};
+    /* The log index of the previous version in `prev_txn_` */
+    int prev_log_idx_{0};
+
+    friend auto operator==(const UndoLink &a, const UndoLink &b) {
+        return a.prev_txn_ == b.prev_txn_ && a.prev_log_idx_ == b.prev_log_idx_;
+    }
+
+    friend auto operator!=(const UndoLink &a, const UndoLink &b) { return !(a == b); }
+
+    /* Checks if the undo link points to something. */
+    auto IsValid() const -> bool { return prev_txn_ != INVALID_TXN_ID; }
+};
+
+struct UndoLog {
+    /* Whether this log is a deletion marker */
+    bool is_deleted_;
+    /* The fields modified by this undo log */
+    std::vector<bool> modified_fields_;
+    /* The modified fields */
+    RmRecord tuple_;
+    /* Timestamp of this undo log */
+    timestamp_t ts_{INVALID_TIMESTAMP};
+    /* Undo log prev version */
+    UndoLink prev_version_{};
+};
+
 class Transaction {
 public:
+    friend class TransactionManager;
+
     explicit Transaction(txn_id_t txn_id, IsolationLevel isolation_level = IsolationLevel::SERIALIZABLE)
         : state_(TransactionState::DEFAULT), isolation_level_(isolation_level), txn_id_(txn_id) {
         write_set_ = std::make_shared<std::deque<WriteRecord *> >();
@@ -62,6 +94,12 @@ public:
 
     inline std::shared_ptr<std::unordered_set<LockDataId> > get_lock_set() { return lock_set_; }
 
+    /** @return the read ts */
+    inline auto GetReadTs() const -> timestamp_t { return read_ts_; }
+
+    /** @return the commit ts */
+    inline auto GetCommitTs() const -> timestamp_t { return commit_ts_; }
+
 private:
     bool txn_mode_; // 用于标识当前事务为显式事务还是单条SQL语句的隐式事务
     TransactionState state_; // 事务状态
@@ -70,6 +108,10 @@ private:
     lsn_t prev_lsn_; // 当前事务执行的最后一条操作对应的lsn，用于系统故障恢复
     txn_id_t txn_id_; // 事务的ID，唯一标识符
     timestamp_t start_ts_; // 事务的开始时间戳
+    /** The read ts */
+    std::atomic<timestamp_t> read_ts_{0};
+    /** The commit ts */
+    std::atomic<timestamp_t> commit_ts_{INVALID_TIMESTAMP};
 
     std::shared_ptr<std::deque<WriteRecord *> > write_set_; // 事务包含的所有写操作
     std::shared_ptr<std::unordered_set<LockDataId> > lock_set_; // 事务申请的所有锁

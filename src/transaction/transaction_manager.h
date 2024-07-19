@@ -11,15 +11,39 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <unordered_map>
 
 #include "transaction.h"
 #include "recovery/log_manager.h"
 #include "concurrency/lock_manager.h"
+#include "concurrency/watermark.h"
 #include "system/sm_manager.h"
 
 /* 系统采用的并发控制算法，当前题目中要求两阶段封锁并发控制算法 */
 enum class ConcurrencyMode { TWO_PHASE_LOCKING = 0, BASIC_TO };
+
+/// The first undo link in the version chain, that links table heap tuple to the undo log.
+struct VersionUndoLink {
+    /** The next version in the version chain. */
+    UndoLink prev_;
+    /** Whether a transaction is modifying the version link. Fall 2023: you do not need to read / write this field until
+     * task 4.2. */
+    bool in_progress_{false};
+
+    friend auto operator==(const VersionUndoLink &a, const VersionUndoLink &b) {
+        return a.prev_ == b.prev_ && a.in_progress_ == b.in_progress_;
+    }
+
+    friend auto operator!=(const VersionUndoLink &a, const VersionUndoLink &b) { return !(a == b); }
+
+    inline static auto FromOptionalUndoLink(std::optional<UndoLink> undo_link) -> std::optional<VersionUndoLink> {
+        if (undo_link.has_value()) {
+            return VersionUndoLink{*undo_link};
+        }
+        return std::nullopt;
+    }
+};
 
 class TransactionManager {
 public:
@@ -76,6 +100,65 @@ public:
     static std::unordered_map<txn_id_t, Transaction *> txn_map; // 全局事务表，存放事务ID与事务对象的映射关系
 
     inline void set_next_txn_id(txn_id_t next_txn_id) { next_txn_id_.store(next_txn_id); }
+
+    /**
+  * @brief Use this function before task 4.2. Update an undo link that links table heap tuple to the first undo log.
+  * Before updating, `check` function will be called to ensure validity.
+  */
+    auto UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+                        std::function<bool(std::optional<UndoLink>)> &&check = nullptr) -> bool;
+
+    /**
+     * @brief Use this function after task 4.2. Update an undo link that links table heap tuple to the first undo log.
+     * Before updating, `check` function will be called to ensure validity.
+     */
+    auto UpdateVersionLink(Rid rid, std::optional<VersionUndoLink> prev_version,
+                           std::function<bool(std::optional<VersionUndoLink>)> &&check = nullptr) -> bool;
+
+    /** @brief Get the first undo log of a table heap tuple. Use this before task 4.2 */
+    auto GetUndoLink(Rid rid) -> std::optional<UndoLink>;
+
+    /** @brief Get the first undo log of a table heap tuple. Use this after task 4.2 */
+    auto GetVersionLink(Rid rid) -> std::optional<VersionUndoLink>;
+
+    /** @brief Access the transaction undo log buffer and get the undo log. Return nullopt if the txn does not exist. Will
+     * still throw an exception if the index is out of range. */
+    auto GetUndoLogOptional(UndoLink link) -> std::optional<UndoLog>;
+
+    /** @brief Access the transaction undo log buffer and get the undo log. Except when accessing the current txn buffer,
+     * you should always call this function to get the undo log instead of manually retrieve the txn shared_ptr and access
+     * the buffer. */
+    auto GetUndoLog(UndoLink link) -> UndoLog;
+
+    /** @brief Get the lowest read timestamp in the system. */
+    auto GetWatermark() -> timestamp_t { return running_txns_.GetWatermark(); }
+
+    /** @brief Stop-the-world garbage collection. Will be called only when all transactions are not accessing the table
+     * heap. */
+    void GarbageCollection();
+
+    struct PageVersionInfo {
+        /** protects the map */
+        std::shared_mutex mutex_;
+        /** Stores previous version info for all slots. Note: DO NOT use `[x]` to access it because
+         * it will create new elements even if it does not exist. Use `find` instead.
+         */
+        std::unordered_map<slot_offset_t, VersionUndoLink> prev_version_;
+    };
+
+    /** protects version info */
+    std::shared_mutex version_info_mutex_;
+    /** Stores the previous version of each tuple in the table heap. Do not directly access this field. Use the helper
+ * functions in `transaction_manager_impl.cpp`. */
+    std::unordered_map<page_id_t, std::shared_ptr<PageVersionInfo> > version_info_;
+
+    /** Stores all the read_ts of running txns so as to facilitate garbage collection. */
+    Watermark running_txns_{0};
+
+    /** Only one txn is allowed to commit at a time */
+    std::mutex commit_mutex_;
+    /** The last committed timestamp. */
+    std::atomic<timestamp_t> last_commit_ts_{0};
 
 private:
     ConcurrencyMode concurrency_mode_; // 事务使用的并发控制算法，目前只需要考虑2PL

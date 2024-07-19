@@ -10,7 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "transaction_manager.h"
 
-#include <record/rm_manager.h>
+#include "record/rm_manager.h"
 
 #include "record/rm_file_handle.h"
 #include "system/sm_manager.h"
@@ -36,6 +36,11 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
     }
     txn->set_start_ts(next_timestamp_++);
     txn_map.emplace(txn->get_transaction_id(), txn);
+
+    // MVCC support
+    txn->read_ts_.store(last_commit_ts_);
+    running_txns_.AddTxn(txn->read_ts_);
+
 #ifdef ENABLE_LOGGING
     auto *begin_log_record = new BeginLogRecord(txn->get_transaction_id());
     begin_log_record->prev_lsn_ = txn->get_prev_lsn();
@@ -71,6 +76,29 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
         lock_manager_->unlock(txn, it);
     }
     lock_set->clear();
+
+    // 获取提交时间戳 注意还不能增加 因为还不稳定
+    auto &&commit_ts = last_commit_ts_.load() + 1;
+    // 为所有元组时间戳设置为提交时间戳
+    for (auto &[table_oid, rids] : txn->GetWriteSets()) {
+        auto &&table_heap = catalog_->GetTable(table_oid)->table_;
+        for (auto &rid : rids) {
+            auto &&tuple_meta = table_heap->GetTupleMeta(rid);
+            tuple_meta.ts_ = commit_ts;
+            table_heap->UpdateTupleMeta(tuple_meta, rid);
+        }
+    }
+
+    // 事务设置为已提交状态
+    txn->state_ = TransactionState::COMMITTED;
+
+    // 更新last_commit_ts_
+    // 因为读取时间戳是最新提交时间戳，新的提交时间戳应该+1 提交时间戳一定是最新的
+    last_commit_ts_.fetch_add(1);
+    txn->commit_ts_.store(last_commit_ts_);
+    running_txns_.UpdateCommitTs(txn->commit_ts_);
+    running_txns_.RemoveTxn(txn->read_ts_);
+
 #ifdef ENABLE_LOGGING
     auto *commit_log_record = new CommitLogRecord(txn->get_transaction_id());
     commit_log_record->prev_lsn_ = txn->get_prev_lsn();

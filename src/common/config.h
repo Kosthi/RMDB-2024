@@ -45,7 +45,7 @@ using txn_id_t = int32_t;    // transaction id type
 using lsn_t = int32_t;       // log sequence number type
 using slot_offset_t = size_t;  // slot offset type
 using oid_t = uint16_t;
-using timestamp_t = int32_t;  // timestamp type, used for transaction concurrency
+using timestamp_t = int64_t;  // timestamp type, used for transaction concurrency
 
 // log file
 static const std::string LOG_FILE_NAME = "db.log";

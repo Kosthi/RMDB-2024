@@ -19,6 +19,7 @@ constexpr int RM_NO_PAGE = -1;
 constexpr int RM_FILE_HDR_PAGE = 0;
 constexpr int RM_FIRST_RECORD_PAGE = 1;
 constexpr int RM_MAX_RECORD_SIZE = 512;
+constexpr static size_t TUPLE_META_SIZE = 16;
 
 /* 文件头，记录表数据文件的元信息，写入磁盘中文件的第0号页面 */
 struct RmFileHdr {
@@ -40,6 +41,12 @@ struct RmRecord {
     char *data; // 记录的数据
     int size; // 记录的大小
     bool allocated_ = false; // 是否已经为数据分配空间
+
+    // MVCC support
+    /** the ts / txn_id of this tuple. In project 3, simply set it to 0. */
+    timestamp_t ts_;
+    /** marks whether this tuple is marked removed from table heap. */
+    bool is_deleted_;
 
     RmRecord() = default;
 
@@ -82,6 +89,7 @@ struct RmRecord {
     RmRecord(char *data_, int size_, bool non_copy) {
         data = data_;
         size = size_;
+        allocated_ = non_copy;
     }
 
     void SetData(char *data_) {
