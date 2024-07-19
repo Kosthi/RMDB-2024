@@ -55,10 +55,6 @@ public:
             sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
             delete delete_log_record;
 
-            // 写入事务写集
-            auto *write_record = new WriteRecord(WType::DELETE_TUPLE, tab_name_, rid, *rec);
-            context_->txn_->append_write_record(write_record);
-
             // 如果有索引，则必然是唯一索引
             for (auto &[index_name, index]: tab_.indexes) {
                 auto &&ih = sm_manager_->ihs_.at(index_name).get();
@@ -70,6 +66,11 @@ public:
                 delete []key;
             }
             fh_->delete_record(rid, context_);
+
+            // 防止 double throw
+            // 写入事务写集
+            auto *write_record = new WriteRecord(WType::DELETE_TUPLE, tab_name_, rid, *rec);
+            context_->txn_->append_write_record(write_record);
         }
         return nullptr;
     }
