@@ -166,7 +166,7 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         std::ofstream ofs(LOG_FILE_NAME, std::ios::trunc);
         ofs.close();
 
-        exit(1);
+        // exit(1);
         // 5.把日志文件中检查点记录的地址写到“重新启动文件”中 忽略
     }
 }
