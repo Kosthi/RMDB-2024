@@ -40,6 +40,7 @@ value_int {sign}?{digit}+
 value_float {sign}?{digit}+\.({digit}+)?
 value_string '[^']*'
 single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
+file_path \.\.[0-9a-zA-Z_\/\.\-]+
 
 %x STATE_COMMENT
 
@@ -77,6 +78,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "INT" { return INT; }
 "CHAR" { return CHAR; }
 "FLOAT" { return FLOAT; }
+"DATETIME" { return DATETIME; }
 "INDEX" { return INDEX; }
 "AND" { return AND; }
 "JOIN" {return JOIN;}
@@ -96,6 +98,10 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "HAVING" { return HAVING; }
 "IN" { return IN; }
 "STATIC_CHECKPOINT" { return STATIC_CHECKPOINT; }
+"LOAD" { return LOAD; }
+"OUTPUT_FILE" { return OUTPUT_FILE; }
+"ON" { return ON; }
+"OFF" { return OFF; }
 "TRUE" { 
     yylval->sv_bool = true;
     return VALUE_BOOL; 
@@ -127,6 +133,10 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 {value_string} {
     yylval->sv_str = std::string(yytext + 1, strlen(yytext) - 2);
     return VALUE_STRING;
+}
+{file_path} {
+    yylval->sv_str = yytext;
+    return FILE_PATH;
 }
     /* EOF */
 <<EOF>> { return T_EOF; }

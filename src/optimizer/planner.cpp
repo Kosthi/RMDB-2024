@@ -134,10 +134,10 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
     curr_conds = std::move(fed_conds);
 
     // 检查正确与否
-    for (auto &index_name: index_col_names) {
-        std::cout << index_name << ",";
-    }
-    std::cout << "\n";
+    // for (auto &index_name: index_col_names) {
+    //     std::cout << index_name << ",";
+    // }
+    // std::cout << "\n";
 
     // if (tab.is_index(index_col_names)) return true;
     return true;
@@ -305,7 +305,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
                 bool index_exist = get_index_cols(it->lhs_col.tab_name, join_conds, index_col_names);
                 if (index_exist) {
                     left_plan->tag = T_IndexScan;
-                    left_plan->conds_ = join_conds;
+                    left_plan->conds_.emplace(left_plan->conds_.begin(), join_conds[0]);
                     left_plan->index_col_names_ = std::move(index_col_names);
                 }
                 index_col_names.clear();
@@ -321,7 +321,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
                 bool index_exist = get_index_cols(it->rhs_col.tab_name, right_conds, index_col_names);
                 if (index_exist) {
                     right_plan->tag = T_IndexScan;
-                    right_plan->conds_ = std::move(right_conds);
+                    right_plan->conds_.emplace(right_plan->conds_.begin(), std::move(right_conds[0]));
                     right_plan->index_col_names_ = std::move(index_col_names);
                 }
                 index_col_names.clear();
@@ -548,6 +548,9 @@ std::shared_ptr<Plan> Planner::do_planner(std::shared_ptr<Query> query, Context 
     } else if (auto x = std::dynamic_pointer_cast<ast::DropIndex>(query->parse)) {
         // drop index
         plannerRoot = std::make_shared<DDLPlan>(T_DropIndex, x->tab_name, x->col_names, std::vector<ColDef>());
+    } else if (auto x = std::dynamic_pointer_cast<ast::LoadStmt>(query->parse)) {
+        // load;
+        plannerRoot = std::make_shared<LoadPlan>(T_Load, x->file_name, x->table_name);
     } else if (auto x = std::dynamic_pointer_cast<ast::InsertStmt>(query->parse)) {
         // insert;
         plannerRoot = std::make_shared<DMLPlan>(T_Insert, std::shared_ptr<Plan>(), x->tab_name,

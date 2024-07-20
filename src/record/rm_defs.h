@@ -78,6 +78,12 @@ struct RmRecord {
         allocated_ = true;
     }
 
+    // 如果页面一直都在内存中，则不需要拷贝，直接指向内存中对应的槽
+    RmRecord(char *data_, int size_, bool non_copy) {
+        data = data_;
+        size = size_;
+    }
+
     void SetData(char *data_) {
         memcpy(data, data_, size);
     }
@@ -114,12 +120,12 @@ struct RmRecord {
 
 // 自定义记录哈希函数
 namespace std {
-    template <>
+    template<>
     struct hash<RmRecord> {
-        std::size_t operator()(const RmRecord& record) const noexcept {
+        std::size_t operator()(const RmRecord &record) const noexcept {
             std::size_t hash_value = 0;
             hash_value ^= std::hash<int>{}(record.size) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
-            for(int i = 0; i < record.size; ++i) {
+            for (int i = 0; i < record.size; ++i) {
                 hash_value ^= std::hash<char>{}(record.data[i]) + 0x9e3779b9 + (hash_value << 6) + (hash_value >> 2);
             }
             return hash_value;
@@ -128,9 +134,9 @@ namespace std {
 }
 
 namespace std {
-    template <>
-    struct hash<optional<RmRecord>> {
-        std::size_t operator()(const std::optional<RmRecord>& record) const {
+    template<>
+    struct hash<optional<RmRecord> > {
+        std::size_t operator()(const std::optional<RmRecord> &record) const {
             return record.has_value() ? std::hash<RmRecord>()(*record) : std::hash<int>()(0);
         }
     };

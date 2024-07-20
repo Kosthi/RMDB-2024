@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "executor_seq_scan.h"
 #include "executor_update.h"
 #include "executor_sortmerge_join.h"
+#include "execution/executor_load.h"
 #include "index/ix.h"
 #include "record_printer.h"
 
@@ -44,6 +45,47 @@ const char *help_info = "Supported SQL syntax:\n"
         "  {= | <> | < | > | <= | >=}\n"
         "selector:\n"
         "  {* | column [, column ...]}\n";
+
+constexpr const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+char *my_itoa(int value, char *buff, int radix) {
+    assert(buff != NULL);
+    assert(radix >= 2 && radix <= 36); // Ensure radix is within valid range
+
+    char *ptr = buff;
+    char *ptr1 = buff;
+    char tmp_char;
+    int tmp_value;
+
+    // Handle negative numbers for base 10
+    if (value < 0 && radix == 10) {
+        *ptr++ = '-';
+        value = -value;
+    }
+
+    // Convert integer to string
+    do {
+        tmp_value = value;
+        value /= radix;
+        *ptr++ = digits[abs(tmp_value - value * radix)];
+    } while (value);
+
+    // Null-terminate the string
+    *ptr-- = '\0';
+
+    // Reverse the string
+    if (*buff == '-') {
+        ptr1++; // Skip the minus sign for reversal
+    }
+
+    while (ptr1 < ptr) {
+        tmp_char = *ptr;
+        *ptr-- = *ptr1;
+        *ptr1++ = tmp_char;
+    }
+
+    return buff;
+}
 
 // 主要负责执行DDL语句
 void QlManager::run_mutli_query(std::shared_ptr<Plan> plan, Context *context) {
@@ -117,6 +159,10 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         }
     } else if (auto x = std::dynamic_pointer_cast<SetKnobPlan>(plan)) {
         switch (x->set_knob_type_) {
+            case ast::SetKnobType::EnableOutputFile: {
+                planner_->enable_output_file = x->bool_value_;
+                break;
+            }
             case ast::SetKnobType::EnableNestLoop: {
                 planner_->set_enable_nestedloop_join(x->bool_value_);
                 break;
@@ -187,12 +233,14 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     rec_printer.print_separator(context);
     // print header into file
     std::fstream outfile;
-    outfile.open("output.txt", std::ios::out | std::ios::app);
-    outfile << "|";
-    for (int i = 0; i < captions.size(); ++i) {
-        outfile << " " << captions[i] << " |";
+    if (planner_->enable_output_file) {
+        outfile.open("output.txt", std::ios::out | std::ios::app);
+        outfile << "|";
+        for (int i = 0; i < captions.size(); ++i) {
+            outfile << " " << captions[i] << " |";
+        }
+        outfile << "\n";
     }
-    outfile << "\n";
 
     // Print records
     size_t num_rec = 0;
@@ -216,12 +264,58 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
         // print record into buffer
         rec_printer.print_record(columns, context);
         // print record into file
+        if (planner_->enable_output_file) {
+            outfile << "|";
+            for (int i = 0; i < columns.size(); ++i) {
+                outfile << " " << columns[i] << " |";
+            }
+            outfile << "\n";
+        }
+        num_rec++;
+    }
+    outfile.close();
+    // Print footer into buffer
+    rec_printer.print_separator(context);
+    // Print record count into buffer
+    RecordPrinter::print_record_count(num_rec, context);
+}
+
+// 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
+void QlManager::select_fast_count_star(int count, std::string &sel_col, Context *context) {
+    std::vector<std::string> captions;
+    captions.emplace_back(sel_col);
+
+    // Print header into buffer
+    RecordPrinter rec_printer(1);
+    rec_printer.print_separator(context);
+    rec_printer.print_record(captions, context);
+    rec_printer.print_separator(context);
+    // print header into file
+    std::fstream outfile;
+    if (planner_->enable_output_file) {
+        outfile.open("output.txt", std::ios::out | std::ios::app);
+        outfile << "|";
+        for (int i = 0; i < captions.size(); ++i) {
+            outfile << " " << captions[i] << " |";
+        }
+        outfile << "\n";
+    }
+
+    // Print records
+    size_t num_rec = 1;
+    std::vector<std::string> columns;
+    char buffer[20]{};
+    columns.emplace_back(my_itoa(count, buffer, 10));
+
+    // print record into buffer
+    rec_printer.print_record(columns, context);
+    // print record into file
+    if (planner_->enable_output_file) {
         outfile << "|";
         for (int i = 0; i < columns.size(); ++i) {
             outfile << " " << columns[i] << " |";
         }
         outfile << "\n";
-        num_rec++;
     }
     outfile.close();
     // Print footer into buffer

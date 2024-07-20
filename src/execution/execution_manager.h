@@ -46,5 +46,7 @@ public:
     void select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
                      Context *context);
 
+    void select_fast_count_star(int count, std::string &sel_col, Context *context);
+
     void run_dml(std::unique_ptr<AbstractExecutor> exec);
 };

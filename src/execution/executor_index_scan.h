@@ -29,6 +29,7 @@ private:
     std::vector<Condition> conds_; // 扫描条件
     RmFileHandle *fh_; // 表的数据文件句柄
     std::vector<ColMeta> cols_; // 需要读取的字段
+    std::vector<ColMeta> cond_cols_; // 谓词需要读取的字段
     size_t len_; // 选取出来的一条记录的长度
     std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
     IndexMeta index_meta_; // index scan涉及到的索引元数据
@@ -58,6 +59,10 @@ private:
     // false 为共享间隙锁，true 为互斥间隙锁
     bool gap_mode_;
     PredicateManager predicate_manager_;
+
+    bool is_empty_btree_{false};
+
+    bool scan_index_{false};
 
     static std::size_t generateID() {
         static size_t current_id = 0;
@@ -145,6 +150,17 @@ public:
         filename_ = "sorted_results_index_" + std::to_string(id_) + ".txt";
         mergesort_ = !conds_[0].is_rhs_val && conds_.size() == 1;
 
+        // where w_id=:w_id and c_w_id=w_id and c_d_id=:d_id and c_id=:c_id;
+        // 全表走索引 加 merge
+        if (!conds_[0].is_rhs_val && conds_.size() > 1) {
+            scan_index_ = true;
+            // 擦掉第一个
+            conds_.erase(conds_.begin());
+        }
+
+        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
+        ih_ = sm_manager_->ihs_[index_name].get();
+
         predicate_manager_ = PredicateManager(index_meta_);
 
         // TODO 支持更多谓词的解析 > >
@@ -158,21 +174,28 @@ public:
             ++it;
         }
 
-        auto gap = Gap(predicate_manager_.getIndexConds());
-        if (gap_mode_) {
-            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-        } else {
-            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        for (auto &cond: conds_) {
+            cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
         }
 
         // S 锁
         // if (context_ != nullptr) {
         //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
         // }
+
+        // auto gap = Gap(predicate_manager_.getIndexConds());
+        // if (gap_mode_) {
+        //     context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // } else {
+        //     context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // }
     }
 
     void beginTuple() override {
-        if (already_begin_ && !mergesort_) {
+        if (is_empty_btree_) {
+            return;
+        }
+        if (already_begin_ && (!mergesort_ || scan_index_)) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
             while (!scan_->is_end()) {
@@ -192,10 +215,37 @@ public:
             return;
         }
 
-        const auto &&index_name = sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_col_names_);
-        ih_ = sm_manager_->ihs_[index_name].get();
+        // 空树
+        if (ih_->is_empty()) {
+            is_empty_btree_ = is_end_ = true;
+            return;
+        }
 
         lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+
+        // 全表扫索引
+        if (scan_index_) {
+            scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
+            already_begin_ = true;
+
+            // where a > 1, c < 1
+            while (!scan_->is_end()) {
+                // 不回表
+                // 全是等号或最后一个谓词是比较，不需要再扫索引
+                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                    // 回表，查不在索引里的谓词
+                    rid_ = scan_->rid();
+                    rm_record_ = fh_->get_record(rid_, context_);
+                    if (conds_.empty() || cmp_conds(rm_record_.get(), conds_, cols_)) {
+                        return;
+                    }
+                }
+                scan_->next();
+            }
+            is_end_ = true;
+            return;
+        }
+
         // 如果 '列 op 列'，走 sortmerge
         // TODO 行多外部排序慢，但是为了通过归并连接测试
         if (mergesort_) {
@@ -870,9 +920,9 @@ public:
     }
 
     // 判断是否满足单个谓词条件
-    bool cmp_cond(const RmRecord *rec, const Condition &cond, const std::vector<ColMeta> &rec_cols) {
-        const auto &lhs_col_meta = get_col(rec_cols, cond.lhs_col);
-        const char *lhs_data = rec->data + lhs_col_meta->offset;
+    bool cmp_cond(int i, const RmRecord *rec, const Condition &cond) {
+        const auto &lhs_col_meta = cond_cols_[i];
+        const char *lhs_data = rec->data + lhs_col_meta.offset;
         char *rhs_data;
         ColType rhs_type;
         // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
@@ -890,7 +940,7 @@ public:
                     // 前面已经强制转换和检查类型匹配过了，这里不需要
                     for (auto &value: cond.rhs_value_list) {
                         rhs_data = value.raw->data;
-                        if (compare(lhs_data, rhs_data, lhs_col_meta->len, value.type) == 0) {
+                        if (compare(lhs_data, rhs_data, lhs_col_meta.len, value.type) == 0) {
                             return true;
                         }
                     }
@@ -899,7 +949,7 @@ public:
                 // 比较谓词
                 assert(cond.rhs_value_list.size() == 1);
                 auto &value = cond.rhs_value_list[0];
-                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta->len, value.type);
+                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta.len, value.type);
                 switch (cond.op) {
                     case OP_EQ: return cmp == 0;
                     case OP_NE: return cmp != 0;
@@ -936,12 +986,12 @@ public:
                 for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
                     record = cond.prev->Next();
                     rhs_data = record->data;
-                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+                    if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                         rhs_type = TYPE_FLOAT;
                         const float a = *reinterpret_cast<const int *>(rhs_data);
                         memcpy(rhs_data, &a, sizeof(float));
                     }
-                    if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
+                    if (compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type) == 0) {
                         return true;
                     }
                 }
@@ -951,23 +1001,25 @@ public:
             // 聚合或列值只能有一行
             record = cond.prev->Next();
             rhs_data = record->data;
-            if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+            if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                 rhs_type = TYPE_FLOAT;
                 const float a = *reinterpret_cast<const int *>(rhs_data);
                 memcpy(rhs_data, &a, sizeof(float));
             }
         } else {
             // 列值
-            const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
-            rhs_type = rhs_col_meta->type;
-            rhs_data = rec->data + rhs_col_meta->offset;
+            assert(0);
+            // 没有 id1 = id2 的情况
+            // const auto &rhs_col_meta = get_col(rec_cols, cond.rhs_col);
+            // rhs_type = rhs_col_meta->type;
+            // rhs_data = rec->data + rhs_col_meta->offset;
         }
 
-        if (lhs_col_meta->type != rhs_type) {
-            throw IncompatibleTypeError(coltype2str(lhs_col_meta->type), coltype2str(rhs_type));
+        if (lhs_col_meta.type != rhs_type) {
+            throw IncompatibleTypeError(coltype2str(lhs_col_meta.type), coltype2str(rhs_type));
         }
 
-        int cmp = compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type);
+        int cmp = compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type);
         switch (cond.op) {
             case OP_EQ: return cmp == 0;
             case OP_NE: return cmp != 0;
@@ -981,9 +1033,12 @@ public:
     }
 
     bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds, const std::vector<ColMeta> &rec_cols) {
-        return std::all_of(conds.begin(), conds.end(), [&](const Condition &cond) {
-            return cmp_cond(rec, cond, rec_cols);
-        });
+        for (int i = 0; i < conds.size(); ++i) {
+            if (!cmp_cond(i, rec, conds[i])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     std::string getType() { return "IndexScanExecutor"; }

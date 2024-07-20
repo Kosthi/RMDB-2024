@@ -11,11 +11,14 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "rm_defs.h"
+#include "rm_file_handle.h"
 
 class RmFileHandle;
 
 class RmScan : public RecScan {
+private:
     const RmFileHandle *file_handle_;
+    RmPageHandle cur_page_handle_;
     Rid rid_;
 
 public:
@@ -26,4 +29,6 @@ public:
     bool is_end() const override;
 
     Rid rid() const override;
+
+    std::unique_ptr<RmRecord> get_record();
 };

@@ -36,11 +36,13 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
     }
     txn->set_start_ts(next_timestamp_++);
     txn_map.emplace(txn->get_transaction_id(), txn);
+#ifdef ENABLE_LOGGING
     auto *begin_log_record = new BeginLogRecord(txn->get_transaction_id());
     begin_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(begin_log_record));
     delete begin_log_record;
+#endif
     return txn;
 }
 
@@ -69,13 +71,15 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
         lock_manager_->unlock(txn, it);
     }
     lock_set->clear();
+#ifdef ENABLE_LOGGING
     auto *commit_log_record = new CommitLogRecord(txn->get_transaction_id());
     commit_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(commit_log_record));
     log_manager->flush_log_to_disk();
-    txn->set_state(TransactionState::COMMITTED);
     delete commit_log_record;
+#endif
+    txn->set_state(TransactionState::COMMITTED);
 }
 
 /**
@@ -116,11 +120,13 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     ih->delete_entry(key, txn);
                     delete []key;
                 }
+#ifdef ENABLE_LOGGING
                 // 生成删除日志
                 auto *delete_log_record = new DeleteLogRecord(txn->get_transaction_id(), record, rid, table_name);
                 delete_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(delete_log_record));
                 delete delete_log_record;
+#endif
                 break;
             }
             case WType::DELETE_TUPLE: {
@@ -137,11 +143,13 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     ih->insert_entry(key, rid, txn);
                     delete []key;
                 }
+#ifdef ENABLE_LOGGING
                 // 生成插入日志
                 auto *insert_log_record = new InsertLogRecord(txn->get_transaction_id(), record, rid, table_name);
                 insert_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(insert_log_record));
                 delete insert_log_record;
+#endif
                 break;
             }
             case WType::UPDATE_TUPLE: {
@@ -153,7 +161,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 for (auto &[index_name, index_meta]: table_meta.indexes) {
                     char *old_key = new char[index_meta.col_tot_len];
                     char *new_key = new char[index_meta.col_tot_len];
-                    for (auto &[index_offset, col_meta] : index_meta.cols) {
+                    for (auto &[index_offset, col_meta]: index_meta.cols) {
                         memcpy(old_key + index_offset, old_record.data + col_meta.offset, col_meta.len);
                         memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
                     }
@@ -163,12 +171,14 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     delete []old_key;
                     delete []new_key;
                 }
+#ifdef ENABLE_LOGGING
                 // 生成插入日志
                 auto *update_log_record = new UpdateLogRecord(txn->get_transaction_id(), new_record, old_record, rid,
                                                               table_name);
                 update_log_record->prev_lsn_ = txn->get_prev_lsn();
                 txn->set_prev_lsn(log_manager->add_log_to_buffer(update_log_record));
                 delete update_log_record;
+#endif
                 break;
             }
             default:
@@ -185,12 +195,13 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
         lock_manager_->unlock(txn, it);
     }
     lock_set->clear();
-
+#ifdef ENABLE_LOGGING
     auto *abort_log_record = new AbortLogRecord(txn->get_transaction_id());
     abort_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(abort_log_record));
     log_manager->flush_log_to_disk();
-    txn->set_state(TransactionState::ABORTED);
     delete abort_log_record;
+#endif
+    txn->set_state(TransactionState::ABORTED);
 }

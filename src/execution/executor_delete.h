@@ -25,20 +25,21 @@ private:
     std::vector<Rid> rids_; // 需要删除的记录的位置
     std::string tab_name_; // 表名称
     SmManager *sm_manager_;
+    bool is_index_scan_{false};
 
 public:
     DeleteExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-                   std::vector<Rid> rids, Context *context): sm_manager_(sm_manager), tab_name_(std::move(tab_name)),
-                                                             conds_(std::move(conds)),
-                                                             rids_(std::move(rids)) {
+                   std::vector<Rid> rids, Context *context, bool is_index_scan = false): sm_manager_(sm_manager),
+        tab_name_(std::move(tab_name)),
+        conds_(std::move(conds)),
+        rids_(std::move(rids)), is_index_scan_(is_index_scan) {
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
-
-        // S_IX 锁
+        // X 锁
         // if (!rids_.empty() && context_ != nullptr) {
-        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        //     // context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
         // }
     }
 
@@ -47,6 +48,7 @@ public:
         for (auto &rid: rids_) {
             auto &&rec = fh_->get_record(rid, context_);
 
+#ifdef ENABLE_LOGGING
             auto *delete_log_record = new DeleteLogRecord(context_->txn_->get_transaction_id(), *rec, rid, tab_name_);
             delete_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
             context_->txn_->set_prev_lsn(context_->log_mgr_->add_log_to_buffer(delete_log_record));
@@ -54,6 +56,7 @@ public:
             page->set_page_lsn(context_->txn_->get_prev_lsn());
             sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
             delete delete_log_record;
+#endif
 
             // 如果有索引，则必然是唯一索引
             for (auto &[index_name, index]: tab_.indexes) {

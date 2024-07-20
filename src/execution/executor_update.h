@@ -26,6 +26,7 @@ private:
     std::string tab_name_;
     std::vector<SetClause> set_clauses_;
     SmManager *sm_manager_;
+    std::vector<std::vector<ColMeta>::iterator> set_cols_;
 
 public:
     UpdateExecutor(SmManager *sm_manager, std::string tab_name, std::vector<SetClause> set_clauses,
@@ -41,11 +42,14 @@ public:
         rids_ = std::move(rids);
         context_ = context;
 
-        // S_IX 锁
-        if (!rids_.empty() && context_ != nullptr) {
-            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-            context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        for (auto &set: set_clauses_) {
+            set_cols_.emplace_back(tab_.get_col(set.lhs.col_name));
         }
+
+        // X 锁
+        // if (!rids_.empty() && context_ != nullptr) {
+        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+        // }
     }
 
     // 这里 next 只会被调用一次
@@ -54,28 +58,53 @@ public:
             auto &&updated_record = fh_->get_record(rid, context_);
             auto old_record = std::make_unique<RmRecord>(*updated_record);
 
-            for (auto &set: set_clauses_) {
-                auto &&col_meta = tab_.get_col(set.lhs.col_name);
-                memcpy(updated_record->data + col_meta->offset, set.rhs.raw->data, col_meta->len);
+            for (int i = 0; i < set_clauses_.size(); ++i) {
+                auto &col_meta = set_cols_[i];
+                if (set_clauses_[i].is_incr) {
+                    add(updated_record->data + col_meta->offset, set_clauses_[i].rhs.raw->data, col_meta->type);
+                } else {
+                    memcpy(updated_record->data + col_meta->offset, set_clauses_[i].rhs.raw->data, col_meta->len);
+                }
             }
 
-            // 先检查 key 是否是 unique
-            for (auto &[index_name, index]: tab_.indexes) {
-                auto &&ih = sm_manager_->ihs_.at(index_name).get();
-                // TODO 优化 放到容器中
-                char *key = new char[index.col_tot_len];
+            auto **old_keys = new char *[tab_.indexes.size()];
+            auto **new_keys = new char *[tab_.indexes.size()];
+            auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
+
+            int i = 0;
+            // 索引查重
+            for (auto &[ix_name, index]: tab_.indexes) {
+                ihs[i] = sm_manager_->ihs_[ix_name].get();
+                old_keys[i] = new char[index.col_tot_len];
+                new_keys[i] = new char[index.col_tot_len];
                 for (auto &[index_offset, col_meta]: index.cols) {
-                    memcpy(key + index_offset, updated_record->data + col_meta.offset, col_meta.len);
+                    memcpy(old_keys[i] + index_offset, old_record->data + col_meta.offset, col_meta.len);
+                    memcpy(new_keys[i] + index_offset,
+                           updated_record->data + col_meta.offset, col_meta.len);
                 }
-                // TODO 如果 update a = 5 where a = 5，应该在优化器阶段优化掉
-                Rid unique_rid{};
-                if (!ih->is_unique(key, unique_rid, context_->txn_) && rid != unique_rid) {
-                    delete []key;
-                    throw NonUniqueIndexError("", {index_name});
+                if (!ihs[i]->is_unique(new_keys[i], _abstract_rid, context_->txn_)) {
+                    for (int j = 0; j < i; ++j) {
+                        delete []old_keys[j];
+                        delete []new_keys[j];
+                    }
+                    delete []old_keys;
+                    delete []new_keys;
+                    delete []ihs;
+                    throw NonUniqueIndexError("", {ix_name});
                 }
-                delete []key;
+                ++i;
             }
 
+            // 再检查是否有间隙锁
+            // for (auto &[index_name, index]: tab_.indexes) {
+            //     RmRecord rm_record(index.col_tot_len);
+            //     for (auto &[index_offset, col_meta]: index.cols) {
+            //         memcpy(rm_record.data + index_offset, updated_record->data + col_meta.offset, col_meta.len);
+            //     }
+            //     context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+            // }
+
+#ifdef ENABLE_LOGGING
             auto *update_log_record = new UpdateLogRecord(context_->txn_->get_transaction_id(), *old_record,
                                                           *updated_record, rid, tab_name_);
             update_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
@@ -84,21 +113,20 @@ public:
             page->set_page_lsn(context_->txn_->get_prev_lsn());
             sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
             delete update_log_record;
+#endif
 
             // Unique Index -> Insert into index
-            for (auto &[index_name, index]: tab_.indexes) {
-                auto ih = sm_manager_->ihs_.at(index_name).get();
-                char *old_key = new char[index.col_tot_len];
-                char *new_key = new char[index.col_tot_len];
-                for (auto &[index_offset, col_meta]: index.cols) {
-                    memcpy(old_key + index_offset, old_record->data + col_meta.offset, col_meta.len);
-                    memcpy(new_key + index_offset, updated_record->data + col_meta.offset, col_meta.len);
-                }
-                ih->delete_entry(old_key, context_->txn_);
-                ih->insert_entry(new_key, rid, context_->txn_);
-                delete []old_key;
-                delete []new_key;
+            for (int j = 0; j < i; ++j) {
+                ihs[j]->delete_entry(old_keys[j], context_->txn_);
+                ihs[j]->insert_entry(new_keys[j], rid, context_->txn_);
+                delete []old_keys[j];
+                delete []new_keys[j];
             }
+
+            // 插入完成，释放内存
+            delete []old_keys;
+            delete []new_keys;
+            delete []ihs;
 
             fh_->update_record(rid, updated_record->data, context_);
 

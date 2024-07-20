@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 #pragma once
 
+#include <utility>
 #include <vector>
 #include <string>
 #include <memory>
@@ -41,7 +42,7 @@ namespace ast {
     };
 
     enum SetKnobType {
-        EnableNestLoop, EnableSortMerge
+        EnableNestLoop, EnableSortMerge, EnableOutputFile
     };
 
     // Base class for tree nodes
@@ -185,9 +186,11 @@ namespace ast {
     struct SetClause : public TreeNode {
         std::string col_name;
         std::shared_ptr<Value> val;
+        bool is_incr;
 
-        SetClause(std::string col_name_, std::shared_ptr<Value> val_) : col_name(std::move(col_name_)),
-                                                                        val(std::move(val_)) {
+        SetClause(std::string col_name_, std::shared_ptr<Value> val_,
+                  bool is_incr_ = false) : col_name(std::move(col_name_)),
+                                           val(std::move(val_)), is_incr(is_incr_) {
         }
     };
 
@@ -231,6 +234,15 @@ namespace ast {
 
         OrderBy(std::shared_ptr<Col> cols_, OrderByDir orderby_dir_) : cols(std::move(cols_)),
                                                                        orderby_dir(orderby_dir_) {
+        }
+    };
+
+    struct LoadStmt : public TreeNode {
+        std::string file_name;
+        std::string table_name;
+
+        explicit LoadStmt(std::string &filename_, std::string &tablename_) : file_name(std::move(filename_)),
+                                                                             table_name(std::move(tablename_)) {
         }
     };
 

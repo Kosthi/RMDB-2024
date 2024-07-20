@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "rm_defs.h"
 
 class RmManager;
+class LoadExecutor;
 
 /* 对表数据文件中的页面进行封装 */
 struct RmPageHandle {
@@ -28,6 +29,8 @@ struct RmPageHandle {
     char *bitmap; // page->data的第二部分，存储页面的bitmap，指针指向首地址，长度为file_hdr->bitmap_size
     char *slots; // page->data的第三部分，存储表的记录，指针指向首地址，每个slot的长度为file_hdr->record_size
 
+    RmPageHandle() = default;
+
     RmPageHandle(const RmFileHdr *fhdr_, Page *page_) : file_hdr(fhdr_), page(page_) {
         page_hdr = reinterpret_cast<RmPageHdr *>(page->get_data() + page->OFFSET_PAGE_HDR);
         bitmap = page->get_data() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;
@@ -35,7 +38,7 @@ struct RmPageHandle {
     }
 
     // 返回指定slot_no的slot存储收地址
-    char *get_slot(int slot_no) const {
+    inline char *get_slot(int slot_no) const {
         return slots + slot_no * file_hdr->record_size; // slots的首地址 + slot个数 * 每个slot的大小(每个record的大小)
     }
 };
@@ -44,6 +47,7 @@ struct RmPageHandle {
 class RmFileHandle {
     friend class RmScan;
     friend class RmManager;
+    friend class LoadExecutor;
 
 private:
     DiskManager *disk_manager_;
@@ -60,9 +64,10 @@ public:
         disk_manager_->read_page(fd, RM_FILE_HDR_PAGE, (char *) &file_hdr_, sizeof(file_hdr_));
         // disk_manager管理的fd对应的文件中，设置从file_hdr_.num_pages开始分配page_no
         disk_manager_->set_fd2pageno(fd, file_hdr_.num_pages);
+        // cur_page_handle_ = create_page_handle();
     }
 
-    RmFileHdr get_file_hdr() { return file_hdr_; }
+    RmFileHdr &get_file_hdr() { return file_hdr_; }
     int GetFd() { return fd_; }
 
     /* 判断指定位置上是否已经存在一条记录，通过Bitmap来判断 */
@@ -72,6 +77,10 @@ public:
     }
 
     std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
+
+    void load_record(int &page_no, char *&data, int nums_record, int page_size);
+
+    void set_first_free_page_no(page_id_t page_no) { file_hdr_.first_free_page_no = page_no; }
 
     Rid insert_record(char *buf, Context *context);
 

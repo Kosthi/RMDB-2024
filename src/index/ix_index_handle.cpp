@@ -234,7 +234,7 @@ std::pair<int, int> IxNodeHandle::remove(const char *key) {
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
     : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // init file_hdr_
-    disk_manager_->read_page(fd, IX_FILE_HDR_PAGE, (char *) &file_hdr_, sizeof(file_hdr_));
+    // disk_manager_->read_page(fd, IX_FILE_HDR_PAGE, (char *) &file_hdr_, sizeof(file_hdr_));
     char *buf = new char[PAGE_SIZE];
     memset(buf, 0, PAGE_SIZE);
     disk_manager_->read_page(fd, IX_FILE_HDR_PAGE, buf, PAGE_SIZE);
@@ -539,6 +539,13 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     // 4. 如果需要并发，并且需要删除叶子结点，则需要在事务的delete_page_set中添加删除结点的对应页面；记得处理并发的上锁
     auto &&[leaf_node, is_root_locked] = find_leaf_page(key, Operation::DELETE, transaction, false);
     int old_size = leaf_node->get_size();
+    // 空树
+    if (old_size == 0) {
+        root_latch_.unlock();
+        leaf_node->page->WUnlatch();
+        buffer_pool_manager_->unpin_page(leaf_node->page->get_page_id(), false);
+        return false;
+    }
     // key 找不到
     const auto &[new_size, pos] = leaf_node->remove(key);
     if (new_size == old_size) {
@@ -595,6 +602,7 @@ bool IxIndexHandle::adjust_root(std::shared_ptr<IxNodeHandle> &old_root_node) {
     if (old_root_node->is_leaf_page() && old_root_node->get_size() == 0) {
         // 叶结点且大小为0，更新根结点为初始值
         file_hdr_->root_page_ = IX_INIT_ROOT_PAGE;
+        // disk_manager_->set_fd2pageno(fd_, 3);
         return false;
     }
     if (old_root_node->is_internal_page() && old_root_node->get_size() == 1) {
@@ -864,6 +872,17 @@ Iid IxIndexHandle::upper_bound(const char *key) {
     return iid;
 }
 
+bool IxIndexHandle::is_empty() {
+    root_latch_.lock();
+    auto node = fetch_node(file_hdr_->root_page_);
+    node->page->RLatch();
+    int size = node->get_size();
+    root_latch_.unlock();
+    node->page->RUnlatch();
+    buffer_pool_manager_->unpin_page(node->get_page_id(), false);
+    return size == 0;
+}
+
 /**
  * @brief 指向最后一个叶子的最后一个结点的后一个
  * 用处在于可以作为IxScan的最后一个
@@ -989,4 +1008,254 @@ RmRecord IxIndexHandle::get_key(const Iid &iid) const {
     RmRecord record(node->get_key(iid.slot_no), file_hdr_->col_tot_len_);
     buffer_pool_manager_->unpin_page(node->get_page_id(), false);
     return std::move(record);
+}
+
+void IxIndexHandle::create_upper_parent_nodes(char *key, Rid *rid, int first_parent_page_no, int sum) {
+    // 初始化第一个父亲节点
+    int pos = 0;
+
+    auto node = create_node();
+    node->page_hdr->is_leaf = false;
+    char *node_key = node->get_key(0);
+    Rid *node_rid = node->get_rid(0);
+    int tot_len = file_hdr_->col_tot_len_;
+
+    int block = 0;
+    // 计算叶子结点的个数和每块应装入的元组条数
+    // max_size * 0.7 大小 尽可能避免分裂重组
+    int expected_leaf_num = static_cast<int>((file_hdr_->btree_order_ + 1) * 0.9);
+    int blocks = sum / expected_leaf_num + (sum % expected_leaf_num ? 1 : 0);
+    // 调整块数量，确保每个叶子节点半满
+    if (blocks > 1 && (file_hdr_->btree_order_ + 1) / 2 > sum / blocks) {
+        // assert(0);
+        --blocks;
+    }
+
+    // 实际每个叶子上的元组数量
+    int actual_leaf_num = sum / blocks;
+    // 多出来的元组
+    int remaining_leaf_num = sum % blocks;
+
+    int upper_expected_parent_num = static_cast<int>((file_hdr_->btree_order_ + 1) * 0.9);
+    int upper_blocks = blocks / upper_expected_parent_num + (blocks % upper_expected_parent_num ? 1 : 0);
+    // 调整块数量，确保每个叶子节点半满
+    if (upper_blocks > 1 && (file_hdr_->btree_order_ + 1) / 2 > blocks / upper_blocks) {
+        --upper_blocks;
+    }
+
+    // 实际每个父亲节点上的元组数量
+    int actual_upper_parent_num = blocks / upper_blocks;
+    // 多出来的元组
+    int remaining_upper_parent_num = blocks % upper_blocks;
+
+    // 第一个父亲节点页号
+    int parent_page_no = first_parent_page_no + blocks;
+
+    // 只能构成一个节点，即为根节点
+    if (blocks == 1) {
+        node->set_parent_page_no(INVALID_PAGE_ID);
+        file_hdr_->root_page_ = node->get_page_no();
+    } else {
+        // 否则叶子节点指向父亲节点
+        node->set_parent_page_no(parent_page_no);
+    }
+
+    // 设置叶子节点大小
+    node->set_size(actual_leaf_num);
+
+    // 对于父亲节点，孩子节点数量
+    int child_pos = 0;
+
+    // 把每个索引块的第一个元组拷贝，用于父亲节点生成
+    char *key_temp;
+    char *key_temp_head;
+    Rid *rid_temp;
+    Rid *rid_temp_head;
+
+    // 只有有父亲节点才需要
+    if (blocks > 1) {
+        key_temp = new char[blocks * tot_len];
+        key_temp_head = key_temp;
+        rid_temp = new Rid[blocks];
+        rid_temp_head = rid_temp;
+    }
+
+    auto *src_key = key;
+    auto *src_rid = rid;
+
+    for (int i = 0; i < sum; i++) {
+        if (pos == actual_leaf_num) {
+            pos = 0;
+            // unpin
+            buffer_pool_manager_->unpin_page(node->get_page_id(), true);
+            // 建立新节点
+            node = create_node();
+            node->page_hdr->is_leaf = false;
+
+            node_key = node->get_key(0);
+            node_rid = node->get_rid(0);
+
+            // 一样的操作
+            if (++block + remaining_leaf_num == blocks) {
+                ++actual_leaf_num;
+            }
+
+            // 设置大小
+            node->set_size(actual_leaf_num);
+
+            // 对于父亲节点，孩子节点数量 + 1
+            if (++child_pos > actual_upper_parent_num) {
+                // 孩子节点数量设置为 0
+                child_pos = 0;
+                // 父亲节点 + 1
+                ++parent_page_no;
+                if (parent_page_no - blocks - 1 == upper_blocks - remaining_upper_parent_num) {
+                    ++actual_upper_parent_num;
+                }
+            }
+            // 指向父亲节点
+            node->set_parent_page_no(parent_page_no);
+        }
+
+        // 注意如果一个叶子节点放满了，跳到下一个叶子头也得拷贝
+        if (pos == 0 && blocks > 1) {
+            // 将每个索引块的第一个元组拷贝一份到临时数组中
+            memcpy(key_temp_head, src_key, tot_len);
+            Rid rid{.page_no = node->get_page_no(), .slot_no = -1};
+            memcpy(rid_temp_head, &rid, sizeof(Rid));
+            key_temp_head += tot_len;
+            // 加一个 rid
+            ++rid_temp_head;
+        }
+
+        // 初始化键值对
+        memcpy(node_key, src_key, tot_len);
+        memcpy(node_rid, src_rid, sizeof(Rid));
+        src_key += tot_len;
+        node_key += tot_len;
+        ++src_rid;
+        ++node_rid;
+        ++pos;
+    }
+
+    delete []key;
+    delete []rid;
+
+    // 没有到根节点，继续递归
+    if (blocks > 1) {
+        buffer_pool_manager_->unpin_page(node->get_page_id(), true);
+        create_upper_parent_nodes(key_temp, rid_temp, first_parent_page_no + blocks, blocks);
+    } else {
+        file_hdr_->root_page_ = node->get_page_no();
+        buffer_pool_manager_->unpin_page(node->get_page_id(), true);
+    }
+}
+
+void ToGraph(const IxIndexHandle *ih, IxNodeHandle *node, BufferPoolManager *bpm, std::ofstream &out) {
+    std::string leaf_prefix("LEAF_");
+    std::string internal_prefix("INT_");
+    if (node->is_leaf_page()) {
+        IxNodeHandle *leaf = node;
+        // Print node name
+        out << leaf_prefix << leaf->get_page_no();
+        // Print node properties
+        out << "[shape=plain color=green ";
+        // Print data of the node
+        out << "label=<<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+        // Print data
+        out << "<TR><TD COLSPAN=\"" << leaf->get_size() << "\">page_no=" << leaf->get_page_no() << "</TD></TR>\n";
+        out << "<TR><TD COLSPAN=\"" << leaf->get_size() << "\">"
+                << "max_size=" << leaf->get_max_size() << ",min_size=" << leaf->get_min_size() << "</TD></TR>\n";
+        out << "<TR>";
+        for (int i = 0; i < leaf->get_size(); i++) {
+            out << "<TD>" << *reinterpret_cast<int *>(leaf->get_key(i)) << "</TD>\n";
+        }
+        out << "</TR>";
+        // Print table end
+        out << "</TABLE>>];\n";
+        // Print Leaf node link if there is a next page
+        if (leaf->get_next_leaf() != INVALID_PAGE_ID && leaf->get_next_leaf() > 1) {
+            // 注意加上一个大于1的判断条件，否则若GetNextPageNo()是1，会把1那个结点也画出来
+            out << leaf_prefix << leaf->get_page_no() << " -> " << leaf_prefix << leaf->get_next_leaf() << ";\n";
+            out << "{rank=same " << leaf_prefix << leaf->get_page_no() << " " << leaf_prefix << leaf->get_next_leaf()
+                    << "};\n";
+        }
+
+        // Print parent links if there is a parent
+        if (leaf->get_parent_page_no() != INVALID_PAGE_ID) {
+            out << internal_prefix << leaf->get_parent_page_no() << ":p" << leaf->get_page_no() << " -> " << leaf_prefix
+                    << leaf->get_page_no() << ";\n";
+        }
+    } else {
+        IxNodeHandle *inner = node;
+        // Print node name
+        out << internal_prefix << inner->get_page_no();
+        // Print node properties
+        out << "[shape=plain color=pink "; // why not?
+        // Print data of the node
+        out << "label=<<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+        // Print data
+        out << "<TR><TD COLSPAN=\"" << inner->get_size() << "\">page_no=" << inner->get_page_no() << "</TD></TR>\n";
+        out << "<TR><TD COLSPAN=\"" << inner->get_size() << "\">"
+                << "max_size=" << inner->get_max_size() << ",min_size=" << inner->get_min_size() << "</TD></TR>\n";
+        out << "<TR>";
+        for (int i = 0; i < inner->get_size(); i++) {
+            out << "<TD PORT=\"p" << inner->value_at(i) << "\">";
+            out << inner->key_at(i);
+            // if (inner->KeyAt(i) != 0) {  // 原判断条件是if (i > 0)
+            //     out << inner->KeyAt(i);
+            // } else {
+            //     out << " ";
+            // }
+            out << "</TD>\n";
+        }
+        out << "</TR>";
+        // Print table end
+        out << "</TABLE>>];\n";
+        // Print Parent link
+        if (inner->get_parent_page_no() != INVALID_PAGE_ID) {
+            out << internal_prefix << inner->get_parent_page_no() << ":p" << inner->get_page_no() << " -> "
+                    << internal_prefix << inner->get_page_no() << ";\n";
+        }
+        // Print leaves
+        for (int i = 0; i < inner->get_size(); i++) {
+            auto child_node = ih->fetch_node(inner->value_at(i));
+            ToGraph(ih, child_node.get(), bpm, out); // 继续递归
+            if (i > 0) {
+                auto sibling_node = ih->fetch_node(inner->value_at(i - 1));
+                if (!sibling_node->is_leaf_page() && !child_node->is_leaf_page()) {
+                    out << "{rank=same " << internal_prefix << sibling_node->get_page_no() << " " << internal_prefix
+                            << child_node->get_page_no() << "};\n";
+                }
+                bpm->unpin_page(sibling_node->get_page_id(), false);
+            }
+        }
+    }
+    bpm->unpin_page(node->get_page_id(), false);
+}
+
+/**
+ * @brief 生成B+树可视化图
+ *
+ * @param bpm 缓冲池
+ * @param outf dot文件名
+ */
+void IxIndexHandle::Draw(BufferPoolManager *bpm, const std::string &outf) {
+    std::ofstream out(outf);
+    out << "digraph G {" << std::endl;
+
+    auto node = fetch_node(file_hdr_->root_page_);
+    ToGraph(this, node.get(), bpm, out);
+    out << "}" << std::endl;
+    out.close();
+
+    // 由dot文件生成png文件
+    std::string prefix = outf;
+    prefix.replace(outf.rfind(".dot"), 4, "");
+    std::string png_name = prefix + ".png";
+    std::string cmd = "dot -Tpng " + outf + " -o " + png_name;
+    system(cmd.c_str());
+
+    // printf("Generate picture: build/%s/%s\n", TEST_DB_NAME.c_str(), png_name.c_str());
+    printf("Generate picture: %s\n", png_name.c_str());
 }

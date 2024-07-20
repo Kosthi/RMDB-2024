@@ -35,10 +35,9 @@ public:
         }
         fh_ = sm_manager_->fhs_.at(tab_name).get();
         context_ = context;
-
-        // IX 锁
+        // X 锁
         // if (context_ != nullptr) {
-        //     context_->lock_mgr_->lock_IX_on_table(context_->txn_, fh_->GetFd());
+        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
         // }
     }
 
@@ -57,35 +56,53 @@ public:
             memcpy(rec.data + col.offset, val.raw->data, col.len);
         }
 
-        // 先检查 key 是否是 unique
-        for (auto &[index_name, index]: tab_.indexes) {
-            auto ih = sm_manager_->ihs_.at(index_name).get();
-            // TODO 优化 放到容器中
-            char *key = new char[index.col_tot_len];
-            for (auto &[index_offset, col_meta]: index.cols) {
-                memcpy(key + index_offset, rec.data + col_meta.offset, col_meta.len);
-            }
-            Rid unique_rid{};
-            if (!ih->is_unique(key, unique_rid, context_->txn_)) {
-                delete []key;
-                throw NonUniqueIndexError("", {index_name});
-            }
-            delete []key;
-        }
 
-        // 再检查是否有间隙锁
-        for (auto &[index_name, index]: tab_.indexes) {
-            auto ih = sm_manager_->ihs_.at(index_name).get();
-            RmRecord rm_record(index.col_tot_len);
+        // 把索引键缓存
+        auto **keys = new char *[tab_.indexes.size()];
+        auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
+
+        int i = 0;
+        // 索引查重
+        for (auto &[ix_name, index]: tab_.indexes) {
+            ihs[i] = sm_manager_->ihs_[ix_name].get();
+            keys[i] = new char[index.col_tot_len];
             for (auto &[index_offset, col_meta]: index.cols) {
-                memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+                memcpy(keys[i] + index_offset,
+                       rec.data + col_meta.offset, col_meta.len);
             }
-            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+            if (!ihs[i]->is_unique(keys[i], rid_, context_->txn_)) {
+                for (int j = 0; j < i; ++j) {
+                    delete []keys[j];
+                }
+                delete []keys;
+                delete []ihs;
+                throw NonUniqueIndexError("", {ix_name});
+            }
+            ++i;
         }
 
         // Insert into record file
         rid_ = fh_->insert_record(rec.data, context_);
 
+        // 插入完成，释放内存
+        for (int j = 0; j < i; ++j) {
+            ihs[j]->insert_entry(keys[j], rid_, context_->txn_);
+            delete []keys[j];
+        }
+        delete []keys;
+        delete []ihs;
+
+        // 再检查是否有间隙锁
+        // for (auto &[index_name, index]: tab_.indexes) {
+        //     auto ih = sm_manager_->ihs_.at(index_name).get();
+        //     RmRecord rm_record(index.col_tot_len);
+        //     for (auto &[index_offset, col_meta]: index.cols) {
+        //         memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+        //     }
+        //     context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+        // }
+
+#ifdef ENABLE_LOGGING
         auto *insert_log_record = new InsertLogRecord(context_->txn_->get_transaction_id(), rec, rid_, tab_name_);
         insert_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
         context_->txn_->set_prev_lsn(context_->log_mgr_->add_log_to_buffer(insert_log_record));
@@ -93,6 +110,7 @@ public:
         page->set_page_lsn(context_->txn_->get_prev_lsn());
         sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
         delete insert_log_record;
+#endif
 
         // Unique Index -> Insert into index
         for (auto &[index_name, index]: tab_.indexes) {

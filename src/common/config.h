@@ -15,6 +15,8 @@ See the Mulan PSL v2 for more details. */
 #include <cstdint>
 
 #define BUFFER_LENGTH 8192
+// 定义日志控制宏
+#define ENABLE_LOGGING
 
 /** Cycle detection is performed every CYCLE_DETECTION_INTERVAL milliseconds. */
 extern std::chrono::milliseconds cycle_detection_interval;
@@ -32,9 +34,9 @@ static constexpr int INVALID_TIMESTAMP = -1;                                  //
 static constexpr int INVALID_LSN = -1;                                        // invalid log sequence number
 static constexpr int HEADER_PAGE_ID = 0;                                      // the header page id
 static constexpr int PAGE_SIZE = 4096;                                        // size of a data page in byte  4KB
-static constexpr int BUFFER_POOL_SIZE = 65536;                                // size of buffer pool 256MB
-// static constexpr int BUFFER_POOL_SIZE = 262144;                                // size of buffer pool 1GB
-static constexpr int LOG_BUFFER_SIZE = (1024 * PAGE_SIZE);                    // size of a log buffer in byte
+// static constexpr int BUFFER_POOL_SIZE = 65536;                                // size of buffer pool 256MB
+static constexpr int BUFFER_POOL_SIZE = 4 * 262144;                                // size of buffer pool 1GB
+static constexpr int LOG_BUFFER_SIZE = (10 * 1024 * PAGE_SIZE);                    // size of a log buffer in byte
 static constexpr int BUCKET_SIZE = 50;                                        // size of extendible hash bucket
 
 using frame_id_t = int32_t;  // frame id type, 帧页ID, 页在BufferPool中的存储单元称为帧,一帧对应一页

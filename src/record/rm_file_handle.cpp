@@ -21,14 +21,14 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     // 1. 获取指定记录所在的page handle
     // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
     // 行级 S 锁
-    if (context != nullptr && context->lock_mgr_ != nullptr) {
-        context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
-    }
+    // if (context != nullptr && context->lock_mgr_ != nullptr) {
+    //     context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
+    // }
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
     }
-    auto &&record = std::make_unique<RmRecord>(file_hdr_.record_size, page_handle.get_slot(rid.slot_no));
+    auto &&record = std::make_unique<RmRecord>(page_handle.get_slot(rid.slot_no), file_hdr_.record_size, true);
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), false);
     return std::move(record);
 }
@@ -53,10 +53,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     auto &&slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
-                                                     fd_);
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
+    //                                                  fd_);
+    // }
 
     memcpy(page_handle.get_slot(slot_no), buf, file_hdr_.record_size);
     Bitmap::set(page_handle.bitmap, slot_no);
@@ -89,6 +89,26 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
         }
     }
     memcpy(page_handle.get_slot(rid.slot_no), buf, file_hdr_.record_size);
+    buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
+}
+
+/** 为 load 载入数据 免检查 直接找到插入位置
+ * @description: 在当前表中的指定位置插入一条记录
+ * @param {Rid&} rid 要插入记录的位置
+ * @param {char*} buf 要插入记录的数据
+ */
+void RmFileHandle::load_record(int &page_no, char *&data, int nums_record, int page_size) {
+    PageId page_id{fd_, page_no};
+    auto &&page_handle = RmPageHandle{&file_hdr_, buffer_pool_manager_->new_page(&page_id)};
+    assert(page_id.page_no == page_no);
+    memcpy(page_handle.slots, data, page_size);
+    for (int i = 0; i < nums_record; ++i) {
+        Bitmap::set(page_handle.bitmap, i);
+    }
+    page_handle.page_hdr->num_records += nums_record;
+    page_handle.page_hdr->next_free_page_no = INVALID_PAGE_ID;
+    ++file_hdr_.num_pages;
+    // file_hdr_.first_free_page_no = page_handle.page_hdr->next_free_page_no;
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
 }
 
@@ -129,9 +149,9 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context) {
     // 1. 获取指定记录所在的page handle
     // 2. 更新记录
     // 行级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    // }
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
@@ -153,6 +173,7 @@ RmPageHandle RmFileHandle::fetch_page_handle(int page_no) const {
     // 使用缓冲池获取指定页面，并生成page_handle返回给上层
     // if page_no is invalid, throw PageNotExistError exception
     if (page_no >= file_hdr_.num_pages || page_no < 0) {
+        // printf("%d %d\n", page_no, file_hdr_.num_pages);
         throw PageNotExistError(disk_manager_->get_file_name(fd_), page_no);
     }
     auto &&page = buffer_pool_manager_->fetch_page({fd_, page_no});
