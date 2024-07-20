@@ -204,6 +204,10 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                     }
                 }
                 if (!is_only_txn) {
+                    // TODO 如果不过题八，不必回滚提高并发度
+                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    }
                     contain = true;
                     break;
                 }
@@ -305,7 +309,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
         // insert/delete 算子
         // 阻塞等待
 
-        // TODO 间隙相交的队列要检查吗？
+        // TODO 间隙相交的队列要检查吗？不检查过不了题八
         if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
             throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
         }
