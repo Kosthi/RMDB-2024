@@ -93,14 +93,13 @@ public:
         delete []ihs;
 
         // 再检查是否有间隙锁
-        // for (auto &[index_name, index]: tab_.indexes) {
-        //     auto ih = sm_manager_->ihs_.at(index_name).get();
-        //     RmRecord rm_record(index.col_tot_len);
-        //     for (auto &[index_offset, col_meta]: index.cols) {
-        //         memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
-        //     }
-        //     context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
-        // }
+        for (auto &[index_name, index]: tab_.indexes) {
+            RmRecord rm_record(index.col_tot_len);
+            for (auto &[index_offset, col_meta]: index.cols) {
+                memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+            }
+            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+        }
 
 #ifdef ENABLE_LOGGING
         auto *insert_log_record = new InsertLogRecord(context_->txn_->get_transaction_id(), rec, rid_, tab_name_);
