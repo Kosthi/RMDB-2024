@@ -24,25 +24,26 @@ private:
     RmFileHandle *fh_; // 表的数据文件句柄
     std::vector<ColMeta> cols_; // scan后生成的记录的字段
     size_t len_; // scan后生成的每条记录的长度
-    std::vector<Condition> fed_conds_; // 同conds_，两个字段相同
+    // std::vector<Condition> fed_conds_; // 同conds_，两个字段相同
     Rid rid_;
     std::unique_ptr<RecScan> scan_; // table_iterator
     SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
     std::vector<bool> is_need_scan_; // 是否需要扫表（非子查询）
     bool is_sub_query_empty_;
+    // false 为共享间隙锁，true 为互斥间隙锁
+    bool gap_mode_;
 
 public:
-    SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context) {
-        sm_manager_ = sm_manager;
-        tab_name_ = std::move(tab_name);
-        conds_ = std::move(conds);
+    SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context,
+                    bool gap_mode = false)
+        : sm_manager_(sm_manager), tab_name_(std::move(tab_name)), conds_(std::move(conds)), gap_mode_(gap_mode) {
         TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         cols_ = tab.cols;
         len_ = cols_.back().offset + cols_.back().len;
         context_ = context;
-        fed_conds_ = conds_;
+        // fed_conds_ = conds_;
         is_sub_query_empty_ = false;
         // S 锁
         if (context_ != nullptr) {
@@ -53,7 +54,11 @@ public:
         for (auto &[ix_name, index_meta]: tab.indexes) {
             auto predicate_manager = PredicateManager(index_meta);
             auto gap = Gap(predicate_manager.getIndexConds());
-            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            if (gap_mode_) {
+                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            } else {
+                context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            }
         }
     }
 

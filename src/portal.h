@@ -95,7 +95,7 @@ public:
                 }
 
                 case T_Update: {
-                    std::unique_ptr<AbstractExecutor> scan = convert_plan_executor(x->subplan_, context);
+                    std::unique_ptr<AbstractExecutor> scan = convert_plan_executor(x->subplan_, context, true);
                     std::vector<Rid> rids;
                     for (scan->beginTuple(); !scan->is_end(); scan->nextTuple()) {
                         rids.emplace_back(scan->rid());
@@ -194,7 +194,7 @@ public:
                 }
             }
             if (x->tag == T_SeqScan) {
-                return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context);
+                return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context, gap_mode);
             }
             return std::make_unique<IndexScanExecutor>(sm_manager_, x->tab_name_, x->conds_, x->index_col_names_,
                                                        context, gap_mode);
