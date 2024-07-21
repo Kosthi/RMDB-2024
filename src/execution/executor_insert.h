@@ -90,6 +90,9 @@ public:
             context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
         }
 
+        // Insert into record file
+        rid_ = fh_->insert_record(rec.data, context_);
+
 #ifdef ENABLE_LOGGING
         auto *insert_log_record = new InsertLogRecord(context_->txn_->get_transaction_id(), rec, rid_, tab_name_);
         insert_log_record->prev_lsn_ = context_->txn_->get_prev_lsn();
@@ -99,9 +102,6 @@ public:
         sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
         delete insert_log_record;
 #endif
-
-        // Insert into record file
-        rid_ = fh_->insert_record(rec.data, context_);
 
         // 插入完成，释放内存
         for (int j = 0; j < i; ++j) {
