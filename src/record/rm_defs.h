@@ -80,8 +80,10 @@ struct RmRecord {
 
     // 如果页面一直都在内存中，则不需要拷贝，直接指向内存中对应的槽
     RmRecord(char *data_, int size_, bool non_copy) {
-        data = data_;
         size = size_;
+        data = new char[size_];
+        memcpy(data, data_, size_);
+        allocated_ = true;
     }
 
     void SetData(char *data_) {
