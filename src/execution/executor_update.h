@@ -55,8 +55,8 @@ public:
     // 这里 next 只会被调用一次
     std::unique_ptr<RmRecord> Next() override {
         for (auto &rid: rids_) {
-            auto &&updated_record = fh_->get_record(rid, context_);
-            auto old_record = std::make_unique<RmRecord>(*updated_record);
+            auto &&old_record = fh_->get_record(rid, context_);
+            auto updated_record = std::make_unique<RmRecord>(*old_record);
 
             for (int i = 0; i < set_clauses_.size(); ++i) {
                 auto &col_meta = set_cols_[i];
