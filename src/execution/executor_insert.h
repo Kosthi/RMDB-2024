@@ -62,7 +62,7 @@ public:
         auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
 
         int i = 0;
-        // 索引查重
+        // 先索引查重
         for (auto &[ix_name, index]: tab_.indexes) {
             ihs[i] = sm_manager_->ihs_[ix_name].get();
             keys[i] = new char[index.col_tot_len];
@@ -71,7 +71,7 @@ public:
                        rec.data + col_meta.offset, col_meta.len);
             }
             if (!ihs[i]->is_unique(keys[i], rid_, context_->txn_)) {
-                for (int j = 0; j < i; ++j) {
+                for (int j = 0; j <= i; ++j) {
                     delete []keys[j];
                 }
                 delete []keys;
@@ -80,17 +80,6 @@ public:
             }
             ++i;
         }
-
-        // Insert into record file
-        rid_ = fh_->insert_record(rec.data, context_);
-
-        // 插入完成，释放内存
-        for (int j = 0; j < i; ++j) {
-            ihs[j]->insert_entry(keys[j], rid_, context_->txn_);
-            delete []keys[j];
-        }
-        delete []keys;
-        delete []ihs;
 
         // 再检查是否有间隙锁
         for (auto &[index_name, index]: tab_.indexes) {
@@ -111,16 +100,16 @@ public:
         delete insert_log_record;
 #endif
 
-        // Unique Index -> Insert into index
-        for (auto &[index_name, index]: tab_.indexes) {
-            auto ih = sm_manager_->ihs_.at(index_name).get();
-            char *key = new char[index.col_tot_len];
-            for (auto &[index_offset, col_meta]: index.cols) {
-                memcpy(key + index_offset, rec.data + col_meta.offset, col_meta.len);
-            }
-            ih->insert_entry(key, rid_, context_->txn_);
-            delete []key;
+        // Insert into record file
+        rid_ = fh_->insert_record(rec.data, context_);
+
+        // 插入完成，释放内存
+        for (int j = 0; j < i; ++j) {
+            ihs[j]->insert_entry(keys[j], rid_, context_->txn_);
+            delete []keys[j];
         }
+        delete []keys;
+        delete []ihs;
 
         // 防止 double throw
         // 写入事务写集

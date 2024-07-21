@@ -82,8 +82,8 @@ public:
                     memcpy(new_keys[i] + index_offset,
                            updated_record->data + col_meta.offset, col_meta.len);
                 }
-                if (!ihs[i]->is_unique(new_keys[i], _abstract_rid, context_->txn_)) {
-                    for (int j = 0; j < i; ++j) {
+                if (!ihs[i]->is_unique(new_keys[i], _abstract_rid, context_->txn_) && _abstract_rid != rid) {
+                    for (int j = 0; j <= i; ++j) {
                         delete []old_keys[j];
                         delete []new_keys[j];
                     }
