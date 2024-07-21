@@ -486,7 +486,7 @@ int getFileLineCount(const std::string &filename) {
 
     // Extract the number of lines from the result string
     // 记得减去表头
-    return std::stoi(result);
+    return std::stoi(result) - 1;
 }
 
 void load_data(std::string filename, std::string tabname) {
@@ -564,7 +564,8 @@ void load_data(std::string filename, std::string tabname) {
                 index_names.emplace_back(tab_.cols[j].name);
             }
 
-            sm_manager->create_index(tab_.name, index_names, nullptr);
+            // 不能 move tab.name
+            sm_manager->create_index(tabname, index_names, nullptr);
         }
 
         auto &ix_name = tab_.indexes.begin()->first;
@@ -860,6 +861,8 @@ int fast_count_star(std::string &tabname, Context *context) {
     while (first_page < total_pages) {
         auto &&page_handle = fh->fetch_page_handle(first_page++);
         count += page_handle.page_hdr->num_records;
+        // TODO 记得 unpin
+        buffer_pool_manager->unpin_page(page_handle.page->get_page_id(), false);
     }
 
     return count;
