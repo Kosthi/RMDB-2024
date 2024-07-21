@@ -72,7 +72,9 @@ public:
         scan_ = std::make_unique<RmScan>(fh_);
         for (; !scan_->is_end(); scan_->next()) {
             rid_ = scan_->rid();
-            rm_record_ = std::move(scan_->get_record());
+            rm_record_ = fh_->get_record(rid_, context_);
+            // TODO 这里会跑太快
+            // rm_record_ = std::move(scan_->get_record());
             if (cmp_conds(rm_record_.get(), conds_)) {
                 break;
             }
@@ -88,7 +90,9 @@ public:
         }
         for (scan_->next(); !scan_->is_end(); scan_->next()) {
             rid_ = scan_->rid();
-            rm_record_ = std::move(scan_->get_record());
+            rm_record_ = fh_->get_record(rid_, context_);
+            // TODO 这里会跑太快
+            // rm_record_ = std::move(scan_->get_record());
             if (cmp_conds(rm_record_.get(), conds_)) {
                 break;
             }
