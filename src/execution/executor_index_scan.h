@@ -179,17 +179,17 @@ public:
         }
 
         // S 锁
-        // if (context_ != nullptr) {
-        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-        // }
+        if (context_ != nullptr) {
+            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        }
 
         // TODO 如果间隙锁比较多，升级成表锁
-        auto gap = Gap(predicate_manager_.getIndexConds());
-        if (gap_mode_) {
-            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-        } else {
-            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-        }
+        // auto gap = Gap(predicate_manager_.getIndexConds());
+        // if (gap_mode_) {
+        //     context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // } else {
+        //     context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
+        // }
     }
 
     void beginTuple() override {
