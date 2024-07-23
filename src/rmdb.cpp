@@ -240,17 +240,10 @@ void *client_handler(void *sock_fd) {
                     }
                 } catch (TransactionAbortException &e) {
                     // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
-                    if (load_status) {
-                        std::string str = "god";
-                        memcpy(data_send, str.c_str(), str.length());
-                        data_send[str.length()] = '\0';
-                        offset = str.length();
-                    } else {
-                        std::string str = "abort\n";
-                        memcpy(data_send, str.c_str(), str.length());
-                        data_send[str.length()] = '\0';
-                        offset = str.length();
-                    }
+                    std::string str = "abort\n";
+                    memcpy(data_send, str.c_str(), str.length());
+                    data_send[str.length()] = '\0';
+                    offset = str.length();
 
                     // 回滚事务
                     txn_manager->abort(context->txn_, log_manager.get());
@@ -500,7 +493,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
