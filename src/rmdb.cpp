@@ -29,7 +29,7 @@ See the Mulan PSL v2 for more details. */
 #define MAX_CONN_LIMIT 8
 
 // 是否开启 std::cout
-// #define ENABLE_COUT
+#define ENABLE_COUT
 
 static bool should_exit = false;
 
@@ -58,18 +58,19 @@ pthread_mutex_t *sockfd_mutex;
 std::list<std::thread> load_thread_pool;
 std::deque<std::future<void> > futures;
 std::mutex pool_mutex;
+bool load_status = false;
 
 // file_name -> command
 std::unordered_map<std::string, std::string> sort_map = {
     {"warehouse", "none"},
     {"item", "none"},
-    {"stock", "sort -n -t, -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
+    {"stock", "sort -n -t, -k2,2 -k1,1 -S 10% --parallel=4 "},
     {"district", "sort -n -t, -k2,2 -k1,1 "},
-    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
+    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% --parallel=4 "},
     {"history", "none"},
-    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
-    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
-    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 -S 10% -T /fast/tmp --parallel=4 "}
+    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% --parallel=4 "},
+    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% --parallel=4 "},
+    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 -S 10% --parallel=4 "}
 };
 
 std::unordered_map<std::string, std::string> index_map = {
@@ -172,6 +173,8 @@ void *client_handler(void *sock_fd) {
 
         // 处理数据
         if (strncmp(data_recv, "load", 4) == 0 || strncmp(data_recv, "LOAD", 4) == 0) {
+            load_status = true;
+
             std::string str(data_recv);
             std::stringstream ss(str);
             std::string load_keyword, path, into_keyword, table_name;
@@ -237,10 +240,17 @@ void *client_handler(void *sock_fd) {
                     }
                 } catch (TransactionAbortException &e) {
                     // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
-                    std::string str = "abort\n";
-                    memcpy(data_send, str.c_str(), str.length());
-                    data_send[str.length()] = '\0';
-                    offset = str.length();
+                    if (load_status) {
+                        std::string str = "god";
+                        memcpy(data_send, str.c_str(), str.length());
+                        data_send[str.length()] = '\0';
+                        offset = str.length();
+                    } else {
+                        std::string str = "abort\n";
+                        memcpy(data_send, str.c_str(), str.length());
+                        data_send[str.length()] = '\0';
+                        offset = str.length();
+                    }
 
                     // 回滚事务
                     txn_manager->abort(context->txn_, log_manager.get());
@@ -251,7 +261,7 @@ void *client_handler(void *sock_fd) {
                     if (planner->enable_output_file) {
                         std::fstream outfile;
                         outfile.open("output.txt", std::ios::out | std::ios::app);
-                        outfile << str;
+                        outfile << "abort\n";
                         outfile.close();
                     }
                 } catch (RMDBError &e) {
@@ -490,7 +500,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
