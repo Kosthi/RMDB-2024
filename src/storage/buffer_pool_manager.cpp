@@ -54,7 +54,7 @@ void BufferPoolManager::update_page(Page *page, PageId new_page_id, frame_id_t n
     page_table_.erase(page->get_page_id());
     page_table_[new_page_id] = new_frame_id;
 
-    // page->reset_memory();
+    page->reset_memory();
     page->id_ = new_page_id;
     page->pin_count_ = 0;
 }
