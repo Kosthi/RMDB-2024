@@ -733,6 +733,9 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
                 return true;
             }
 
+            // no-wait
+            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
             if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
                 // Younger transaction requests the lock, abort the current transaction
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
@@ -774,6 +777,9 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
     if (lock_request_queue.group_lock_mode_ == GroupLockMode::X ||
         lock_request_queue.group_lock_mode_ == GroupLockMode::IX ||
         lock_request_queue.group_lock_mode_ == GroupLockMode::SIX) {
+        // no-wait
+        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
         // Check for conflicting locks and apply wait-die logic
         if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
             // Younger transaction requests the lock, abort the current transaction
@@ -859,6 +865,10 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
                 lock_request_queue.group_lock_mode_ = GroupLockMode::X;
                 return true;
             }
+
+            // no-wait
+            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
             // 判断回滚还是等待
             if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
                 // Younger transaction requests the lock, abort the current transaction
@@ -893,6 +903,9 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
 
     // 如果其他事务持有任意锁，加锁失败（no-wait）
     if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
+        // no-wait
+        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
         // 判断回滚还是等待
         if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
             // Younger transaction requests the lock, abort the current transaction
