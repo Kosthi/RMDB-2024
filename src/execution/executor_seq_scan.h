@@ -57,15 +57,15 @@ public:
         }
 
         // 如果表上有索引，对于全表扫操作加 (-INF, +INF) 的间隙锁
-        for (auto &[ix_name, index_meta]: tab.indexes) {
-            auto predicate_manager = PredicateManager(index_meta);
-            auto gap = Gap(predicate_manager.getIndexConds());
-            if (gap_mode_) {
-                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
-            } else {
-                context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
-            }
-        }
+        // for (auto &[ix_name, index_meta]: tab.indexes) {
+        //     auto predicate_manager = PredicateManager(index_meta);
+        //     auto gap = Gap(predicate_manager.getIndexConds());
+        //     if (gap_mode_) {
+        //         context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        //     } else {
+        //         context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        //     }
+        // }
     }
 
     void beginTuple() override {
