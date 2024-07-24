@@ -64,13 +64,13 @@ bool load_status = false;
 std::unordered_map<std::string, std::string> sort_map = {
     {"warehouse", "none"},
     {"item", "none"},
-    {"stock", "sort -n -t, -k2,2 -k1,1 -S 10% --parallel=4 "},
+    {"stock", "sort -n -t, -k2,2 -k1,1 "},
     {"district", "sort -n -t, -k2,2 -k1,1 "},
-    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% --parallel=4 "},
+    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 "},
     {"history", "none"},
-    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% --parallel=4 "},
-    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% --parallel=4 "},
-    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 -S 10% --parallel=4 "}
+    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 "},
+    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 "},
+    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 "}
 };
 
 std::unordered_map<std::string, std::string> index_map = {
@@ -305,7 +305,7 @@ void *client_handler(void *sock_fd) {
             break;
         }
         // 如果是单挑语句，需要按照一个完整的事务来执行，所以执行完当前语句后，自动提交事务
-        if (context->txn_->get_txn_mode() == false) {
+        if (context->txn_->get_txn_mode() == false && context->txn_->get_state() != TransactionState::ABORTED) {
             txn_manager->commit(context->txn_, context->log_mgr_);
         }
         delete context;
@@ -401,6 +401,9 @@ void start_server() {
     sm_manager->close_db();
 
     for (auto &[_, txn]: txn_manager->txn_map) {
+        if (txn->get_state() != TransactionState::COMMITTED || txn->get_state() != TransactionState::ABORTED) {
+            std::cout << "txn " << txn->get_transaction_id() << + " not finish!" << std::endl;
+        }
         delete txn;
     }
 
@@ -493,7 +496,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);

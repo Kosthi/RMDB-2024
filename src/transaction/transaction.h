@@ -51,7 +51,7 @@ public:
     inline lsn_t get_prev_lsn() { return prev_lsn_; }
     inline void set_prev_lsn(lsn_t prev_lsn) { prev_lsn_ = prev_lsn; }
 
-    inline std::shared_ptr<std::deque<WriteRecord *> > get_write_set() { return write_set_; }
+    inline std::shared_ptr<std::deque<WriteRecord *> > &get_write_set() { return write_set_; }
     inline void append_write_record(WriteRecord *write_record) { write_set_->push_back(write_record); }
 
     inline std::shared_ptr<std::deque<Page *> > get_index_deleted_page_set() { return index_deleted_page_set_; }
@@ -60,7 +60,7 @@ public:
     inline std::shared_ptr<std::deque<Page *> > get_index_latch_page_set() { return index_latch_page_set_; }
     inline void append_index_latch_page_set(Page *page) { index_latch_page_set_->push_back(page); }
 
-    inline std::shared_ptr<std::unordered_set<LockDataId> > get_lock_set() { return lock_set_; }
+    inline std::shared_ptr<std::unordered_set<LockDataId> > &get_lock_set() { return lock_set_; }
 
 private:
     bool txn_mode_; // 用于标识当前事务为显式事务还是单条SQL语句的隐式事务

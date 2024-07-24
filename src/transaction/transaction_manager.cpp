@@ -71,6 +71,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
         lock_manager_->unlock(txn, it);
     }
     lock_set->clear();
+
 #ifdef ENABLE_LOGGING
     auto *commit_log_record = new CommitLogRecord(txn->get_transaction_id());
     commit_log_record->prev_lsn_ = txn->get_prev_lsn();
@@ -96,7 +97,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     // 5. 更新事务状态
     std::lock_guard lock(latch_);
 
-    auto &&write_set = txn->get_write_set();
+    auto &write_set = txn->get_write_set();
     auto *context = new Context(lock_manager_, log_manager, txn);
     // 从最后一个向前回滚
     for (auto &&it = write_set->rbegin(); it != write_set->rend(); ++it) {
@@ -190,11 +191,12 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     write_set->clear();
 
     // 释放所有锁
-    auto &&lock_set = txn->get_lock_set();
+    auto &lock_set = txn->get_lock_set();
     for (auto &it: *lock_set) {
         lock_manager_->unlock(txn, it);
     }
     lock_set->clear();
+
 #ifdef ENABLE_LOGGING
     auto *abort_log_record = new AbortLogRecord(txn->get_transaction_id());
     abort_log_record->prev_lsn_ = txn->get_prev_lsn();
