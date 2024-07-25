@@ -73,6 +73,26 @@ public:
         return res;
     }
 
+    bool release_transaction(txn_id_t txn_id) {
+        std::unique_lock lock(latch_);
+        if (txn_map.find(txn_id) == txn_map.end()) {
+            return true;
+        }
+
+        auto *res = txn_map[txn_id];
+        if (res->get_state() == TransactionState::COMMITTED || res->get_state() == TransactionState::ABORTED) {
+            assert(res != nullptr);
+            assert(res->get_thread_id() == std::this_thread::get_id());
+
+            delete res;
+            txn_map.erase(txn_id);
+            return true;
+        }
+
+        lock.unlock();
+        return false;
+    }
+
     static std::unordered_map<txn_id_t, Transaction *> txn_map; // 全局事务表，存放事务ID与事务对象的映射关系
 
     inline void set_next_txn_id(txn_id_t next_txn_id) { next_txn_id_.store(next_txn_id); }

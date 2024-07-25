@@ -302,9 +302,11 @@ void *client_handler(void *sock_fd) {
             break;
         }
         // 如果是单挑语句，需要按照一个完整的事务来执行，所以执行完当前语句后，自动提交事务
-        if (context->txn_->get_txn_mode() == false) {
+        if (context->txn_->get_txn_mode() == false && context->txn_->get_state() != TransactionState::ABORTED) {
             txn_manager->commit(context->txn_, context->log_mgr_);
         }
+        // 最好这里就释放全局锁表资源，不然等服务器关了再释放，会有不必要的资源占用
+        txn_manager->release_transaction(txn_id);
         delete context;
     }
 
@@ -397,7 +399,12 @@ void start_server() {
     //    assert(ret != -1);
     sm_manager->close_db();
 
+    // printf("txn size: %lu\n", txn_manager->txn_map.size());
     for (auto &[_, txn]: txn_manager->txn_map) {
+        if (txn->get_state() != TransactionState::COMMITTED && txn->get_state() != TransactionState::ABORTED) {
+            // std::cout << "txn " << txn->get_transaction_id() << " not finish" << std::endl;
+            // printf("txn state: %d\n", txn->get_state());
+        }
         delete txn;
     }
 
