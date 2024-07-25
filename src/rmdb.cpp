@@ -63,13 +63,13 @@ std::mutex pool_mutex;
 std::unordered_map<std::string, std::string> sort_map = {
     {"warehouse", "none"},
     {"item", "none"},
-    {"stock", "sort -n -t, -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
+    {"stock", "sort -n -t, -k2,2 -k1,1 "},
     {"district", "sort -n -t, -k2,2 -k1,1 "},
-    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
+    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 "},
     {"history", "none"},
-    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
-    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 -S 10% -T /fast/tmp --parallel=4 "},
-    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 -S 10% -T /fast/tmp --parallel=4 "}
+    {"orders", "sort -n -t, -k3,3 -k2,2 -k1,1 "},
+    {"new_orders", "sort -n -t, -k3,3 -k2,2 -k1,1 "},
+    {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 "}
 };
 
 std::unordered_map<std::string, std::string> index_map = {
@@ -594,7 +594,6 @@ void load_data(std::string filename, std::string tabname) {
         // 调整块数量，确保每个叶子节点半满
         if (blocks > 1 && (ih->file_hdr_->btree_order_ + 1) / 2 > num_lines / blocks) {
             // 不可能执行到这里
-            assert(0);
             --blocks;
         }
 
