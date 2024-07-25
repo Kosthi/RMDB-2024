@@ -763,12 +763,11 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
                 for (auto &&it = lock_request_queue.request_queue_.begin();
                      it != lock_request_queue.request_queue_.end(); ++it) {
                     if (it->txn_id_ != txn->get_transaction_id()) {
-                        if (it->lock_mode_ != LockMode::SHARED || it->granted_) {
+                        if (it->lock_mode_ == LockMode::EXCLUSIVE && it->granted_) {
                             return false;
                         }
                     } else {
                         cur = it;
-                        break;
                     }
                 }
                 return true;
@@ -808,12 +807,11 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
             for (auto &&it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
                  ++it) {
                 if (it->txn_id_ != txn->get_transaction_id()) {
-                    if (it->lock_mode_ != LockMode::SHARED || it->granted_) {
+                    if (it->lock_mode_ == LockMode::EXCLUSIVE && it->granted_) {
                         return false;
                     }
                 } else {
                     cur = it;
-                    break;
                 }
             }
             return true;
@@ -902,7 +900,6 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
                         }
                     } else {
                         cur = it;
-                        break;
                     }
                 }
                 return true;
@@ -939,7 +936,6 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
                     }
                 } else {
                     cur = it;
-                    break;
                 }
             }
             return true;
