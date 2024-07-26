@@ -67,8 +67,8 @@ public:
         }
 
         lock.unlock();
-        assert(res != nullptr);
-        assert(res->get_thread_id() == std::this_thread::get_id());
+        // assert(res != nullptr);
+        // assert(res->get_thread_id() == std::this_thread::get_id());
 
         return res;
     }

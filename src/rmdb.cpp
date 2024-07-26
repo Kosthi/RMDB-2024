@@ -29,7 +29,7 @@ See the Mulan PSL v2 for more details. */
 #define MAX_CONN_LIMIT 8
 
 // 是否开启 std::cout
-// #define ENABLE_COUT
+#define ENABLE_COUT
 
 static bool should_exit = false;
 
@@ -52,6 +52,8 @@ auto portal = std::make_unique<Portal>(sm_manager.get());
 auto analyze = std::make_unique<Analyze>(sm_manager.get());
 pthread_mutex_t *buffer_mutex;
 pthread_mutex_t *sockfd_mutex;
+
+std::chrono::milliseconds cycle_detection_interval(10);
 
 // 定义线程池大小
 // constexpr int MAX_THREAD_POOL_SIZE = 2;
@@ -420,6 +422,8 @@ int main(int argc, char **argv) {
         std::cerr << "Usage: " << argv[0] << " <database>" << std::endl;
         exit(1);
     }
+
+    lock_manager->txn_manager = txn_manager.get();
 
     signal(SIGINT, sigint_handler);
     try {

@@ -47,7 +47,7 @@ public:
     void set_enable_output_file(bool set_val) { enable_output_file = set_val; }
 
     // 是否把输入写入 output.txt 文件中，默认开启
-    bool enable_output_file = true;
+    bool enable_output_file = false;
 
 private:
     std::shared_ptr<Query> logical_optimization(std::shared_ptr<Query> query, Context *context);
