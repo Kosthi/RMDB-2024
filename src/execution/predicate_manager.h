@@ -15,8 +15,8 @@ public:
     explicit PredicateManager(IndexMeta &index_meta) {
         for (int i = 0; i < index_meta.cols.size(); ++i) {
             predicates_.emplace(index_meta.cols[i].second.name, i);
-            index_conds_.emplace_back(CondOp{.offset = index_meta.cols[i].first},
-                                      CondOp{.offset = index_meta.cols[i].first});
+            index_conds_.emplace_back(CondOp(index_meta.cols[i].first),
+                                      CondOp(index_meta.cols[i].first));
         }
     }
 
