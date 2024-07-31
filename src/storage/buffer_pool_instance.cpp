@@ -45,8 +45,8 @@ void BufferPoolInstance::update_page(Page *page, PageId new_page_id, frame_id_t 
         it->second.Schedule({page->get_page_id(), page->get_data()});
 #else
         disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
-        page->is_dirty_ = false;
 #endif
+        page->is_dirty_ = false;
     }
 
     page_table_.erase(page->get_page_id());
