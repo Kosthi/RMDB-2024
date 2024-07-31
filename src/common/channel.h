@@ -22,10 +22,10 @@ public:
      */
     void Put(T element) {
         std::unique_lock lk(m_);
-        is_cache_ = false;
-        q_.push(std::move(element));
+        // is_cache_ = false;
+        q_.emplace(std::move(element));
         lk.unlock();
-        cv_.notify_all();
+        // cv_.notify_all();
     }
 
     /**
@@ -39,10 +39,10 @@ public:
         }
         T element = std::move(q_.front());
         q_.pop();
-        if (q_.empty()) {
-            is_cache_ = true;
-            buffer_ = element;
-        }
+        // if (q_.empty()) {
+        //     is_cache_ = true;
+        //     buffer_ = element;
+        // }
         return element;
     }
 
@@ -59,24 +59,24 @@ public:
     auto TryReadFromQueue() -> std::optional<T> {
         std::unique_lock lk(m_);
         if (q_.empty()) {
-            if (is_cache_) {
-                return buffer_;
-            }
+            // if (is_cache_) {
+            //     return buffer_;
+            // }
             return std::nullopt;
         }
         return q_.back();
     }
 
-    void LoadBuffer(T element) {
-        std::unique_lock lk(m_);
-        buffer_ = std::move(element);
-        is_cache_ = true;
-    }
+    // void LoadBuffer(T element) {
+    //     std::unique_lock lk(m_);
+    //     buffer_ = std::move(element);
+    //     is_cache_ = true;
+    // }
 
 private:
     std::mutex m_;
     std::condition_variable cv_;
     std::queue<T> q_;
-    T buffer_;
-    bool is_cache_{false};
+    // T buffer_;
+    // bool is_cache_{false};
 };

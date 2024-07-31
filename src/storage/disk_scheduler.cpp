@@ -39,7 +39,7 @@ void DiskScheduler::ScheduleRead(Page &page) {
         memcpy(page.get_data(), last_req->data_, PAGE_SIZE);
     } else {
         disk_manager_->read_page(page.get_page_id().fd, page.get_page_id().page_no, page.get_data(), PAGE_SIZE);
-        request_queue_[page.get_page_no()].LoadBuffer(DiskRequest(page.get_page_id(), page.get_data()));
+        // request_queue_[page.get_page_no()].LoadBuffer(DiskRequest(page.get_page_id(), page.get_data()));
     }
 }
 
