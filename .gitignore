@@ -7,9 +7,27 @@ package-lock.json
 **/.DS_Store
 
 # build
-build
-cmake-build-debug
-cmake-build-debug-ubuntu-2204-arm
+build/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-debug-ubuntu-2204-arm/
+cmake-build-debug-ubuntu-2004-arm/
+cmake-build-release-ubuntu-2004-arm/
 
 # idea
-.idea
+.idea/
+
+# test files
+src/test/
+
+# perf
+FlameGraph/
+generate_data/
+perf_graph/
+TPCC-Tester/
+
+# python venv
+venv/
+
+# clion
+.clion.source.upload.marker
