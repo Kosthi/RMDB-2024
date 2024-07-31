@@ -62,7 +62,7 @@ public:
             lhs_rec_ = left_->Next();
             while (!right_->is_end()) {
                 auto &&rhs_rec = right_->Next();
-                if (cmp_conds(lhs_rec_.get(), rhs_rec.get(), fed_conds_, cols_)) {
+                if (fed_conds_.empty() || cmp_conds(lhs_rec_.get(), rhs_rec.get(), fed_conds_, cols_)) {
                     rm_record_ = std::make_unique<RmRecord>(len_);
                     // 拷贝左右元组
                     memcpy(rm_record_->data, lhs_rec_->data, left_->tupleLen());

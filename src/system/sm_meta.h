@@ -73,6 +73,7 @@ struct IndexMeta {
     friend std::ostream &operator<<(std::ostream &os, const IndexMeta &index) {
         os << index.tab_name << " " << index.col_tot_len << " " << index.col_num;
         for (auto &[_, col]: index.cols) {
+            std::ignore = _;
             os << "\n" << col;
         }
         return os;
@@ -111,6 +112,7 @@ namespace std {
             hash ^= std::hash<int>{}(index.col_tot_len) << 1;
             hash ^= std::hash<int>{}(index.col_num) << 2;
             for (const auto &[_, col]: index.cols) {
+                std::ignore = _;
                 hash ^= std::hash<std::string>{}(col.name) << 3;
             }
             return hash;

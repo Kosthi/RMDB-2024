@@ -13,7 +13,6 @@ See the Mulan PSL v2 for more details. */
 #include <cerrno>
 #include <cstring>
 #include <string>
-#include <execution/executor_load.h>
 
 #include "optimizer/plan.h"
 #include "execution/executor_abstract.h"
@@ -64,12 +63,6 @@ public:
 
     // 将查询执行计划转换成对应的算子树
     std::shared_ptr<PortalStmt> start(std::shared_ptr<Plan> plan, Context *context) {
-        if (auto x = std::dynamic_pointer_cast<LoadPlan>(plan)) {
-            std::unique_ptr<AbstractExecutor> root =
-                    std::make_unique<LoadExecutor>(sm_manager_, x->filename_, x->tab_name_, context);
-            return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
-                                                std::move(root), plan);
-        }
         if (auto x = std::dynamic_pointer_cast<StaticCheckpointPlan>(plan)) {
             return std::make_shared<PortalStmt>(PORTAL_CMD_UTILITY, std::vector<TabCol>(),
                                                 std::unique_ptr<AbstractExecutor>(), plan);

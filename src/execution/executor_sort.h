@@ -2,6 +2,7 @@
 
 #include <queue>
 
+// #define SORT_EXTERNAL
 #define MAX_CHUNK_SIZE 5
 
 class SortExecutor : public AbstractExecutor {
@@ -23,7 +24,7 @@ private:
     std::deque<std::string> temp_files_;
     // 为每个 sort 算子实例分配一个 ID
     size_t id_;
-    bool is_end_;
+    bool is_end_{false};
 
     static std::size_t generateID() {
         static size_t current_id = 0;
@@ -202,6 +203,7 @@ public:
         temp_files_.clear();
         current_tuple_ = nullptr;
 
+#ifdef SORT_EXTERNAL
         // struct stat st;
         // 当前算子排序过了，已经存在排序结果文件
         if (!filename_.empty()) {
@@ -295,6 +297,24 @@ public:
             current_tuple_ = nullptr;
             outfile_.close();
         }
+#else
+        // 假设索引扫出来的记录数量比较少，直接在内存中排序
+        for (prev_->beginTuple(); !prev_->is_end(); prev_->nextTuple()) {
+            records_.emplace_back(prev_->Next());
+        }
+        if (records_.empty()) {
+            is_end_ = true;
+        } else {
+            std::sort(records_.begin(), records_.end(),
+                      [&](const std::unique_ptr<RmRecord> &l_rec, const std::unique_ptr<RmRecord> &r_rec) {
+                          auto &&lhs = l_rec->data + cols_.offset;
+                          auto &&rhs = r_rec->data + cols_.offset;
+                          return is_desc_
+                                     ? compare(lhs, rhs, cols_.len, cols_.type) > 0
+                                     : compare(lhs, rhs, cols_.len, cols_.type) < 0;
+                      });
+        }
+#endif
     }
 
     void nextTuple() override {
@@ -303,7 +323,7 @@ public:
             records_.pop_front();
             return;
         }
-
+#ifdef SORT_EXTERNAL
         do {
             current_tuple_ = std::make_unique<RmRecord>(len_);
             outfile_.read(current_tuple_->data, current_tuple_->size);
@@ -321,6 +341,9 @@ public:
             current_tuple_ = nullptr;
             outfile_.close();
         }
+#else
+        is_end_ = true;
+#endif
     }
 
     std::unique_ptr<RmRecord> Next() override {

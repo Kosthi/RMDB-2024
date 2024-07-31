@@ -51,6 +51,70 @@ struct Value {
 
     std::shared_ptr<RmRecord> raw; // raw record buffer
 
+    Value() = default;
+
+    // 拷贝构造
+    Value(const Value &other) noexcept
+        : type(other.type), raw(other.raw) {
+        if (type == TYPE_INT) {
+            int_val = other.int_val;
+        } else if (type == TYPE_FLOAT) {
+            float_val = other.float_val;
+        } else if (type == TYPE_STRING) {
+            str_val = other.str_val;
+        }
+    }
+
+    // 移动构造
+    Value(Value &&other) noexcept
+        : type(other.type), raw(std::move(other.raw)) {
+        if (type == TYPE_INT) {
+            int_val = other.int_val;
+            other.int_val = 0;
+        } else if (type == TYPE_FLOAT) {
+            float_val = other.float_val;
+            other.float_val = 0.0f;
+        } else if (type == TYPE_STRING) {
+            str_val = std::move(other.str_val);
+        }
+    }
+
+    // 拷贝赋值构造
+    Value &operator=(const Value &other) noexcept {
+        if (this != &other) {
+            type = other.type;
+            if (type == TYPE_INT) {
+                int_val = other.int_val;
+            } else if (type == TYPE_FLOAT) {
+                float_val = other.float_val;
+            } else if (type == TYPE_STRING) {
+                str_val = other.str_val;
+            }
+            raw = other.raw;
+        }
+        return *this;
+    }
+
+    // 移动赋值构造
+    Value &operator=(Value &&other) noexcept {
+        if (this != &other) {
+            type = other.type;
+            if (type == TYPE_INT) {
+                int_val = other.int_val;
+                other.int_val = 0;
+            } else if (type == TYPE_FLOAT) {
+                float_val = other.float_val;
+                other.float_val = 0.0f;
+            } else if (type == TYPE_STRING) {
+                str_val = std::move(other.str_val);
+            }
+            raw = std::move(other.raw);
+        }
+        return *this;
+    }
+
+    ~Value() = default;
+
     void set_int(int int_val_) {
         type = TYPE_INT;
         int_val = int_val_;
@@ -148,10 +212,20 @@ namespace std {
                     hash_combine(seed, v.str_val);
                     break;
                 }
-                default:
-                    throw InternalError("Unexpected data type！");
+                // default:
+                //     throw InternalError("Unexpected data type！");
             }
             return seed;
+        }
+    };
+
+    template<>
+    struct hash<TabCol> {
+        std::size_t operator()(const TabCol &tc) const noexcept {
+            std::size_t h1 = std::hash<std::string>{}(tc.tab_name);
+            std::size_t h2 = std::hash<std::string>{}(tc.col_name);
+            // 结合两个哈希值，使用位运算符来减少冲突
+            return h1 ^ (h2 << 1);
         }
     };
 }

@@ -24,25 +24,25 @@ See the Mulan PSL v2 for more details. */
 
 class IndexScanExecutor : public AbstractExecutor {
 private:
+    SmManager *sm_manager_;
     std::string tab_name_; // 表名称
-    TabMeta tab_; // 表的元数据
     std::vector<Condition> conds_; // 扫描条件
+    std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
+    TabMeta tab_; // 表的元数据
     RmFileHandle *fh_; // 表的数据文件句柄
     std::vector<ColMeta> cols_; // 需要读取的字段
     std::vector<ColMeta> cond_cols_; // 谓词需要读取的字段
     size_t len_; // 选取出来的一条记录的长度
-    std::vector<std::string> index_col_names_; // index scan涉及到的索引包含的字段
     IndexMeta index_meta_; // index scan涉及到的索引元数据
     Rid rid_;
     std::unique_ptr<IxScan> scan_;
-    SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
     std::deque<std::unique_ptr<RmRecord> > records_;
     // 实际二进制文件名
     std::string filename_;
     // 排序结果实际读取文件，二进制
     std::fstream outfile_;
-    bool is_end_;
+    bool is_end_{false};
     size_t id_;
     bool mergesort_;
     constexpr static int int_min_ = INT32_MIN;
@@ -318,8 +318,6 @@ public:
             return;
         }
 
-        is_end_ = false;
-
         char *left_key = new char[index_meta_.col_tot_len];
         char *right_key = new char[index_meta_.col_tot_len];
 
@@ -332,7 +330,7 @@ public:
 
         auto last_idx = std::get<1>(last_left_tuple); // 第一个范围查询位置
 
-        assert(last_idx == std::get<1>(last_right_tuple));
+        // assert(last_idx == std::get<1>(last_right_tuple));
 
         // index(a, b, c) where a = 1, b = 1 等值查询
         if (last_left_op == OP_INVALID && last_right_op == OP_INVALID) {
@@ -351,7 +349,7 @@ public:
                 case OP_EQ: {
                     // where p_id = 0, name = 'bztyhnmj';
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-                    assert(last_idx == index_meta_.cols.size());
+                    // assert(last_idx == index_meta_.cols.size());
                     // set_remaining_all_min(offset, last_idx, key);
                     lower_ = ih_->lower_bound(left_key);
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
@@ -421,7 +419,7 @@ public:
                     // where p_id = 0, name = 'bztyhnmj';
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                     // set_remaining_all_min(offset, last_idx, right_key);
-                    assert(last_idx == index_meta_.cols.size());
+                    // assert(last_idx == index_meta_.cols.size());
 
                     lower_ = ih_->lower_bound(right_key);
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
@@ -886,7 +884,7 @@ public:
     // char  类型范围 0 ~ 255
     void set_remaining_all_max(int last_idx, char *&key) {
         // 设置成最大值
-        for (auto i = last_idx; i < index_meta_.cols.size(); ++i) {
+        for (size_t i = last_idx; i < index_meta_.cols.size(); ++i) {
             auto &[index_offset, col] = index_meta_.cols[i];
             if (col.type == TYPE_INT) {
                 memcpy(key + index_offset, &int_max_, sizeof(int));
@@ -905,7 +903,7 @@ public:
     // float 类型范围 float_min_ ~ float_max_
     // char  类型范围 0 ~ 255
     void set_remaining_all_min(int last_idx, char *&key) {
-        for (auto i = last_idx; i < index_meta_.cols.size(); ++i) {
+        for (size_t i = last_idx; i < index_meta_.cols.size(); ++i) {
             auto &[index_offset, col] = index_meta_.cols[i];
             if (col.type == TYPE_INT) {
                 memcpy(key + index_offset, &int_min_, sizeof(int));
@@ -1033,7 +1031,7 @@ public:
     }
 
     bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds, const std::vector<ColMeta> &rec_cols) {
-        for (int i = 0; i < conds.size(); ++i) {
+        for (size_t i = 0; i < conds.size(); ++i) {
             if (!cmp_cond(i, rec, conds[i])) {
                 return false;
             }

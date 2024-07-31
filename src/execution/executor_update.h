@@ -58,7 +58,7 @@ public:
             auto &&old_record = fh_->get_record(rid, context_);
             auto updated_record = std::make_unique<RmRecord>(*old_record);
 
-            for (int i = 0; i < set_clauses_.size(); ++i) {
+            for (size_t i = 0; i < set_clauses_.size(); ++i) {
                 auto &col_meta = set_cols_[i];
                 if (set_clauses_[i].is_incr) {
                     add(updated_record->data + col_meta->offset, set_clauses_[i].rhs.raw->data, col_meta->type);

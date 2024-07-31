@@ -163,7 +163,8 @@ public:
      * @param child
      * @return int
      */
-    int find_child(std::shared_ptr<IxNodeHandle> child) {
+    int find_child(const std::shared_ptr<IxNodeHandle> &child) const {
+        // int rid_idx = lower_bound(child->get_key(0));
         // TODO：优化为什么不二分
         int rid_idx;
         for (rid_idx = 0; rid_idx < page_hdr->num_key; rid_idx++) {
@@ -171,7 +172,7 @@ public:
                 break;
             }
         }
-        // assert(rid_idx < page_hdr->num_key);
+        assert(rid_idx < page_hdr->num_key);
         return rid_idx;
     }
 
@@ -198,25 +199,25 @@ private:
     // IxFileHdr *file_hdr_; // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
     std::mutex root_latch_;
 
-    class Context {
-    public:
-        // When you insert into / remove from the B+ tree, store the write guard of header page here.
-        // Remember to drop the header page guard and set it to nullopt when you want to unlock all.
-        std::optional<WritePageGuard> header_page_{std::nullopt};
-
-        // Save the root page id here so that it's easier to know if the current page is the root page.
-        page_id_t root_page_id_{INVALID_PAGE_ID};
-
-        // Store the write guards of the pages that you're modifying here.
-        std::deque<WritePageGuard> write_set_;
-
-        // You may want to use this when getting value, but not necessary.
-        std::deque<ReadPageGuard> read_set_;
-
-        auto isRootPage(page_id_t page_id) -> bool { return page_id == root_page_id_; }
-
-        Operation op_type_;
-    };
+    // class Context {
+    // public:
+    //     // When you insert into / remove from the B+ tree, store the write guard of header page here.
+    //     // Remember to drop the header page guard and set it to nullopt when you want to unlock all.
+    //     std::optional<WritePageGuard> header_page_{std::nullopt};
+    //
+    //     // Save the root page id here so that it's easier to know if the current page is the root page.
+    //     page_id_t root_page_id_{INVALID_PAGE_ID};
+    //
+    //     // Store the write guards of the pages that you're modifying here.
+    //     std::deque<WritePageGuard> write_set_;
+    //
+    //     // You may want to use this when getting value, but not necessary.
+    //     std::deque<ReadPageGuard> read_set_;
+    //
+    //     auto isRootPage(page_id_t page_id) -> bool { return page_id == root_page_id_; }
+    //
+    //     Operation op_type_;
+    // };
 
     void release_all_index_latch_page(Transaction *);
 

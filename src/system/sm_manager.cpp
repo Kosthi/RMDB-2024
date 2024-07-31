@@ -112,6 +112,7 @@ void SmManager::open_db(const std::string &db_name) {
         fhs_[table_name] = rm_manager_->open_file(table_name);
         // 待索引完成后更新
         for (auto &[index_name, _]: tab_meta.indexes) {
+            std::ignore = _;
             ihs_[index_name] = ix_manager_->open_index(index_name);
         }
     }
@@ -140,11 +141,13 @@ void SmManager::close_db() {
 
     // 记录文件落盘
     for (auto &[_, file_handle]: fhs_) {
+        std::ignore = _;
         rm_manager_->close_file(file_handle.get());
     }
 
     // 索引文件落盘
     for (auto &[_, index_handle]: ihs_) {
+        std::ignore = _;
         ix_manager_->close_index(index_handle.get());
     }
 
@@ -193,6 +196,7 @@ void SmManager::show_indexs(std::string &table_name, Context *context) {
 
     std::ostringstream cols_stream;
     for (const auto &[_, index]: db_.tabs_[table_name].indexes) {
+        std::ignore = _;
         cols_stream << "(" << index.cols[0].second.name;
         outfile << format << index.cols[0].second.name;
         for (size_t i = 1; i < index.cols.size(); ++i) {
@@ -294,6 +298,7 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
 
     // 先关闭再删除索引文件
     for (auto &[index_name, index_meta]: tab_meta.indexes) {
+        std::ignore = index_meta;
         ix_manager_->close_index(ihs_[index_name].get());
         ix_manager_->destroy_index(index_name);
         ihs_.erase(index_name);

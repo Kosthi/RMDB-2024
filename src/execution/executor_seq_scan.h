@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 
 class SeqScanExecutor : public AbstractExecutor {
 private:
+    SmManager *sm_manager_;
     std::string tab_name_; // 表的名称
     std::vector<Condition> conds_; // scan的条件
     RmFileHandle *fh_; // 表的数据文件句柄
@@ -28,7 +29,6 @@ private:
     // std::vector<Condition> fed_conds_; // 同conds_，两个字段相同
     Rid rid_;
     std::unique_ptr<RmScan> scan_; // table_iterator
-    SmManager *sm_manager_;
     std::unique_ptr<RmRecord> rm_record_;
     std::vector<bool> is_need_scan_; // 是否需要扫表（非子查询）
     bool is_sub_query_empty_;
@@ -245,7 +245,7 @@ public:
     }
 
     bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds) {
-        for (int i = 0; i < conds.size(); ++i) {
+        for (size_t i = 0; i < conds.size(); ++i) {
             if (!cmp_cond(i, rec, conds[i])) {
                 return false;
             }

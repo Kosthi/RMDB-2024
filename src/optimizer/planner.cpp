@@ -47,11 +47,12 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
         }
     }
 
-    int max_len = 0, max_equals = 0, cur_len = 0, cur_equals = 0;
+    size_t max_len = 0, max_equals = 0, cur_len = 0, cur_equals = 0;
     for (auto &[index_name, index]: tab.indexes) {
+        std::ignore = index_name;
         cur_len = cur_equals = 0;
-        auto &cols = index.cols;
         for (auto &[_, col]: index.cols) {
+            std::ignore = _;
             if (index_set.count(col.name) == 0) {
                 break;
             }
@@ -67,14 +68,14 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
             // 匹配最长的
             max_len = cur_len;
             index_col_names.clear();
-            for (int i = 0; i < index.cols.size(); ++i) {
+            for (size_t i = 0; i < index.cols.size(); ++i) {
                 index_col_names.emplace_back(index.cols[i].second.name);
             }
         } else if (cur_len == curr_conds.size()) {
             max_len = cur_len;
             // 最长前缀相等选择等号多的
             if (index_col_names.empty()) {
-                for (int i = 0; i < index.cols.size(); ++i) {
+                for (size_t i = 0; i < index.cols.size(); ++i) {
                     index_col_names.emplace_back(index.cols[i].second.name);
                 }
                 // for (int i = 0; i < cur_len; ++i) {
@@ -95,7 +96,7 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
                 max_equals = cur_equals;
                 // cur_len >= cur_equals;
                 index_col_names.clear();
-                for (int i = 0; i < index.cols.size(); ++i) {
+                for (size_t i = 0; i < index.cols.size(); ++i) {
                     index_col_names.emplace_back(index.cols[i].second.name);
                 }
                 // for (int i = 0; i < cur_len; ++i) {
@@ -128,6 +129,7 @@ bool Planner::get_index_cols(std::string &tab_name, std::vector<Condition> &curr
 
     // 连接重复的，如果有
     for (auto &[index_name, idx]: repelicate_conds_map) {
+        std::ignore = idx;
         fed_conds.emplace_back(std::move(curr_conds[repelicate_conds_map[index_name]]));
     }
 
@@ -226,7 +228,27 @@ std::shared_ptr<Plan> Planner::pop_scan(int *scantbl, const std::string &table, 
 }
 
 std::shared_ptr<Query> Planner::logical_optimization(std::shared_ptr<Query> query, Context *context) {
-    //TODO 实现逻辑优化规则
+    // TODO 实现逻辑优化规则
+    // where w_id=:w_id and c_w_id=w_id and c_d_id=:d_id and c_id=:c_id;
+    // where w_id=:w_id and c_w_id=:w_id and c_d_id=:d_id and c_id=:c_id;
+    std::unordered_map<TabCol, Value> map;
+
+    // 记录每个左列对应的右值
+    for (auto &cond: query->conds) {
+        if (cond.is_rhs_val) {
+            map.emplace(cond.lhs_col, cond.rhs_val);
+        }
+    }
+
+    for (auto &cond: query->conds) {
+        if (!cond.is_rhs_val && !cond.is_sub_query) {
+            auto it = map.find(cond.rhs_col);
+            if (it != map.end()) {
+                cond.is_rhs_val = true;
+                cond.rhs_val = std::move(it->second);
+            }
+        }
+    }
 
     return query;
 }

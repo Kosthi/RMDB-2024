@@ -22,7 +22,7 @@ void RecoveryManager::analyze() {
     txn_id_t max_txn_id = INVALID_TXN_ID;
     std::size_t log_offset = 0;
     // 这里返回的read_bytes <= LOG_BUFFER_SIZE
-    int read_bytes;
+    size_t read_bytes;
 
     while ((read_bytes = disk_manager_->read_log(buffer_.buffer_, LOG_BUFFER_SIZE, log_offset)) > 0) {
         while (buffer_.offset_ + LOG_HEADER_SIZE <= read_bytes) {
@@ -294,6 +294,7 @@ void RecoveryManager::undo() {
     std::priority_queue<lsn_t> lsn_heap;
 
     for (auto &[_, lsn]: active_txn_) {
+        std::ignore = _;
         lsn_heap.emplace(lsn);
     }
 
@@ -423,9 +424,11 @@ void RecoveryManager::redo_indexes() {
     std::vector<std::string> col_names;
     auto *context = new Context(nullptr, nullptr, &transaction_);
     for (auto &[table_name, _]: sm_manager_->fhs_) {
+        std::ignore = _;
         auto &table_meta = sm_manager_->db_.get_table(table_name);
         for (auto &[index_name, index_meta]: table_meta.indexes) {
             for (auto &[_, col]: index_meta.cols) {
+                std::ignore = _;
                 col_names.emplace_back(col.name);
             }
             sm_manager_->redo_index(table_name, table_meta, col_names, index_name, context);

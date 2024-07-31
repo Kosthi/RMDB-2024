@@ -50,7 +50,7 @@ int IxNodeHandle::lower_bound(const char *target) const {
     // 提示: 可以采用多种查找方式，如顺序遍历、二分查找等；使用ix_compare()函数进行比较
     int l = 0, r = page_hdr->num_key;
     while (l < r) {
-        int mid = l + r >> 1;
+        int mid = (l + r) >> 1;
         int cmp = Compare(target, get_key(mid));
         if (cmp <= 0) {
             r = mid;
@@ -73,7 +73,7 @@ int IxNodeHandle::upper_bound(const char *target) const {
     // 提示: 可以采用多种查找方式：顺序遍历、二分查找等；使用ix_compare()函数进行比较
     int l = 1, r = page_hdr->num_key;
     while (l < r) {
-        int mid = l + r >> 1;
+        int mid = (l + r) >> 1;
         int cmp = Compare(target, get_key(mid));
         if (cmp < 0) {
             r = mid;
@@ -232,7 +232,7 @@ std::pair<int, int> IxNodeHandle::remove(const char *key) {
 }
 
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
-    : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
+    : fd_(fd), disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager) {
     // init file_hdr_
     // disk_manager_->read_page(fd, IX_FILE_HDR_PAGE, (char *) &file_hdr_, sizeof(file_hdr_));
     char *buf = new char[PAGE_SIZE];
@@ -574,13 +574,16 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
     leaf_node->page->WUnlatch();
     buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), true);
     if (is_delete) {
-        // assert(buffer_pool_manager_->delete_page(leaf_node->get_page_id()));
+        // printf("pin_count: %d\n", leaf_node->page->get_pin_count());
+        // assert(leaf_node->page->get_pin_count() == 0);
+        // buffer_pool_manager_->delete_page(leaf_node->get_page_id());
     }
     if (transaction != nullptr) {
-        // for (auto &page: *transaction->get_index_deleted_page_set()) {
-        // assert(page->get_pin_count() == 0);
-        // assert(buffer_pool_manager_->delete_page(page->get_page_id()));
-        // }
+        for (auto &page: *transaction->get_index_deleted_page_set()) {
+            // printf("pin_count: %d\n", page->get_pin_count());
+            // assert(page->get_pin_count() == 0);
+            // assert(buffer_pool_manager_->delete_page(page->get_page_id()));
+        }
         transaction->get_index_deleted_page_set()->clear();
     }
     return true;
@@ -1007,7 +1010,7 @@ RmRecord IxIndexHandle::get_key(const Iid &iid) const {
     }
     RmRecord record(node->get_key(iid.slot_no), file_hdr_->col_tot_len_);
     buffer_pool_manager_->unpin_page(node->get_page_id(), false);
-    return std::move(record);
+    return record;
 }
 
 void IxIndexHandle::create_upper_parent_nodes(char *key, Rid *rid, int first_parent_page_no, int sum) {
@@ -1067,10 +1070,10 @@ void IxIndexHandle::create_upper_parent_nodes(char *key, Rid *rid, int first_par
     int child_pos = 0;
 
     // 把每个索引块的第一个元组拷贝，用于父亲节点生成
-    char *key_temp;
-    char *key_temp_head;
-    Rid *rid_temp;
-    Rid *rid_temp_head;
+    char *key_temp = nullptr;
+    char *key_temp_head = nullptr;
+    Rid *rid_temp = nullptr;
+    Rid *rid_temp_head = nullptr;
 
     // 只有有父亲节点才需要
     if (blocks > 1) {
@@ -1254,7 +1257,11 @@ void IxIndexHandle::Draw(BufferPoolManager *bpm, const std::string &outf) {
     prefix.replace(outf.rfind(".dot"), 4, "");
     std::string png_name = prefix + ".png";
     std::string cmd = "dot -Tpng " + outf + " -o " + png_name;
-    system(cmd.c_str());
+    int ret = system(cmd.c_str());
+    if (ret != 0) {
+        // Handle the error, by logging it
+        std::cerr << "Command execution failed with return code: " << ret << std::endl;
+    }
 
     // printf("Generate picture: build/%s/%s\n", TEST_DB_NAME.c_str(), png_name.c_str());
     printf("Generate picture: %s\n", png_name.c_str());

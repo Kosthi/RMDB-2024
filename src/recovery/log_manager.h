@@ -46,6 +46,8 @@ public:
     txn_id_t log_tid_; /* 创建当前日志的事务ID */
     lsn_t prev_lsn_; /* 事务创建的前一条日志记录的lsn，用于undo */
 
+    virtual ~LogRecord() = default;
+
     // 把日志记录序列化到dest中
     virtual void serialize(char *dest) const {
         memcpy(dest + OFFSET_LOG_TYPE, &log_type_, sizeof(LogType));
@@ -213,7 +215,7 @@ public:
         table_name_ = nullptr;
     }
 
-    ~InsertLogRecord() {
+    ~InsertLogRecord() override {
         delete []table_name_;
     }
 
@@ -293,7 +295,7 @@ public:
         table_name_ = nullptr;
     }
 
-    ~DeleteLogRecord() {
+    ~DeleteLogRecord() override {
         delete []table_name_;
     }
 
@@ -373,7 +375,7 @@ public:
         table_name_ = nullptr;
     }
 
-    ~UpdateLogRecord() {
+    ~UpdateLogRecord() override {
         delete []table_name_;
     }
 

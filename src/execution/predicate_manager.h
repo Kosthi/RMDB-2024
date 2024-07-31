@@ -13,10 +13,10 @@ public:
 
     // TODO 暂时仅支持索引列解析
     explicit PredicateManager(IndexMeta &index_meta) {
-        for (int i = 0; i < index_meta.cols.size(); ++i) {
+        for (size_t i = 0; i < index_meta.cols.size(); ++i) {
             predicates_.emplace(index_meta.cols[i].second.name, i);
-            index_conds_.emplace_back(CondOp{.offset = index_meta.cols[i].first},
-                                      CondOp{.offset = index_meta.cols[i].first});
+            index_conds_.emplace_back(index_meta.cols[i].first,
+                                      index_meta.cols[i].first);
         }
     }
 
@@ -60,6 +60,7 @@ public:
 
     bool cmpIndexLeftConds(const RmRecord &rec) {
         for (auto &[cond, _]: index_conds_) {
+            std::ignore = _;
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
@@ -69,6 +70,7 @@ public:
 
     bool cmpIndexRightConds(const RmRecord &rec) {
         for (auto &[_, cond]: index_conds_) {
+            std::ignore = _;
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
@@ -96,6 +98,7 @@ public:
 
         CompOp op;
         for (auto &[cond, _]: index_conds_) {
+            std::ignore = _;
             op = cond.op;
             if (op == OP_INVALID) {
                 break;
@@ -115,6 +118,7 @@ public:
 
         CompOp op;
         for (auto &[_, cond]: index_conds_) {
+            std::ignore = _;
             op = cond.op;
             if (op == OP_INVALID) {
                 break;

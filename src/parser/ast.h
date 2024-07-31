@@ -140,7 +140,7 @@ namespace ast {
     struct CreateStaticCheckpoint : public TreeNode {
     };
 
-    struct Expr : public TreeNode {
+    struct Expr : virtual public TreeNode {
     };
 
     struct Value : public Expr {
@@ -302,13 +302,13 @@ namespace ast {
         }
     };
 
-    struct SelectStmt : public TreeNode, public Expr {
+    struct SelectStmt : virtual public TreeNode, public Expr {
         std::vector<std::shared_ptr<BoundExpr> > select_list;
         std::vector<std::string> tabs;
         std::vector<std::shared_ptr<JoinExpr> > jointree;
-        std::vector<std::shared_ptr<Col> > group_bys;
         // 放 where 谓词，对元组过滤
         std::vector<std::shared_ptr<BinaryExpr> > conds;
+        std::vector<std::shared_ptr<Col> > group_bys;
         // 放 having 谓词，对分组过滤
         std::vector<std::shared_ptr<HavingExpr> > havings;
 

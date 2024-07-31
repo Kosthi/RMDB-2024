@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "defs.h"
 #include "storage/buffer_pool_manager.h"
+#include <assert.h>
 
 constexpr int IX_NO_PAGE = -1;
 constexpr int IX_FILE_HDR_PAGE = 0;

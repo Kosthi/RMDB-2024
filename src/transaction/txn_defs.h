@@ -98,7 +98,7 @@ public:
 
     // 结论：A的最小值小于等于B的最大值，并且B的最小值小于等于A的最大值，那么他们就是相交的。(Amin<=Bmax)&&(Amax>=Bmin)
     bool isCoincide(const Gap &gap) const {
-        for (int i = 0; i < index_conds_.size(); ++i) {
+        for (std::size_t i = 0; i < index_conds_.size(); ++i) {
             auto &lhs_cond = index_conds_[i].first;
             auto &rhs_cond = gap.index_conds_[i].second;
             if (lhs_cond.op != OP_INVALID && rhs_cond.op != OP_INVALID) {
@@ -124,7 +124,7 @@ public:
             }
         }
 
-        for (int i = 0; i < index_conds_.size(); ++i) {
+        for (size_t i = 0; i < index_conds_.size(); ++i) {
             auto &lhs_cond = gap.index_conds_[i].first;
             auto &rhs_cond = index_conds_[i].second;
             if (lhs_cond.op != OP_INVALID && rhs_cond.op != OP_INVALID) {
@@ -155,6 +155,7 @@ public:
 
     bool cmpIndexLeftConds(const RmRecord &rec) const {
         for (auto &[cond, _]: index_conds_) {
+            std::ignore = _;
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
@@ -164,6 +165,7 @@ public:
 
     bool cmpIndexRightConds(const RmRecord &rec) const {
         for (auto &[_, cond]: index_conds_) {
+            std::ignore = _;
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }

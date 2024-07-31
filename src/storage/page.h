@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/config.h"
 #include "rwlatch.h"
+#include <cstring>
 
 /**
  * @description: 存储层每个Page的id的声明
@@ -57,7 +58,7 @@ namespace std {
  * Page对象在磁盘上有文件存储, 若在Buffer中则有帧偏移, 并非特指Buffer或Disk上的数据
  */
 class Page {
-    friend class BufferPoolManager;
+    friend class BufferPoolInstance;
 
 public:
     Page() { reset_memory(); }

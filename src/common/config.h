@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <string>
 
 #define BUFFER_LENGTH 8192
 // 定义日志控制宏
@@ -35,7 +36,9 @@ static constexpr int INVALID_LSN = -1;                                        //
 static constexpr int HEADER_PAGE_ID = 0;                                      // the header page id
 static constexpr int PAGE_SIZE = 4096;                                        // size of a data page in byte  4KB
 // static constexpr int BUFFER_POOL_SIZE = 65536;                                // size of buffer pool 256MB
-static constexpr int BUFFER_POOL_SIZE = 3 * 262144;                                // size of buffer pool 1GB
+static constexpr int BUFFER_POOL_SIZE = 2 * 262144;                           // size of buffer pool 1GB
+static constexpr int BUFFER_POOL_INSTANCES = 2;                               // instances of buffer pool
+static constexpr int BUFFER_POOL_INSTANCE_SIZE = BUFFER_POOL_SIZE / BUFFER_POOL_INSTANCES;
 static constexpr int LOG_BUFFER_SIZE = (1024 * PAGE_SIZE);                    // size of a log buffer in byte
 static constexpr int BUCKET_SIZE = 50;                                        // size of extendible hash bucket
 

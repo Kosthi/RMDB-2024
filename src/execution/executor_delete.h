@@ -19,13 +19,13 @@ See the Mulan PSL v2 for more details. */
 
 class DeleteExecutor : public AbstractExecutor {
 private:
-    TabMeta tab_; // 表的元数据
-    std::vector<Condition> conds_; // delete的条件
-    RmFileHandle *fh_; // 表的数据文件句柄
-    std::vector<Rid> rids_; // 需要删除的记录的位置
-    std::string tab_name_; // 表名称
     SmManager *sm_manager_;
+    std::string tab_name_; // 表名称
+    std::vector<Condition> conds_; // delete的条件
+    std::vector<Rid> rids_; // 需要删除的记录的位置
     bool is_index_scan_{false};
+    TabMeta tab_; // 表的元数据
+    RmFileHandle *fh_; // 表的数据文件句柄
 
 public:
     DeleteExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,

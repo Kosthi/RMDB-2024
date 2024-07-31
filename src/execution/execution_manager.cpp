@@ -18,7 +18,6 @@ See the Mulan PSL v2 for more details. */
 #include "executor_seq_scan.h"
 #include "executor_update.h"
 #include "executor_sortmerge_join.h"
-#include "execution/executor_load.h"
 #include "index/ix.h"
 #include "record_printer.h"
 
@@ -195,9 +194,11 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         sm_manager_->flush_meta();
 
         for (auto &[_, fh]: sm_manager_->fhs_) {
+            std::ignore = _;
             sm_manager_->get_rm_manager()->flush_file(fh.get());
         }
         for (auto &[_, ih]: sm_manager_->ihs_) {
+            std::ignore = _;
             sm_manager_->get_ix_manager()->flush_index(ih.get());
         }
         // 直接把日志清空
@@ -236,7 +237,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     if (planner_->enable_output_file) {
         outfile.open("output.txt", std::ios::out | std::ios::app);
         outfile << "|";
-        for (int i = 0; i < captions.size(); ++i) {
+        for (size_t i = 0; i < captions.size(); ++i) {
             outfile << " " << captions[i] << " |";
         }
         outfile << "\n";
@@ -266,7 +267,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
         // print record into file
         if (planner_->enable_output_file) {
             outfile << "|";
-            for (int i = 0; i < columns.size(); ++i) {
+            for (size_t i = 0; i < columns.size(); ++i) {
                 outfile << " " << columns[i] << " |";
             }
             outfile << "\n";
@@ -295,7 +296,7 @@ void QlManager::select_fast_count_star(int count, std::string &sel_col, Context 
     if (planner_->enable_output_file) {
         outfile.open("output.txt", std::ios::out | std::ios::app);
         outfile << "|";
-        for (int i = 0; i < captions.size(); ++i) {
+        for (size_t i = 0; i < captions.size(); ++i) {
             outfile << " " << captions[i] << " |";
         }
         outfile << "\n";
@@ -312,7 +313,7 @@ void QlManager::select_fast_count_star(int count, std::string &sel_col, Context 
     // print record into file
     if (planner_->enable_output_file) {
         outfile << "|";
-        for (int i = 0; i < columns.size(); ++i) {
+        for (size_t i = 0; i < columns.size(); ++i) {
             outfile << " " << columns[i] << " |";
         }
         outfile << "\n";

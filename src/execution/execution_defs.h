@@ -21,7 +21,42 @@ struct CondOp {
     Value rhs_val;
     int offset = 0;
 
+    // 默认构造函数
+    CondOp() = default;
+
+    // 有参构造函数
     explicit CondOp(int offset_) : rhs_val(), offset(offset_) {
+    }
+
+    // 拷贝构造函数
+    CondOp(const CondOp &other) = default;
+
+    // 移动构造函数
+    CondOp(CondOp &&other) noexcept : op(other.op), rhs_val(std::move(other.rhs_val)), offset(other.offset) {
+        other.op = OP_INVALID;
+        other.offset = 0;
+    }
+
+    // 拷贝赋值运算符
+    CondOp &operator=(const CondOp &other) noexcept {
+        if (this != &other) {
+            op = other.op;
+            rhs_val = other.rhs_val;
+            offset = other.offset;
+        }
+        return *this;
+    }
+
+    // 移动赋值运算符
+    CondOp &operator=(CondOp &&other) noexcept {
+        if (this != &other) {
+            op = other.op;
+            rhs_val = std::move(other.rhs_val);
+            offset = other.offset;
+            other.op = OP_INVALID;
+            other.offset = 0;
+        }
+        return *this;
     }
 };
 
