@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "disk_manager.h"
 #include "replacer/lru_replacer.h"
 #include "buffer_pool_instance.h"
+#include "disk_scheduler.h"
 
 class LogManager;
 
@@ -32,14 +33,17 @@ private:
     LogManager *log_manager_;
     // Replacer *replacer_; // buffer_pool的置换策略，当前赛题中为LRU置换策略
     // std::mutex latch_; // 用于共享数据结构的并发控制
+    std::unique_ptr<DiskScheduler> disk_scheduler_;
 
 public:
     BufferPoolManager(size_t pool_size, DiskManager *disk_manager, LogManager *log_manager = nullptr)
         : pool_size_(pool_size), disk_manager_(disk_manager), log_manager_(log_manager) {
         // 共享lru
         // replacer_ = new LRUReplacer(pool_size_);
+        disk_scheduler_ = std::make_unique<DiskScheduler>(disk_manager_);
         for (auto &instance: instances_) {
-            instance = new BufferPoolInstance(pool_size / BUFFER_POOL_INSTANCES, disk_manager_, log_manager_);
+            instance = new BufferPoolInstance(pool_size / BUFFER_POOL_INSTANCES, disk_manager_, disk_scheduler_.get(),
+                                              log_manager_);
         }
     }
 

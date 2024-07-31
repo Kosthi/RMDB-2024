@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #define BUFFER_LENGTH 8192
 // 定义日志控制宏
 #define ENABLE_LOGGING
+// 定义异步刷盘宏
+#define ENABLE_ASYNC_DISK
 
 /** Cycle detection is performed every CYCLE_DETECTION_INTERVAL milliseconds. */
 extern std::chrono::milliseconds cycle_detection_interval;

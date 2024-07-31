@@ -67,6 +67,10 @@ public:
 
     inline PageId get_page_id() const { return id_; }
 
+    inline int get_page_fd() const { return id_.fd; }
+
+    inline int get_page_no() const { return id_.page_no; }
+
     inline char *get_data() { return data_; }
 
     inline bool is_dirty() const { return is_dirty_; }

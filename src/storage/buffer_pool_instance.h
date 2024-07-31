@@ -9,6 +9,7 @@
 #include "replacer/lru_replacer.h"
 
 #include "disk_manager.h"
+#include "disk_scheduler.h"
 #include "page.h"
 #include "replacer/replacer.h"
 
@@ -24,9 +25,11 @@ private:
     ClockReplacer *replacer_; // buffer_pool的置换策略，当前赛题中为LRU置换策略
     LogManager *log_manager_;
     std::mutex latch_; // 用于共享数据结构的并发控制
+    std::unordered_map<int, DiskScheduler> disk_scheduler_;
 
 public:
-    BufferPoolInstance(size_t pool_size, DiskManager *disk_manager, LogManager *log_manager = nullptr)
+    BufferPoolInstance(size_t pool_size, DiskManager *disk_manager, DiskScheduler *disk_scheduler,
+                       LogManager *log_manager = nullptr)
         : pool_size_(pool_size), disk_manager_(disk_manager), log_manager_(log_manager) {
         // 为buffer pool分配一块连续的内存空间
         pages_ = new Page[pool_size_];

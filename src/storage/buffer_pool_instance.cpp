@@ -37,13 +37,22 @@ void BufferPoolInstance::update_page(Page *page, PageId new_page_id, frame_id_t 
             log_manager_->flush_log_to_disk();
         }
 #endif
+#ifdef ENABLE_ASYNC_DISK
+        auto it = disk_scheduler_.find(page->get_page_fd());
+        if (it == disk_scheduler_.end()) {
+            it = disk_scheduler_.emplace(page->get_page_fd(), disk_manager_).first;
+        }
+        it->second.Schedule({page->get_page_id(), page->get_data()});
+#else
         disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
         page->is_dirty_ = false;
+#endif
     }
 
     page_table_.erase(page->get_page_id());
     page_table_[new_page_id] = new_frame_id;
 
+    // TODO new_page 需要 reset，update 不需要，因为会被覆盖
     page->reset_memory();
     page->id_ = new_page_id;
     page->pin_count_ = 0;
@@ -72,7 +81,15 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
         frame_id_t frame_id = INVALID_FRAME_ID;
         if (find_victim_page(&frame_id)) {
             update_page(&pages_[frame_id], page_id, frame_id);
+#ifdef ENABLE_ASYNC_DISK
+            auto itt = disk_scheduler_.find(page_id.fd);
+            if (itt == disk_scheduler_.end()) {
+                itt = disk_scheduler_.emplace(page_id.fd, disk_manager_).first;
+            }
+            itt->second.ScheduleRead(pages_[frame_id]);
+#else
             disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[frame_id].get_data(), PAGE_SIZE);
+#endif
             // 不知道是从freelist还是replacer来的，都pin一下，待优化
             replacer_->pin(frame_id);
             pages_[frame_id].pin_count_ = 1;
@@ -149,7 +166,15 @@ bool BufferPoolInstance::flush_page(PageId page_id) {
         log_manager_->flush_log_to_disk();
     }
 #endif
+#ifdef ENABLE_ASYNC_DISK
+    auto itt = disk_scheduler_.find(page.get_page_fd());
+    if (itt == disk_scheduler_.end()) {
+        itt = disk_scheduler_.emplace(page.get_page_fd(), disk_manager_).first;
+    }
+    itt->second.Schedule({page.get_page_id(), page.get_data()});
+#else
     disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
+#endif
     page.is_dirty_ = false;
     return true;
 }
@@ -206,7 +231,15 @@ bool BufferPoolInstance::delete_page(PageId page_id) {
             log_manager_->flush_log_to_disk();
         }
 #endif
+#ifdef ENABLE_ASYNC_DISK
+        auto itt = disk_scheduler_.find(page.get_page_fd());
+        if (itt == disk_scheduler_.end()) {
+            itt = disk_scheduler_.emplace(page.get_page_fd(), disk_manager_).first;
+        }
+        itt->second.Schedule({page.get_page_id(), page.get_data()});
+#else
         disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
+#endif
         page.is_dirty_ = false;
     }
 
@@ -233,7 +266,15 @@ void BufferPoolInstance::flush_all_pages(int fd) {
                 log_manager_->flush_log_to_disk();
             }
 #endif
+#ifdef ENABLE_ASYNC_DISK
+            auto it = disk_scheduler_.find(page.get_page_fd());
+            if (it == disk_scheduler_.end()) {
+                it = disk_scheduler_.emplace(page.get_page_fd(), disk_manager_).first;
+            }
+            it->second.Schedule({page.get_page_id(), page.get_data()});
+#else
             disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
+#endif
             page.is_dirty_ = false;
         }
     }
