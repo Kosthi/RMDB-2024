@@ -53,9 +53,9 @@ void DiskScheduler::StartWorkerThread() {
                 }
                 auto &r = e.value();
                 disk_manager_->write_page(r.page_id_.fd, r.page_id_.page_no, r.data_, PAGE_SIZE);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::milliseconds(5000));
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
 }
