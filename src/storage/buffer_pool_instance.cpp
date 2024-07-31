@@ -258,6 +258,7 @@ bool BufferPoolInstance::delete_page(PageId page_id) {
 void BufferPoolInstance::flush_all_pages(int fd) {
     std::lock_guard lock(latch_);
 
+    disk_scheduler_.erase(fd);
     for (auto &[pageId, frameId]: page_table_) {
         if (pageId.fd == fd) {
             auto &page = pages_[frameId];
@@ -266,15 +267,7 @@ void BufferPoolInstance::flush_all_pages(int fd) {
                 log_manager_->flush_log_to_disk();
             }
 #endif
-#ifdef ENABLE_ASYNC_DISK
-            auto it = disk_scheduler_.find(page.get_page_fd());
-            if (it == disk_scheduler_.end()) {
-                it = disk_scheduler_.emplace(page.get_page_fd(), disk_manager_).first;
-            }
-            it->second.Schedule({page.get_page_id(), page.get_data()});
-#else
             disk_manager_->write_page(page.id_.fd, page.id_.page_no, page.data_, PAGE_SIZE);
-#endif
             page.is_dirty_ = false;
         }
     }
@@ -287,6 +280,7 @@ void BufferPoolInstance::flush_all_pages(int fd) {
 void BufferPoolInstance::flush_all_pages_for_checkpoint(int fd) {
     std::lock_guard lock(latch_);
 
+    disk_scheduler_.erase(fd);
     for (auto &[pageId, frameId]: page_table_) {
         if (pageId.fd == fd) {
             auto &page = pages_[frameId];
