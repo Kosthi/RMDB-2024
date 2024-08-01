@@ -27,10 +27,11 @@ private:
     std::vector<SetClause> set_clauses_;
     SmManager *sm_manager_;
     std::vector<std::vector<ColMeta>::iterator> set_cols_;
+    bool is_set_index_key_;
 
 public:
     UpdateExecutor(SmManager *sm_manager, std::string tab_name, std::vector<SetClause> set_clauses,
-                   std::vector<Condition> conds, std::vector<Rid> rids, Context *context) {
+                   std::vector<Condition> conds, std::vector<Rid> rids, bool is_set_index_key, Context *context) {
         sm_manager_ = sm_manager;
         tab_name_ = std::move(tab_name);
         set_clauses_ = std::move(set_clauses);
@@ -40,6 +41,7 @@ public:
         // 已经通过扫描算子找到了满足谓词条件的 rids
         // 不如同时把 records 也给我
         rids_ = std::move(rids);
+        is_set_index_key_ = is_set_index_key;
         context_ = context;
 
         for (auto &set: set_clauses_) {
@@ -67,32 +69,48 @@ public:
                 }
             }
 
-            auto **old_keys = new char *[tab_.indexes.size()];
-            auto **new_keys = new char *[tab_.indexes.size()];
-            auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
+            if (is_set_index_key_) {
+                auto **old_keys = new char *[tab_.indexes.size()];
+                auto **new_keys = new char *[tab_.indexes.size()];
+                auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
 
-            int i = 0;
-            // 索引查重
-            for (auto &[ix_name, index]: tab_.indexes) {
-                ihs[i] = sm_manager_->ihs_[ix_name].get();
-                old_keys[i] = new char[index.col_tot_len];
-                new_keys[i] = new char[index.col_tot_len];
-                for (auto &[index_offset, col_meta]: index.cols) {
-                    memcpy(old_keys[i] + index_offset, old_record->data + col_meta.offset, col_meta.len);
-                    memcpy(new_keys[i] + index_offset,
-                           updated_record->data + col_meta.offset, col_meta.len);
-                }
-                if (!ihs[i]->is_unique(new_keys[i], _abstract_rid, context_->txn_) && _abstract_rid != rid) {
-                    for (int j = 0; j <= i; ++j) {
-                        delete []old_keys[j];
-                        delete []new_keys[j];
+                int i = 0;
+                // 索引查重
+                for (auto &[ix_name, index]: tab_.indexes) {
+                    ihs[i] = sm_manager_->ihs_[ix_name].get();
+                    old_keys[i] = new char[index.col_tot_len];
+                    new_keys[i] = new char[index.col_tot_len];
+                    for (auto &[index_offset, col_meta]: index.cols) {
+                        memcpy(old_keys[i] + index_offset, old_record->data + col_meta.offset, col_meta.len);
+                        memcpy(new_keys[i] + index_offset,
+                               updated_record->data + col_meta.offset, col_meta.len);
                     }
-                    delete []old_keys;
-                    delete []new_keys;
-                    delete []ihs;
-                    throw NonUniqueIndexError("", {ix_name});
+                    if (!ihs[i]->is_unique(new_keys[i], _abstract_rid, context_->txn_) && _abstract_rid != rid) {
+                        for (int j = 0; j <= i; ++j) {
+                            delete []old_keys[j];
+                            delete []new_keys[j];
+                        }
+                        delete []old_keys;
+                        delete []new_keys;
+                        delete []ihs;
+                        throw NonUniqueIndexError("", {ix_name});
+                    }
+                    ++i;
                 }
-                ++i;
+
+                // Unique Index -> Insert into index
+                for (int j = 0; j < i; ++j) {
+                    // TODO 如果不涉及索引建的变化，直接原地更新记录，不需要维护索引，避免B+树分裂重组的不必要耗时
+                    ihs[j]->delete_entry(old_keys[j], context_->txn_);
+                    ihs[j]->insert_entry(new_keys[j], rid, context_->txn_);
+                    delete []old_keys[j];
+                    delete []new_keys[j];
+                }
+
+                // 插入完成，释放内存
+                delete []old_keys;
+                delete []new_keys;
+                delete []ihs;
             }
 
             // 再检查是否有间隙锁
@@ -114,19 +132,6 @@ public:
             sm_manager_->get_bpm()->unpin_page(page->get_page_id(), true);
             delete update_log_record;
 #endif
-
-            // Unique Index -> Insert into index
-            for (int j = 0; j < i; ++j) {
-                ihs[j]->delete_entry(old_keys[j], context_->txn_);
-                ihs[j]->insert_entry(new_keys[j], rid, context_->txn_);
-                delete []old_keys[j];
-                delete []new_keys[j];
-            }
-
-            // 插入完成，释放内存
-            delete []old_keys;
-            delete []new_keys;
-            delete []ihs;
 
             fh_->update_record(rid, updated_record->data, context_);
 

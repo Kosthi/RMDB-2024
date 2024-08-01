@@ -59,7 +59,7 @@ namespace ast {
     struct ShowIndexs : public TreeNode {
         std::string tab_name;
 
-        ShowIndexs(std::string tab_name_) : tab_name(std::move(tab_name_)) {
+        explicit ShowIndexs(std::string &tab_name_) : tab_name(std::move(tab_name_)) {
         }
     };
 
@@ -91,7 +91,7 @@ namespace ast {
         std::shared_ptr<TypeLen> type_len;
 
         ColDef(std::string col_name_, std::shared_ptr<TypeLen> type_len_) : col_name(std::move(col_name_)),
-                                                                            type_len(std::move(type_len_)) {
+                                                                              type_len(std::move(type_len_)) {
         }
     };
 
@@ -99,23 +99,23 @@ namespace ast {
         std::string tab_name;
         std::vector<std::shared_ptr<Field> > fields;
 
-        CreateTable(std::string tab_name_,
-                    std::vector<std::shared_ptr<Field> > fields_) : tab_name(std::move(tab_name_)),
-                                                                    fields(std::move(fields_)) {
+        CreateTable(std::string &tab_name_,
+                    std::vector<std::shared_ptr<Field> > &fields_) : tab_name(std::move(tab_name_)),
+                                                                     fields(std::move(fields_)) {
         }
     };
 
     struct DropTable : public TreeNode {
         std::string tab_name;
 
-        DropTable(std::string tab_name_) : tab_name(std::move(tab_name_)) {
+        explicit DropTable(std::string &tab_name_) : tab_name(std::move(tab_name_)) {
         }
     };
 
     struct DescTable : public TreeNode {
         std::string tab_name;
 
-        DescTable(std::string tab_name_) : tab_name(std::move(tab_name_)) {
+        explicit DescTable(std::string &tab_name_) : tab_name(std::move(tab_name_)) {
         }
     };
 
@@ -123,7 +123,7 @@ namespace ast {
         std::string tab_name;
         std::vector<std::string> col_names;
 
-        CreateIndex(std::string tab_name_, std::vector<std::string> col_names_) : tab_name(std::move(tab_name_)),
+        CreateIndex(std::string &tab_name_, std::vector<std::string> &col_names_) : tab_name(std::move(tab_name_)),
             col_names(std::move(col_names_)) {
         }
     };
@@ -132,7 +132,7 @@ namespace ast {
         std::string tab_name;
         std::vector<std::string> col_names;
 
-        DropIndex(std::string tab_name_, std::vector<std::string> col_names_) : tab_name(std::move(tab_name_)),
+        DropIndex(std::string &tab_name_, std::vector<std::string> &col_names_) : tab_name(std::move(tab_name_)),
             col_names(std::move(col_names_)) {
         }
     };
@@ -149,28 +149,28 @@ namespace ast {
     struct IntLit : public Value {
         int val;
 
-        IntLit(int val_) : val(val_) {
+        explicit IntLit(int val_) : val(val_) {
         }
     };
 
     struct FloatLit : public Value {
         float val;
 
-        FloatLit(float val_) : val(val_) {
+        explicit FloatLit(float val_) : val(val_) {
         }
     };
 
     struct StringLit : public Value {
         std::string val;
 
-        StringLit(std::string val_) : val(std::move(val_)) {
+        explicit StringLit(std::string &val_) : val(std::move(val_)) {
         }
     };
 
     struct BoolLit : public Value {
         bool val;
 
-        BoolLit(bool val_) : val(val_) {
+        explicit BoolLit(bool val_) : val(val_) {
         }
     };
 
@@ -179,7 +179,7 @@ namespace ast {
         std::string col_name;
 
         Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)),
-                                                            col_name(std::move(col_name_)) {
+                                                              col_name(std::move(col_name_)) {
         }
     };
 
@@ -188,7 +188,7 @@ namespace ast {
         std::shared_ptr<Value> val;
         bool is_incr;
 
-        SetClause(std::string col_name_, std::shared_ptr<Value> val_,
+        SetClause(std::string &col_name_, std::shared_ptr<Value> &val_,
                   bool is_incr_ = false) : col_name(std::move(col_name_)),
                                            val(std::move(val_)), is_incr(is_incr_) {
         }
@@ -200,13 +200,14 @@ namespace ast {
         std::shared_ptr<Expr> rhs; // 可能是列也可能是值
         std::vector<std::shared_ptr<Value> > rhs_list; // 数值列表
 
-        BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_) : lhs(std::move(lhs_)), op(op_),
+        BinaryExpr(std::shared_ptr<Col> &lhs_, SvCompOp &op_, std::shared_ptr<Expr> &rhs_) : lhs(std::move(lhs_)),
+            op(op_),
             rhs(std::move(rhs_)) {
         }
 
-        BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_,
-                   std::vector<std::shared_ptr<Value> > rhs_list_) : lhs(std::move(lhs_)), op(op_),
-                                                                     rhs_list(std::move(rhs_list_)) {
+        BinaryExpr(std::shared_ptr<Col> &lhs_, SvCompOp &op_,
+                   std::vector<std::shared_ptr<Value> > &rhs_list_) : lhs(std::move(lhs_)), op(op_),
+                                                                      rhs_list(std::move(rhs_list_)) {
         }
     };
 
@@ -218,22 +219,22 @@ namespace ast {
         // BoundExpr(std::shared_ptr<Col> col_) : col(std::move(col_)) {}
 
         BoundExpr(std::shared_ptr<Col> col_, AggType type_) : col(std::move(col_)),
-                                                              type(type_) {
+                                                                type(type_) {
         }
 
-        BoundExpr(std::shared_ptr<Col> col_, AggType type_, std::string alias_) : col(std::move(col_)),
+        BoundExpr(std::shared_ptr<Col> col_, AggType type_, std::string &alias_) : col(std::move(col_)),
             type(type_), alias(std::move(alias_)) {
         }
 
-        inline bool is_aggregate() const { return type != AGG_COL; }
+        // inline bool is_aggregate() const { return type != AGG_COL; }
     };
 
     struct OrderBy : public TreeNode {
         std::shared_ptr<Col> cols;
         OrderByDir orderby_dir;
 
-        OrderBy(std::shared_ptr<Col> cols_, OrderByDir orderby_dir_) : cols(std::move(cols_)),
-                                                                       orderby_dir(orderby_dir_) {
+        OrderBy(std::shared_ptr<Col> &cols_, OrderByDir &orderby_dir_) : cols(std::move(cols_)),
+                                                                         orderby_dir(orderby_dir_) {
         }
     };
 
@@ -250,8 +251,9 @@ namespace ast {
         std::string tab_name;
         std::vector<std::shared_ptr<Value> > vals;
 
-        InsertStmt(std::string tab_name_, std::vector<std::shared_ptr<Value> > vals_) : tab_name(std::move(tab_name_)),
-            vals(std::move(vals_)) {
+        InsertStmt(std::string &tab_name_,
+                   std::vector<std::shared_ptr<Value> > &vals_) : tab_name(std::move(tab_name_)),
+                                                                  vals(std::move(vals_)) {
         }
     };
 
@@ -259,9 +261,9 @@ namespace ast {
         std::string tab_name;
         std::vector<std::shared_ptr<BinaryExpr> > conds;
 
-        DeleteStmt(std::string tab_name_,
-                   std::vector<std::shared_ptr<BinaryExpr> > conds_) : tab_name(std::move(tab_name_)),
-                                                                       conds(std::move(conds_)) {
+        DeleteStmt(std::string &tab_name_,
+                   std::vector<std::shared_ptr<BinaryExpr> > &conds_) : tab_name(std::move(tab_name_)),
+                                                                        conds(std::move(conds_)) {
         }
     };
 
@@ -270,11 +272,11 @@ namespace ast {
         std::vector<std::shared_ptr<SetClause> > set_clauses;
         std::vector<std::shared_ptr<BinaryExpr> > conds;
 
-        UpdateStmt(std::string tab_name_,
-                   std::vector<std::shared_ptr<SetClause> > set_clauses_,
-                   std::vector<std::shared_ptr<BinaryExpr> > conds_) : tab_name(std::move(tab_name_)),
-                                                                       set_clauses(std::move(set_clauses_)),
-                                                                       conds(std::move(conds_)) {
+        UpdateStmt(std::string &tab_name_,
+                   std::vector<std::shared_ptr<SetClause> > &set_clauses_,
+                   std::vector<std::shared_ptr<BinaryExpr> > &conds_) : tab_name(std::move(tab_name_)),
+                                                                        set_clauses(std::move(set_clauses_)),
+                                                                        conds(std::move(conds_)) {
         }
     };
 
@@ -284,8 +286,8 @@ namespace ast {
         std::vector<std::shared_ptr<BinaryExpr> > conds;
         JoinType type;
 
-        JoinExpr(std::string left_, std::string right_,
-                 std::vector<std::shared_ptr<BinaryExpr> > conds_, JoinType type_) : left(std::move(left_)),
+        JoinExpr(std::string &left_, std::string &right_,
+                 std::vector<std::shared_ptr<BinaryExpr> > &conds_, JoinType &type_) : left(std::move(left_)),
             right(std::move(right_)), conds(std::move(conds_)), type(type_) {
         }
     };
@@ -296,7 +298,7 @@ namespace ast {
         // 先不支持 COUNT(*) <= SUM(id);
         std::shared_ptr<Expr> rhs;
 
-        HavingExpr(std::shared_ptr<BoundExpr> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_) : lhs(std::move(lhs_)),
+        HavingExpr(std::shared_ptr<BoundExpr> &lhs_, SvCompOp &op_, std::shared_ptr<Expr> &rhs_) : lhs(std::move(lhs_)),
             op(op_),
             rhs(std::move(rhs_)) {
         }
@@ -315,17 +317,17 @@ namespace ast {
         bool has_sort;
         std::shared_ptr<OrderBy> order;
 
-        SelectStmt(std::vector<std::shared_ptr<BoundExpr> > select_list_,
-                   std::vector<std::string> tabs_,
-                   std::vector<std::shared_ptr<BinaryExpr> > conds_,
-                   std::vector<std::shared_ptr<Col> > group_bys_,
-                   std::vector<std::shared_ptr<HavingExpr> > havings_,
-                   std::shared_ptr<OrderBy> order_) : select_list(std::move(select_list_)),
-                                                      tabs(std::move(tabs_)),
-                                                      conds(std::move(conds_)),
-                                                      group_bys(std::move(group_bys_)),
-                                                      havings(std::move(havings_)),
-                                                      order(std::move(order_)) {
+        SelectStmt(std::vector<std::shared_ptr<BoundExpr> > &select_list_,
+                   std::vector<std::string> &tabs_,
+                   std::vector<std::shared_ptr<BinaryExpr> > &conds_,
+                   std::vector<std::shared_ptr<Col> > &group_bys_,
+                   std::vector<std::shared_ptr<HavingExpr> > &havings_,
+                   std::shared_ptr<OrderBy> &order_) : select_list(std::move(select_list_)),
+                                                       tabs(std::move(tabs_)),
+                                                       conds(std::move(conds_)),
+                                                       group_bys(std::move(group_bys_)),
+                                                       havings(std::move(havings_)),
+                                                       order(std::move(order_)) {
             has_sort = (bool) order;
         }
     };

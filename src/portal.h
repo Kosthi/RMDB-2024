@@ -101,9 +101,25 @@ public:
                     for (scan->beginTuple(); !scan->is_end(); scan->nextTuple()) {
                         rids.emplace_back(scan->rid());
                     }
+                    // TODO update 算子优化，如果更新值不涉及索引键，则不需要维护索引
+                    bool is_set_index_key = true;
+                    if (scan->getType() == "IndexScanExecutor") {
+                        auto *index_scan = dynamic_cast<IndexScanExecutor *>(scan.get());
+                        auto &map = index_scan->get_index_meta().cols_map;
+                        // 查找 set 值是否是 key
+                        int i = 0;
+                        for (; i < x->set_clauses_.size(); ++i) {
+                            if (map.count(x->set_clauses_[i].lhs.col_name) > 0) {
+                                break;
+                            }
+                        }
+                        if (i == x->set_clauses_.size()) {
+                            is_set_index_key = false;
+                        }
+                    }
                     std::unique_ptr<AbstractExecutor> root = std::make_unique<UpdateExecutor>(sm_manager_,
                         std::move(x->tab_name_), std::move(x->set_clauses_), std::move(x->conds_), std::move(rids),
-                        context);
+                        is_set_index_key, context);
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), plan);
                 }
