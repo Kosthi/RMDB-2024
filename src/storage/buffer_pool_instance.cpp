@@ -65,28 +65,37 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
     // 3.     调用disk_manager_的read_page读取目标页到frame
     // 4.     固定目标页，更新pin_count_
     // 5.     返回目标页
-    std::lock_guard lock(latch_);
+    // std::lock_guard lock(latch_);
+    buffer_lock_manager_.ReadLock();
 
-    auto &&it = page_table_.find(page_id);
+    auto it = page_table_.find(page_id);
     if (it == page_table_.end()) {
         frame_id_t frame_id = INVALID_FRAME_ID;
+        buffer_lock_manager_.WriteLock();
         if (find_victim_page(&frame_id)) {
             update_page(&pages_[frame_id], page_id, frame_id);
             disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[frame_id].get_data(), PAGE_SIZE);
             // 不知道是从freelist还是replacer来的，都pin一下，待优化
             replacer_->pin(frame_id);
             pages_[frame_id].pin_count_ = 1;
+            // 两阶段锁
+            buffer_lock_manager_.ReadUnlock();
+            buffer_lock_manager_.WriteUnlock();
             return &pages_[frame_id];
         }
+        buffer_lock_manager_.ReadUnlock();
+        buffer_lock_manager_.WriteUnlock();
         return nullptr;
     }
 
     // 如果已经在页表中，只有第一次使用需要pin
-    if (++pages_[it->second].pin_count_ == 1) {
+    auto &page = pages_[it->second];
+    if (++page.pin_count_ == 1) {
         replacer_->pin(it->second);
     }
 
-    return &pages_[it->second];
+    buffer_lock_manager_.ReadUnlock();
+    return &page;
 }
 
 /**
@@ -106,20 +115,24 @@ bool BufferPoolInstance::unpin_page(PageId page_id, bool is_dirty) {
     // 2.2.1 若自减后等于0，则调用replacer_的Unpin
     // 3 根据参数is_dirty，更改P的is_dirty_
     // 缓冲池够用 没必要 unpin，决赛不行了
-    std::lock_guard lock(latch_);
-
-    auto &&it = page_table_.find(page_id);
+    // std::lock_guard lock(latch_);
+    buffer_lock_manager_.WriteLock();
+    // unpin 时候页面已经在页表中，
+    auto it = page_table_.find(page_id);
     // 不在页表中
     if (it == page_table_.end()) {
+        buffer_lock_manager_.WriteUnlock();
         return false;
     }
     if (pages_[it->second].pin_count_ == 0) {
+        buffer_lock_manager_.WriteUnlock();
         return false;
     }
     if (--pages_[it->second].pin_count_ == 0) {
         replacer_->unpin(it->second);
     }
     pages_[it->second].is_dirty_ |= is_dirty;
+    buffer_lock_manager_.WriteUnlock();
     return true;
 }
 
@@ -135,6 +148,7 @@ bool BufferPoolInstance::flush_page(PageId page_id) {
     // 1.1 目标页P没有被page_table_记录 ，返回false
     // 2. 无论P是否为脏都将其写回磁盘。
     // 3. 更新P的is_dirty_
+    // 未使用过
     std::lock_guard lock(latch_);
 
     auto &&it = page_table_.find(page_id);
@@ -165,8 +179,7 @@ Page *BufferPoolInstance::new_page(PageId *page_id) {
     // 3.   将frame的数据写回磁盘
     // 4.   固定frame，更新pin_count_
     // 5.   返回获得的page
-    std::lock_guard lock(latch_);
-
+    buffer_lock_manager_.WriteLock();
     frame_id_t frame_id = -1;
     if (find_victim_page(&frame_id)) {
         // page_id->page_no = disk_manager_->allocate_page(page_id->fd);
@@ -174,8 +187,10 @@ Page *BufferPoolInstance::new_page(PageId *page_id) {
         // 不知道是从freelist还是replacer来的，都pin一下，待优化
         replacer_->pin(frame_id);
         pages_[frame_id].pin_count_ = 1;
+        buffer_lock_manager_.WriteUnlock();
         return &pages_[frame_id];
     }
+    buffer_lock_manager_.WriteUnlock();
     return nullptr;
 }
 
@@ -189,7 +204,7 @@ bool BufferPoolInstance::delete_page(PageId page_id) {
     // 2.   若目标页的pin_count不为0，则返回false
     // 3.   将目标页数据写回磁盘，从页表中删除目标页，重置其元数据，将其加入free_list_，返回true
     std::lock_guard lock(latch_);
-
+    // 没用过
     auto &&it = page_table_.find(page_id);
     if (it == page_table_.end()) {
         return true;

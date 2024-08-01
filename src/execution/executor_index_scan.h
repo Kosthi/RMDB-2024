@@ -808,7 +808,7 @@ public:
         if (!scan_->is_end() && !asc_) {
             rid_ = scan_->prev_rid(upper_);
             rm_record_ = fh_->get_record(rid_, context_);
-            std::cout << "fast max" << std::endl;
+            // std::cout << "fast max" << std::endl;
             return;
         }
 
