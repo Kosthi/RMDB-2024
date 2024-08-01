@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <deque>
 #include <list>
 #include <thread>
 #include <unordered_map>
