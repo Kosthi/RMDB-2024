@@ -168,7 +168,7 @@ public:
                                                             bool gap_mode = false) {
         if (auto x = std::dynamic_pointer_cast<ProjectionPlan>(plan)) {
             return std::make_unique<ProjectionExecutor>(convert_plan_executor(x->subplan_, context),
-                                                        x->sel_cols_);
+                                                        x->sel_cols_, x->limit_);
         }
         if (auto x = std::dynamic_pointer_cast<AggregatePlan>(plan)) {
             return std::make_unique<AggregateExecutor>(convert_plan_executor(x->subplan_, context), x->sel_cols_,
@@ -199,7 +199,7 @@ public:
                 return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context, gap_mode);
             }
             return std::make_unique<IndexScanExecutor>(sm_manager_, x->tab_name_, x->conds_, x->index_col_names_,
-                                                       context, gap_mode);
+                                                       context, gap_mode, x->asc_);
         }
         if (auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
             std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);

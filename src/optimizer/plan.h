@@ -61,7 +61,7 @@ public:
 class ScanPlan : public Plan {
 public:
     ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-             std::vector<std::string> index_col_names, bool is_sub_query = false) {
+             std::vector<std::string> index_col_names, bool asc = true) {
         Plan::tag = tag;
         tab_name_ = std::move(tab_name);
         conds_ = std::move(conds);
@@ -70,6 +70,7 @@ public:
         len_ = cols_.back().offset + cols_.back().len;
         fed_conds_ = conds_;
         index_col_names_ = std::move(index_col_names);
+        asc_ = asc;
     }
 
     ~ScanPlan() {
@@ -82,6 +83,8 @@ public:
     size_t len_;
     std::vector<Condition> fed_conds_;
     std::vector<std::string> index_col_names_;
+    // 顺序扫还是逆序
+    bool asc_;
 };
 
 class JoinPlan : public Plan {
@@ -110,11 +113,12 @@ public:
 class ProjectionPlan : public Plan {
 public:
     ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols,
-                   std::vector<std::string> alias) {
+                   std::vector<std::string> alias, int limit = -1) {
         Plan::tag = tag;
         subplan_ = std::move(subplan);
         sel_cols_ = std::move(sel_cols);
         alias_ = std::move(alias);
+        limit_ = limit;
     }
 
     ~ProjectionPlan() {
@@ -123,6 +127,7 @@ public:
     std::shared_ptr<Plan> subplan_;
     std::vector<TabCol> sel_cols_;
     std::vector<std::string> alias_;
+    int limit_;
 };
 
 class SortPlan : public Plan {

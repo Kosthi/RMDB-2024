@@ -430,6 +430,7 @@ int main(int argc, char **argv) {
     }
 
     signal(SIGINT, sigint_handler);
+    signal(SIGTERM, sigint_handler);
     try {
 #ifdef ENABLE_COUT
         std::cout << "\n"

@@ -64,6 +64,9 @@ private:
 
     bool scan_index_{false};
 
+    // 顺序扫描还是逆序
+    bool asc_{true};
+
     static std::size_t generateID() {
         static size_t current_id = 0;
         return ++current_id;
@@ -121,11 +124,11 @@ private:
 public:
     IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
                       std::vector<std::string> index_col_names,
-                      Context *context, bool gap_mode = false) : sm_manager_(sm_manager),
-                                                                 tab_name_(std::move(tab_name)),
-                                                                 conds_(std::move(conds)),
-                                                                 index_col_names_(std::move(index_col_names)),
-                                                                 gap_mode_(gap_mode) {
+                      Context *context, bool gap_mode = false, bool asc = true) : sm_manager_(sm_manager),
+        tab_name_(std::move(tab_name)),
+        conds_(std::move(conds)),
+        index_col_names_(std::move(index_col_names)),
+        gap_mode_(gap_mode), asc_(asc) {
         context_ = context;
         tab_ = sm_manager_->db_.get_table(tab_name_);
         // index_no_ = index_no;
@@ -801,6 +804,14 @@ public:
         scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
         already_begin_ = true;
 
+        // max 找最后一个记录的情况
+        if (!scan_->is_end() && !asc_) {
+            rid_ = scan_->prev_rid(upper_);
+            rm_record_ = fh_->get_record(rid_, context_);
+            std::cout << "fast max" << std::endl;
+            return;
+        }
+
         // where a > 1, c < 1
         while (!scan_->is_end()) {
             // 不回表
@@ -819,6 +830,9 @@ public:
     }
 
     void nextTuple() override {
+        if (!asc_) {
+            return;
+        }
         if (!records_.empty()) {
             rm_record_ = std::move(records_.front());
             records_.pop_front();

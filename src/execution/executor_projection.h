@@ -23,10 +23,12 @@ private:
     std::vector<size_t> proj_idxs_; // 每个投影的字段在原先表所有字段的索引
     const std::vector<ColMeta> &prev_cols_;
     bool is_agg_{false};
+    int limit_;
 
 public:
     ProjectionExecutor(std::unique_ptr<AbstractExecutor> prev,
-                       const std::vector<TabCol> &proj_cols): prev_(std::move(prev)), prev_cols_(prev_->cols()) {
+                       const std::vector<TabCol> &proj_cols, int limit = -1): prev_(std::move(prev)),
+                                                                              prev_cols_(prev_->cols()), limit_(limit) {
         if (prev_->getType() == "AggregateExecutor") {
             is_agg_ = true;
             int offset = 0;
@@ -58,6 +60,7 @@ public:
     void nextTuple() override { prev_->nextTuple(); }
 
     std::unique_ptr<RmRecord> Next() override {
+        --limit_;
         if (is_agg_) {
             return std::move(prev_->Next());
         }
@@ -78,7 +81,9 @@ public:
 
     Rid &rid() override { return _abstract_rid; }
 
-    bool is_end() const { return prev_->is_end(); }
+    bool is_end() const {
+        return limit_ == 0 || prev_->is_end();
+    }
 
     // 需要实现
     const std::vector<ColMeta> &cols() const override { return proj_cols_; }

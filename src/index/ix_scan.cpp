@@ -59,10 +59,10 @@ Iid IxScan::prev_iid(const Iid &iid) {
     if (--slot >= 0) {
         return {iid.page_no, slot};
     }
-    auto &&node = ih_->fetch_node(iid_.page_no);
+    auto node = ih_->fetch_node(iid.page_no);
     assert(node->is_leaf_page());
     if (node->get_page_no() != ih_->file_hdr_->first_leaf_) {
-        auto &&prev_node = ih_->fetch_node(node->get_prev_leaf());
+        auto prev_node = ih_->fetch_node(node->get_prev_leaf());
         Iid iidd = {prev_node->get_page_no(), prev_node->get_size() - 1};
         bpm_->unpin_page(prev_node->get_page_id(), false);
         bpm_->unpin_page(node->get_page_id(), false);
@@ -70,6 +70,10 @@ Iid IxScan::prev_iid(const Iid &iid) {
     }
     bpm_->unpin_page(node->get_page_id(), false);
     return {-1, -1};
+}
+
+Rid IxScan::prev_rid(const Iid &iid) {
+    return ih_->get_rid(prev_iid(iid));
 }
 
 RmRecord IxScan::get_key() {

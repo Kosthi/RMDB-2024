@@ -31,14 +31,14 @@ public:
         cur_node_handle_ = ih_->fetch_node(iid_.page_no);
     }
 
+    ~IxScan() override {
+        bpm_->unpin_page(cur_node_handle_->get_page_id(), false);
+    }
+
     void next() override;
 
     bool is_end() const override {
-        if (iid_ == end_) {
-            bpm_->unpin_page(cur_node_handle_->get_page_id(), false);
-            return true;
-        }
-        return false;
+        return iid_ == end_;
     }
 
     Rid rid() const override;
@@ -48,6 +48,8 @@ public:
     Iid prev_iid();
 
     Iid prev_iid(const Iid &iid);
+
+    Rid prev_rid(const Iid &iid);
 
     RmRecord get_key();
 };

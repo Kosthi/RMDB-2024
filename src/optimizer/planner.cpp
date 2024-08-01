@@ -282,6 +282,20 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
         } else {
             // 存在索引
             // 且在排序列上，不需要排序
+            // 如果有索引，且是 min，max 聚合直接优化成 orderby + limit，就不用走聚合算子了
+            // select min(no_o_id)/max(no_o_id) as min_o_id from new_orders where no_d_id=:d_id and no_w_id=:w_id;
+            // select no_o_id as min_o_id from new_orders where no_d_id=:d_id and no_w_id=:w_id order by no_o_id limit 1;
+            if (curr_conds.size() <= index_col_names.size() && query->agg_types.size() == 1) {
+                if (query->agg_types[0] == AGG_MIN) {
+                    query->asc = true;
+                    query->limit = 1;
+                    query->agg_types[0] = AGG_COL;
+                } else if (query->agg_types[0] == AGG_MAX) {
+                    query->asc = false;
+                    query->limit = 1;
+                    query->agg_types[0] = AGG_COL;
+                }
+            }
             if (x->has_sort) {
                 for (auto &cond: curr_conds) {
                     if (cond.lhs_col == query->sort_bys || cond.rhs_col == query->sort_bys) {
@@ -291,7 +305,8 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
                 }
             }
             table_scan_executors[i] =
-                    std::make_shared<ScanPlan>(T_IndexScan, sm_manager_, tables[i], curr_conds, index_col_names);
+                    std::make_shared<ScanPlan>(T_IndexScan, sm_manager_, tables[i], curr_conds, index_col_names,
+                                               query->asc);
         }
     }
     // TODO 这里先假设子查询不需要 join
@@ -534,7 +549,7 @@ std::shared_ptr<Plan> Planner::generate_select_plan(std::shared_ptr<Query> query
 
     // TODO 待会处理别名
     plannerRoot = std::make_shared<ProjectionPlan>(T_Projection, std::move(plannerRoot),
-                                                   std::move(sel_cols), std::move(query->alias));
+                                                   std::move(sel_cols), std::move(query->alias), query->limit);
 
     return plannerRoot;
 }

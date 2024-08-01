@@ -50,6 +50,12 @@ public:
     //insert 的values值
     std::vector<Value> values;
 
+    // min asc true
+    // max asc false
+    bool asc = true;
+    // limit > 0 available
+    int limit = -1;
+
     Query() {
     }
 };
