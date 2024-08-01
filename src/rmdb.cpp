@@ -201,6 +201,16 @@ void *client_handler(void *sock_fd) {
         for (auto &future: futures) {
             future.get();
         }
+        if (!futures.empty()) {
+            for (auto &[_, fh]: sm_manager->fhs_) {
+                std::ignore = _;
+                buffer_pool_manager->flush_all_pages(fh->GetFd());
+            }
+            for (auto &[_, ih]: sm_manager->ihs_) {
+                std::ignore = _;
+                buffer_pool_manager->flush_all_pages(ih->fd_);
+            }
+        }
         futures.clear();
         pool_mutex.unlock();
 #ifdef ENABLE_COUT
@@ -495,7 +505,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
