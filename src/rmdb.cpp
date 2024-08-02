@@ -506,7 +506,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
