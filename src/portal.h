@@ -92,7 +92,7 @@ public:
                         }
                     }
                     return std::make_shared<PortalStmt>(PORTAL_ONE_SELECT, std::move(show_cols), std::move(root),
-                                                        plan);
+                                                        std::move(plan));
                 }
 
                 case T_Update: {
@@ -180,42 +180,46 @@ public:
     void drop() {
     }
 
-    std::unique_ptr<AbstractExecutor> convert_plan_executor(std::shared_ptr<Plan> plan, Context *context,
+    std::unique_ptr<AbstractExecutor> convert_plan_executor(const std::shared_ptr<Plan> &plan, Context *context,
                                                             bool gap_mode = false) {
         if (auto x = std::dynamic_pointer_cast<ProjectionPlan>(plan)) {
             return std::make_unique<ProjectionExecutor>(convert_plan_executor(x->subplan_, context),
-                                                        x->sel_cols_, x->limit_);
-        }
-        if (auto x = std::dynamic_pointer_cast<AggregatePlan>(plan)) {
-            return std::make_unique<AggregateExecutor>(convert_plan_executor(x->subplan_, context), x->sel_cols_,
-                                                       x->agg_types_,
-                                                       x->group_bys_, x->havings_, context);
+                                                        std::move(x->sel_cols_), x->limit_);
         }
         if (auto x = std::dynamic_pointer_cast<ScanPlan>(plan)) {
             // TODO 为每个子查询生成算子
-            for (auto &cond: x->conds_) {
-                if (cond.is_sub_query && cond.sub_query_plan != nullptr) {
-                    cond.prev = convert_plan_executor(cond.sub_query_plan, context);
-                    // 在算子执行之前就处理异常情况，否则会错误输出表头
-                    // 子查询为空抛错处理
-                    cond.prev->beginTuple();
-                    if (cond.prev->is_end()) {
-                        throw InternalError("Empty sub query!");
-                    }
-                    // 比较运算符的子查询，只能有一个元素
-                    if (cond.op != OP_IN) {
-                        cond.prev->nextTuple();
-                        if (!cond.prev->is_end()) {
-                            throw InternalError("Subquery returns more than 1 row!");
-                        }
-                    }
-                }
-            }
+            // for (auto &cond: x->conds_) {
+            //     if (cond.is_sub_query && cond.sub_query_plan != nullptr) {
+            //         assert(0);
+            //         cond.prev = convert_plan_executor(cond.sub_query_plan, context);
+            //         // 在算子执行之前就处理异常情况，否则会错误输出表头
+            //         // 子查询为空抛错处理
+            //         cond.prev->beginTuple();
+            //         if (cond.prev->is_end()) {
+            //             throw InternalError("Empty sub query!");
+            //         }
+            //         // 比较运算符的子查询，只能有一个元素
+            //         if (cond.op != OP_IN) {
+            //             cond.prev->nextTuple();
+            //             if (!cond.prev->is_end()) {
+            //                 throw InternalError("Subquery returns more than 1 row!");
+            //             }
+            //         }
+            //     }
+            // }
             if (x->tag == T_SeqScan) {
-                return std::make_unique<SeqScanExecutor>(sm_manager_, x->tab_name_, x->conds_, context, gap_mode);
+                return std::make_unique<SeqScanExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->conds_),
+                                                         context, gap_mode);
             }
-            return std::make_unique<IndexScanExecutor>(sm_manager_, x->tab_name_, x->conds_, x->index_col_names_,
+            return std::make_unique<IndexScanExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->conds_),
+                                                       std::move(x->index_col_names_),
                                                        context, gap_mode, x->asc_);
+        }
+        if (auto x = std::dynamic_pointer_cast<AggregatePlan>(plan)) {
+            return std::make_unique<AggregateExecutor>(convert_plan_executor(x->subplan_, context),
+                                                       std::move(x->sel_cols_),
+                                                       std::move(x->agg_types_),
+                                                       std::move(x->group_bys_), std::move(x->havings_), context);
         }
         if (auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
             std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
@@ -230,7 +234,7 @@ public:
         }
         if (auto x = std::dynamic_pointer_cast<SortPlan>(plan)) {
             return std::make_unique<SortExecutor>(convert_plan_executor(x->subplan_, context),
-                                                  x->sel_col_, x->is_desc_);
+                                                  std::move(x->sel_col_), x->is_desc_);
         }
         return nullptr;
     }

@@ -22,6 +22,10 @@ See the Mulan PSL v2 for more details. */
 #include "system/sm.h"
 #include "predicate_manager.h"
 
+static std::map<CompOp, CompOp> swap_op = {
+    {OP_EQ, OP_EQ}, {OP_NE, OP_NE}, {OP_LT, OP_GT}, {OP_GT, OP_LT}, {OP_LE, OP_GE}, {OP_GE, OP_LE},
+};
+
 class IndexScanExecutor : public AbstractExecutor {
 private:
     SmManager *sm_manager_;
@@ -136,9 +140,6 @@ public:
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         cols_ = tab_.cols;
         len_ = cols_.back().offset + cols_.back().len;
-        std::map<CompOp, CompOp> swap_op = {
-            {OP_EQ, OP_EQ}, {OP_NE, OP_NE}, {OP_LT, OP_GT}, {OP_GT, OP_LT}, {OP_LE, OP_GE}, {OP_GE, OP_LE},
-        };
 
         for (auto &cond: conds_) {
             if (cond.lhs_col.tab_name != tab_name_) {
@@ -195,9 +196,9 @@ public:
     }
 
     void beginTuple() override {
-        if (is_empty_btree_) {
-            return;
-        }
+        // if (is_empty_btree_) {
+        //     return;
+        // }
         if (already_begin_ && (!mergesort_ || scan_index_)) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
@@ -219,10 +220,10 @@ public:
         }
 
         // 空树
-        if (ih_->is_empty()) {
-            is_empty_btree_ = is_end_ = true;
-            return;
-        }
+        // if (ih_->is_empty()) {
+        //     is_empty_btree_ = is_end_ = true;
+        //     return;
+        // }
 
         lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
 

@@ -28,7 +28,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
     }
-    auto &&record = std::make_unique<RmRecord>(page_handle.get_slot(rid.slot_no), file_hdr_.record_size, true);
+    auto record = std::make_unique<RmRecord>(page_handle.get_slot(rid.slot_no), file_hdr_.record_size, true);
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), false);
     return std::move(record);
 }

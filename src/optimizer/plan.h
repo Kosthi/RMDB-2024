@@ -73,8 +73,7 @@ public:
         asc_ = asc;
     }
 
-    ~ScanPlan() {
-    }
+    ~ScanPlan() override = default;
 
     // 以下变量同ScanExecutor中的变量
     std::string tab_name_;

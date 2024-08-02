@@ -31,7 +31,7 @@ public:
         : sm_manager_(sm_manager), planner_(planner) {
     }
 
-    std::shared_ptr<Plan> plan_query(std::shared_ptr<Query> query, Context *context) {
+    std::shared_ptr<Plan> plan_query(std::shared_ptr<Query> &query, Context *context) {
         if (auto x = std::dynamic_pointer_cast<ast::Help>(query->parse)) {
             // help;
             return std::make_shared<OtherPlan>(T_Help, std::string());
