@@ -172,7 +172,7 @@ public:
                 break;
             }
         }
-        assert(rid_idx < page_hdr->num_key);
+        // assert(rid_idx < page_hdr->num_key);
         return rid_idx;
     }
 

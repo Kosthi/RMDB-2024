@@ -579,11 +579,11 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
         // buffer_pool_manager_->delete_page(leaf_node->get_page_id());
     }
     if (transaction != nullptr) {
-        for (auto &page: *transaction->get_index_deleted_page_set()) {
-            // printf("pin_count: %d\n", page->get_pin_count());
-            // assert(page->get_pin_count() == 0);
-            // assert(buffer_pool_manager_->delete_page(page->get_page_id()));
-        }
+        // for (auto &page: *transaction->get_index_deleted_page_set()) {
+        // printf("pin_count: %d\n", page->get_pin_count());
+        // assert(page->get_pin_count() == 0);
+        // assert(buffer_pool_manager_->delete_page(page->get_page_id()));
+        // }
         transaction->get_index_deleted_page_set()->clear();
     }
     return true;

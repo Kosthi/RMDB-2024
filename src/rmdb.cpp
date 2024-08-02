@@ -201,16 +201,16 @@ void *client_handler(void *sock_fd) {
         for (auto &future: futures) {
             future.get();
         }
-        if (!futures.empty()) {
-            for (auto &[_, fh]: sm_manager->fhs_) {
-                std::ignore = _;
-                buffer_pool_manager->flush_all_pages(fh->GetFd());
-            }
-            for (auto &[_, ih]: sm_manager->ihs_) {
-                std::ignore = _;
-                buffer_pool_manager->flush_all_pages(ih->fd_);
-            }
-        }
+        // if (!futures.empty()) {
+        //     for (auto &[_, fh]: sm_manager->fhs_) {
+        //         std::ignore = _;
+        //         buffer_pool_manager->flush_all_pages(fh->GetFd());
+        //     }
+        //     for (auto &[_, ih]: sm_manager->ihs_) {
+        //         std::ignore = _;
+        //         buffer_pool_manager->flush_all_pages(ih->fd_);
+        //     }
+        // }
         futures.clear();
         pool_mutex.unlock();
 #ifdef ENABLE_COUT
@@ -506,7 +506,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
@@ -563,7 +563,7 @@ void load_data(std::string filename, std::string tabname) {
 
     if (!tab_.indexes.empty()) {
         // 只有一个索引
-        // int num_lines = getFileLineCount(filename);
+        int num_lines = getFileLineCount(filename);
 
         // if (tabname == "customer") {
         //     auto &ix_name = tab_.indexes.begin()->first;
@@ -584,86 +584,86 @@ void load_data(std::string filename, std::string tabname) {
         //     sm_manager->create_index(tabname, index_names, nullptr);
         // }
 
-        // auto &ix_name = tab_.indexes.begin()->first;
-        // auto &ih = sm_manager->ihs_[ix_name];
-        //
-        // auto &index_meta = tab_.indexes.begin()->second;
-        // int &tot_len = index_meta.col_tot_len;
-        //
-        // // 直接设置开始分配的页面号
-        // // disk_manager->set_fd2pageno(ih->fd_, 2);
-        //
-        // // 创建第一个叶子结点
-        // int pos = 0;
-        // auto node = ih->fetch_node(ih->file_hdr_->root_page_);
-        // // ih->file_hdr_->first_leaf_ = node->get_page_no();
-        // // node->set_is_leaf_page(true);
-        //
-        // char *node_key = node->get_key(0);
-        // Rid *node_rid = node->get_rid(0);
-        //
-        // int block = 0;
-        // // 计算叶子结点的个数和每块应装入的元组条数
-        // // max_size * 0.7 大小 尽可能避免分裂重组
-        // int expected_leaf_num = static_cast<int>((ih->file_hdr_->btree_order_ + 1) * 0.7);
-        // int blocks = num_lines / expected_leaf_num + (num_lines % expected_leaf_num ? 1 : 0);
-        // // 调整块数量，确保每个叶子节点半满
-        // if (blocks > 1 && (ih->file_hdr_->btree_order_ + 1) / 2 > num_lines / blocks) {
-        //     // 可能执行到这里
-        //     --blocks;
-        // }
-        //
-        // // 实际每个叶子上的元组数量
-        // int actual_leaf_num = num_lines / blocks;
-        // // 多出来的元组
-        // int remaining_leaf_num = num_lines % blocks;
-        //
-        // // max_size * 0.9 大小 让父节点尽可能放入更多的元组
-        // int upper_expected_parent_num = static_cast<int>((ih->file_hdr_->btree_order_ + 1) * 0.9);
-        // int upper_blocks = blocks / upper_expected_parent_num + (num_lines % upper_expected_parent_num ? 1 : 0);
-        // // 调整块数量，确保每个叶子节点半满
-        // if (upper_blocks > 1 && (ih->file_hdr_->btree_order_ + 1) / 2 > blocks / upper_blocks) {
-        //     --upper_blocks;
-        // }
-        //
-        // // 实际每个父亲节点上的元组数量
-        // int actual_upper_parent_num = blocks / upper_blocks;
-        // // 多出来的元组
-        // int remaining_upper_parent_num = blocks % upper_blocks;
-        //
-        // // 第一个父亲节点页号
-        // int parent_page_no = blocks + 2;
-        //
-        // // 只能构成一个节点，即为根节点
-        // if (blocks == 1) {
-        //     node->set_parent_page_no(INVALID_PAGE_ID);
-        //     ih->file_hdr_->root_page_ = node->get_page_no();
-        // } else {
-        //     // 否则叶子节点指向父亲节点
-        //     node->set_parent_page_no(parent_page_no);
-        // }
-        //
-        // // 设置叶子节点大小
-        // node->set_size(actual_leaf_num);
-        //
-        // // 对于父亲节点，孩子节点数量
-        // int child_pos = 0;
-        //
-        // // 把每个索引块的第一个元组拷贝，用于父亲节点生成
-        // char *key_temp = nullptr;
-        // char *key_temp_head = nullptr;
-        // Rid *rid_temp = nullptr;
-        // Rid *rid_temp_head = nullptr;
-        //
-        // // 只有有父亲节点才需要
-        // if (blocks > 1) {
-        //     key_temp = new char[blocks * tot_len];
-        //     key_temp_head = key_temp;
-        //     rid_temp = new Rid[blocks];
-        //     rid_temp_head = rid_temp;
-        // }
+        auto &ix_name = tab_.indexes.begin()->first;
+        auto &ih = sm_manager->ihs_[ix_name];
 
-        auto *txn = new Transaction(666);
+        auto &index_meta = tab_.indexes.begin()->second;
+        int &tot_len = index_meta.col_tot_len;
+
+        // 直接设置开始分配的页面号
+        // disk_manager->set_fd2pageno(ih->fd_, 2);
+
+        // 创建第一个叶子结点
+        int pos = 0;
+        auto node = ih->fetch_node(ih->file_hdr_->root_page_);
+        // ih->file_hdr_->first_leaf_ = node->get_page_no();
+        // node->set_is_leaf_page(true);
+
+        char *node_key = node->get_key(0);
+        Rid *node_rid = node->get_rid(0);
+
+        int block = 0;
+        // 计算叶子结点的个数和每块应装入的元组条数
+        // max_size * 0.7 大小 尽可能避免分裂重组
+        int expected_leaf_num = static_cast<int>((ih->file_hdr_->btree_order_ + 1) * 0.7);
+        int blocks = num_lines / expected_leaf_num + (num_lines % expected_leaf_num ? 1 : 0);
+        // 调整块数量，确保每个叶子节点半满
+        if (blocks > 1 && (ih->file_hdr_->btree_order_ + 1) / 2 > num_lines / blocks) {
+            // 可能执行到这里
+            --blocks;
+        }
+
+        // 实际每个叶子上的元组数量
+        int actual_leaf_num = num_lines / blocks;
+        // 多出来的元组
+        int remaining_leaf_num = num_lines % blocks;
+
+        // max_size * 0.9 大小 让父节点尽可能放入更多的元组
+        int upper_expected_parent_num = static_cast<int>((ih->file_hdr_->btree_order_ + 1) * 0.9);
+        int upper_blocks = blocks / upper_expected_parent_num + (num_lines % upper_expected_parent_num ? 1 : 0);
+        // 调整块数量，确保每个叶子节点半满
+        if (upper_blocks > 1 && (ih->file_hdr_->btree_order_ + 1) / 2 > blocks / upper_blocks) {
+            --upper_blocks;
+        }
+
+        // 实际每个父亲节点上的元组数量
+        int actual_upper_parent_num = blocks / upper_blocks;
+        // 多出来的元组
+        int remaining_upper_parent_num = blocks % upper_blocks;
+
+        // 第一个父亲节点页号
+        int parent_page_no = blocks + 2;
+
+        // 只能构成一个节点，即为根节点
+        if (blocks == 1) {
+            node->set_parent_page_no(INVALID_PAGE_ID);
+            ih->file_hdr_->root_page_ = node->get_page_no();
+        } else {
+            // 否则叶子节点指向父亲节点
+            node->set_parent_page_no(parent_page_no);
+        }
+
+        // 设置叶子节点大小
+        node->set_size(actual_leaf_num);
+
+        // 对于父亲节点，孩子节点数量
+        int child_pos = 0;
+
+        // 把每个索引块的第一个元组拷贝，用于父亲节点生成
+        char *key_temp = nullptr;
+        char *key_temp_head = nullptr;
+        Rid *rid_temp = nullptr;
+        Rid *rid_temp_head = nullptr;
+
+        // 只有有父亲节点才需要
+        if (blocks > 1) {
+            key_temp = new char[blocks * tot_len];
+            key_temp_head = key_temp;
+            rid_temp = new Rid[blocks];
+            rid_temp_head = rid_temp;
+        }
+
+        // auto *txn = new Transaction(666);
 
         // i 慢指针，j 快指针
         for (std::size_t j = i; j < file_size; ++j) {
@@ -707,82 +707,82 @@ void load_data(std::string filename, std::string tabname) {
                 i = j + 1;
 
                 // 得到索引键
-                // char *key = new char[tot_len];
-                // for (auto &[index_offset, col]: index_meta.cols) {
-                //     memcpy(key + index_offset, cur + col.offset, col.len);
-                // }
-
-                for (auto &[index_name, index]: tab_.indexes) {
-                    auto &ih = sm_manager->ihs_[index_name];
-                    char *key = new char[index.col_tot_len];
-                    for (auto &[index_offset, col_meta]: index.cols) {
-                        memcpy(key + index_offset, cur + col_meta.offset, col_meta.len);
-                    }
-                    ih->insert_entry(key, {page_no, row % max_nums_}, txn);
-                    delete []key;
+                char *key = new char[tot_len];
+                for (auto &[index_offset, col]: index_meta.cols) {
+                    memcpy(key + index_offset, cur + col.offset, col.len);
                 }
 
+                // for (auto &[index_name, index]: tab_.indexes) {
+                //     auto &ih = sm_manager->ihs_[index_name];
+                //     char *key = new char[index.col_tot_len];
+                //     for (auto &[index_offset, col_meta]: index.cols) {
+                //         memcpy(key + index_offset, cur + col_meta.offset, col_meta.len);
+                //     }
+                //     ih->insert_entry(key, {page_no, row % max_nums_}, txn);
+                //     delete []key;
+                // }
+
                 // 一个叶子节点放满了
-                //         if (pos == actual_leaf_num) {
-                //             pos = 0;
-                //
-                //             auto new_node = ih->create_node();
-                //             // 设置叶子节点前后关系
-                //             new_node->set_prev_leaf(node->get_page_no());
-                //             new_node->set_next_leaf(node->get_next_leaf());
-                //             node->set_next_leaf(new_node->get_page_no());
-                //
-                //             // unpin
-                //             buffer_pool_manager->unpin_page(node->get_page_id(), true);
-                //
-                //             node = std::move(new_node);
-                //             node->set_is_leaf_page(true);
-                //             node_key = node->get_key(0);
-                //             node_rid = node->get_rid(0);
-                //
-                //             // TODO why use ?
-                //             if (++block + remaining_leaf_num == blocks) {
-                //                 // assert(0);
-                //                 ++actual_leaf_num;
-                //             }
-                //
-                //             // 设置大小
-                //             node->set_size(actual_leaf_num);
-                //
-                //             // 对于父亲节点，孩子节点数量 + 1
-                //             if (++child_pos > actual_upper_parent_num) {
-                //                 // 父亲节点 + 1
-                //                 ++parent_page_no;
-                //                 // 孩子节点数量设置为 0
-                //                 child_pos = 0;
-                //                 // 为啥
-                //                 if (parent_page_no - blocks - 1 == upper_blocks - remaining_upper_parent_num) {
-                //                     ++actual_upper_parent_num;
-                //                 }
-                //             }
-                //             // 指向父亲节点
-                //             node->set_parent_page_no(parent_page_no);
-                //         }
-                //
-                //         // 注意如果一个叶子节点放满了，跳到下一个叶子头也得拷贝
-                //         if (pos == 0 && blocks > 1) {
-                //             // 将每个索引块的第一个元组拷贝一份到临时数组中
-                //             memcpy(key_temp_head, key, tot_len);
-                //             Rid rid{.page_no = node->get_page_no(), .slot_no = 0};
-                //             memcpy(rid_temp_head, &rid, sizeof(Rid));
-                //             key_temp_head += tot_len;
-                //             // 加一个 rid
-                //             ++rid_temp_head;
-                //         }
-                //
-                //         // 初始化键值对
-                //         Rid rid{page_no, row % max_nums_};
-                //         memcpy(node_key, key, tot_len);
-                //         memcpy(node_rid, &rid, sizeof(Rid));
-                //         node_key += tot_len;
-                //         ++node_rid;
-                //         ++pos;
-                //
+                if (pos == actual_leaf_num) {
+                    pos = 0;
+
+                    auto new_node = ih->create_node();
+                    // 设置叶子节点前后关系
+                    new_node->set_prev_leaf(node->get_page_no());
+                    new_node->set_next_leaf(node->get_next_leaf());
+                    node->set_next_leaf(new_node->get_page_no());
+
+                    // unpin
+                    buffer_pool_manager->unpin_page(node->get_page_id(), true);
+
+                    node = std::move(new_node);
+                    node->set_is_leaf_page(true);
+                    node_key = node->get_key(0);
+                    node_rid = node->get_rid(0);
+
+                    // TODO why use ?
+                    if (++block + remaining_leaf_num == blocks) {
+                        // assert(0);
+                        ++actual_leaf_num;
+                    }
+
+                    // 设置大小
+                    node->set_size(actual_leaf_num);
+
+                    // 对于父亲节点，孩子节点数量 + 1
+                    if (++child_pos > actual_upper_parent_num) {
+                        // 父亲节点 + 1
+                        ++parent_page_no;
+                        // 孩子节点数量设置为 0
+                        child_pos = 0;
+                        // 为啥
+                        if (parent_page_no - blocks - 1 == upper_blocks - remaining_upper_parent_num) {
+                            ++actual_upper_parent_num;
+                        }
+                    }
+                    // 指向父亲节点
+                    node->set_parent_page_no(parent_page_no);
+                }
+
+                // 注意如果一个叶子节点放满了，跳到下一个叶子头也得拷贝
+                if (pos == 0 && blocks > 1) {
+                    // 将每个索引块的第一个元组拷贝一份到临时数组中
+                    memcpy(key_temp_head, key, tot_len);
+                    Rid rid{.page_no = node->get_page_no(), .slot_no = 0};
+                    memcpy(rid_temp_head, &rid, sizeof(Rid));
+                    key_temp_head += tot_len;
+                    // 加一个 rid
+                    ++rid_temp_head;
+                }
+
+                // 初始化键值对
+                Rid rid{page_no, row % max_nums_};
+                memcpy(node_key, key, tot_len);
+                memcpy(node_rid, &rid, sizeof(Rid));
+                node_key += tot_len;
+                ++node_rid;
+                ++pos;
+
                 cur += record_len_;
                 // 满足一页或者读到最后了，刷进去
                 if ((row + 1) % max_nums_ == 0 || j == file_size - 1) {
@@ -793,20 +793,20 @@ void load_data(std::string filename, std::string tabname) {
                 }
 
                 ++row;
-                // delete []key;
+                delete []key;
             }
         }
 
         // 设置最后一个叶子节点
-        // ih->file_hdr_->last_leaf_ = node->get_page_no();
-        // // unpin
-        // buffer_pool_manager->unpin_page(node->get_page_id(), true);
-        //
-        // // 需要建立父亲节点
-        // if (blocks > 1) {
-        //     ih->create_upper_parent_nodes(key_temp, rid_temp, blocks + 2, blocks);
-        // }
-        delete txn;
+        ih->file_hdr_->last_leaf_ = node->get_page_no();
+        // unpin
+        buffer_pool_manager->unpin_page(node->get_page_id(), true);
+
+        // 需要建立父亲节点
+        if (blocks > 1) {
+            ih->create_upper_parent_nodes(key_temp, rid_temp, blocks + 2, blocks);
+        }
+        // delete txn;
 
         // ih->Draw(buffer_pool_manager.get(), "dis_Graph.dot");
     } else {
