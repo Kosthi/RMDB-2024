@@ -663,6 +663,7 @@ void load_data(std::string filename, std::string tabname) {
             rid_temp_head = rid_temp;
         }
 
+        char *key = new char[tot_len];
         // auto *txn = new Transaction(666);
 
         // i 慢指针，j 快指针
@@ -707,7 +708,6 @@ void load_data(std::string filename, std::string tabname) {
                 i = j + 1;
 
                 // 得到索引键
-                char *key = new char[tot_len];
                 for (auto &[index_offset, col]: index_meta.cols) {
                     memcpy(key + index_offset, cur + col.offset, col.len);
                 }
@@ -752,11 +752,10 @@ void load_data(std::string filename, std::string tabname) {
                     // 对于父亲节点，孩子节点数量 + 1
                     if (++child_pos >= actual_upper_parent_num) {
                         // 父亲节点 + 1
-                        ++parent_page_no;
                         // 孩子节点数量设置为 0
                         child_pos = 0;
-                        // 为啥
-                        if (parent_page_no - blocks - 1 == upper_blocks - remaining_upper_parent_num) {
+                        // 注意这里的2和起始节点页号有关，parent_page_no - blocks - 2 才是实际父节点块数
+                        if (++parent_page_no - blocks - 2 == upper_blocks - remaining_upper_parent_num) {
                             ++actual_upper_parent_num;
                         }
                     }
@@ -793,9 +792,10 @@ void load_data(std::string filename, std::string tabname) {
                 }
 
                 ++row;
-                delete []key;
             }
         }
+
+        delete []key;
 
         // 设置最后一个叶子节点
         ih->file_hdr_->last_leaf_ = node->get_page_no();
