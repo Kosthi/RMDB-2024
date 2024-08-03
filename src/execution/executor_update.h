@@ -49,15 +49,15 @@ public:
         }
 
         // X 锁
-        if (!rids_.empty() && context_ != nullptr) {
-            context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-        }
+        // if (!rids_.empty() && context_ != nullptr) {
+        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+        // }
     }
 
     // 这里 next 只会被调用一次
     std::unique_ptr<RmRecord> Next() override {
         for (auto &rid: rids_) {
-            auto &&old_record = fh_->get_record(rid, context_);
+            auto old_record = fh_->get_record(rid, context_);
             auto updated_record = std::make_unique<RmRecord>(*old_record);
 
             for (size_t i = 0; i < set_clauses_.size(); ++i) {
@@ -114,6 +114,7 @@ public:
             }
 
             // 再检查是否有间隙锁
+            // TPCC 测试中 update 不会涉及键的变化，在 index scan 算子加了写间隙锁后就不用再检查了
             // for (auto &[index_name, index]: tab_.indexes) {
             //     RmRecord rm_record(index.col_tot_len);
             //     for (auto &[index_offset, col_meta]: index.cols) {

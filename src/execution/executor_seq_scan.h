@@ -34,14 +34,15 @@ private:
     bool is_sub_query_empty_;
     // false 为共享间隙锁，true 为互斥间隙锁
     bool gap_mode_;
+    TabMeta tab_;
 
 public:
     SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context,
                     bool gap_mode = false)
         : sm_manager_(sm_manager), tab_name_(std::move(tab_name)), conds_(std::move(conds)), gap_mode_(gap_mode) {
-        TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
+        tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
-        cols_ = tab.cols;
+        cols_ = tab_.cols;
         len_ = cols_.back().offset + cols_.back().len;
         context_ = context;
         // fed_conds_ = conds_;
@@ -69,6 +70,17 @@ public:
     }
 
     void beginTuple() override {
+        // 如果表上有索引，对于全表扫操作加 (-INF, +INF) 的间隙锁
+        for (auto &[ix_name, index_meta]: tab_.indexes) {
+            auto predicate_manager = PredicateManager(index_meta);
+            auto gap = Gap(predicate_manager.getIndexConds());
+            if (gap_mode_) {
+                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            } else {
+                context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            }
+        }
+
         scan_ = std::make_unique<RmScan>(fh_);
         for (; !scan_->is_end(); scan_->next()) {
             rid_ = scan_->rid();
