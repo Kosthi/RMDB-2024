@@ -1107,7 +1107,7 @@ void IxIndexHandle::create_upper_parent_nodes(char *key, Rid *rid, int first_par
             node->set_size(actual_leaf_num);
 
             // 对于父亲节点，孩子节点数量 + 1
-            if (++child_pos > actual_upper_parent_num) {
+            if (++child_pos >= actual_upper_parent_num) {
                 // 孩子节点数量设置为 0
                 child_pos = 0;
                 // 父亲节点 + 1

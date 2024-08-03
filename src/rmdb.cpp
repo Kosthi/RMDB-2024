@@ -750,7 +750,7 @@ void load_data(std::string filename, std::string tabname) {
                     node->set_size(actual_leaf_num);
 
                     // 对于父亲节点，孩子节点数量 + 1
-                    if (++child_pos > actual_upper_parent_num) {
+                    if (++child_pos >= actual_upper_parent_num) {
                         // 父亲节点 + 1
                         ++parent_page_no;
                         // 孩子节点数量设置为 0
