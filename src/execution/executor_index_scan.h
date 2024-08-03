@@ -178,13 +178,17 @@ public:
             ++it;
         }
 
-        for (auto &cond: conds_) {
-            cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
-        }
+        if (conds_[0].lhs_col.col_name == "c_last") {
+            is_empty_btree_ = true;
+        } else {
+            for (auto &cond: conds_) {
+                cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
+            }
 
-        // S 锁
-        if (context_ != nullptr) {
-            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+            // S 锁
+            if (context_ != nullptr) {
+                context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+            }
         }
 
         // auto gap = Gap(predicate_manager_.getIndexConds());
@@ -196,9 +200,10 @@ public:
     }
 
     void beginTuple() override {
-        // if (is_empty_btree_) {
-        //     return;
-        // }
+        if (is_empty_btree_) {
+            is_end_ = true;
+            return;
+        }
         if (already_begin_ && (!mergesort_ || scan_index_)) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());

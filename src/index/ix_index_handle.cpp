@@ -1111,8 +1111,8 @@ void IxIndexHandle::create_upper_parent_nodes(char *key, Rid *rid, int first_par
                 // 孩子节点数量设置为 0
                 child_pos = 0;
                 // 父亲节点 + 1
-                // 注意这里的2和起始节点页号有关，parent_page_no - blocks - 2 才是实际父节点块数
-                if (++parent_page_no - blocks - 2 == upper_blocks - remaining_upper_parent_num) {
+                // 注意这里的2和起始节点页号有关，parent_page_no - blocks - first_parent_page_no 才是实际父节点块数
+                if (++parent_page_no - blocks - first_parent_page_no == upper_blocks - remaining_upper_parent_num) {
                     ++actual_upper_parent_num;
                 }
             }
