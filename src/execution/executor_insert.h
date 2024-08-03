@@ -84,7 +84,6 @@ public:
 
         // 再检查是否有间隙锁
         for (auto &[index_name, index]: tab_.indexes) {
-            auto ih = sm_manager_->ihs_.at(index_name).get();
             RmRecord rm_record(index.col_tot_len);
             for (auto &[index_offset, col_meta]: index.cols) {
                 memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
