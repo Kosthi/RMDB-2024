@@ -70,6 +70,11 @@ public:
     }
 
     void beginTuple() override {
+        // S 锁
+        if (context_ != nullptr) {
+            context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        }
+
         // 如果表上有索引，对于全表扫操作加 (-INF, +INF) 的间隙锁
         for (auto &[ix_name, index_meta]: tab_.indexes) {
             auto predicate_manager = PredicateManager(index_meta);
