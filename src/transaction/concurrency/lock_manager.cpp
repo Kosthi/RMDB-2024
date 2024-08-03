@@ -241,11 +241,11 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
             }
 
             // 锁升级
-            lock_request.granted_ = false;
-            lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+            // lock_request.granted_ = false;
+            // lock_request.lock_mode_ = LockMode::EXCLUSIVE;
 
             lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
 
             std::unique_lock ul(latch_, std::adopt_lock);
             auto cur = lock_request_queue.request_queue_.begin();
