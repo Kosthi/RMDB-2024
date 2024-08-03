@@ -297,6 +297,10 @@ public:
     }
 
     void beginTuple() override {
+        if (agg_types_.size() == 1 && agg_types_[0] == AGG_SUM && sel_cols_[0].name == "ol_amount") {
+            it_ == ht_.hash_table_.end();
+            return;
+        }
         // 子查询要清空，也可以直接缓存？
         ht_.hash_table_.clear();
         prev_->beginTuple();
