@@ -78,7 +78,7 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
     // 检查间隙是否相交
     bool contain_X = false;
     for (auto &[data_id, queue]: it->second) {
-        if (queue.group_lock_mode_ == GroupLockMode::X && gap.isCoincide(data_id.gap_)) {
+        if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
             bool is_only_txn = true;
             for (auto &req: queue.request_queue_) {
                 if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
@@ -87,9 +87,9 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
                 }
             }
             if (!is_only_txn) {
-                // if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                //     throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                // }
+                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                }
                 contain_X = true;
                 break;
             }
@@ -116,12 +116,11 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
             for (auto it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
                  ++it_) {
                 if (it_->txn_id_ != txn->get_transaction_id()) {
-                    if (it_->lock_mode_ != LockMode::SHARED || it_->granted_) {
+                    if (it_->lock_mode_ == LockMode::EXCLUSIVE && it_->granted_) {
                         return false;
                     }
                 } else {
                     cur = it_;
-                    break;
                 }
             }
 
@@ -201,7 +200,8 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
     // 独占锁只要有区间相交就得等待
     for (auto &[data_id, queue]: it->second) {
         if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
-            if (gap.isCoincide(data_id.gap_)) {
+            // 注意参数里的 gap 已经被移动了，是 lock_data_id.gap_
+            if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
                 bool is_only_txn = true;
                 for (auto &req: queue.request_queue_) {
                     if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
@@ -211,9 +211,9 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                 }
                 if (!is_only_txn) {
                     // TODO 如果不过题八，不必回滚提高并发度
-                    // if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                    //     throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                    // }
+                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    }
                     contain = true;
                     break;
                 }
@@ -264,11 +264,6 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                         break;
                     }
                 }
-                // if (lock_request_queue.shared_lock_num_ != 1) {
-                //     return false;
-                // }
-
-                // assert(lock_request_queue.shared_lock_num_ == 1);
 
                 bool contain = false;
                 for (auto &[data_id, queue]: it->second) {
@@ -340,12 +335,6 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                     break;
                 }
             }
-
-            // if (lock_request_queue.shared_lock_num_ != 0) {
-            //     return false;
-            // }
-            //
-            // assert(lock_request_queue.shared_lock_num_ == 0);
 
             bool contain = false;
             for (auto &[data_id, queue]: it->second) {
