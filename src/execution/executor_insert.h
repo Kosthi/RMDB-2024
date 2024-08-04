@@ -83,45 +83,45 @@ public:
         }
 
         // 再检查是否有间隙锁
-        // for (auto &[index_name, index]: tab_.indexes) {
-        //     RmRecord rm_record(index.col_tot_len);
-        //     for (auto &[index_offset, col_meta]: index.cols) {
-        //         memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
-        //     }
-        //     context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
-        // }
+        for (auto &[index_name, index]: tab_.indexes) {
+            RmRecord rm_record(index.col_tot_len);
+            for (auto &[index_offset, col_meta]: index.cols) {
+                memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+            }
+            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+        }
 
         // 再检查是否有间隙锁冲突，这里间隙锁退化成了行锁
-        for (auto &[index_name, index_meta]: tab_.indexes) {
-            auto predicate_manager = PredicateManager(index_meta);
-
-            // TODO 支持更多谓词的解析 > >
-            // 手动写个 cond index_col = val
-            std::vector<Condition> conds;
-            for (auto &[index_offset, col_meta]: index_meta.cols) {
-                Value v;
-                v.type = col_meta.type;
-                v.raw = std::make_shared<RmRecord>(rec.data + col_meta.offset, col_meta.len);
-                conds.emplace_back();
-                conds.back().op = OP_EQ;
-                conds.back().lhs_col = {"", col_meta.name};
-                conds.back().rhs_val = std::move(v);
-            }
-            for (auto it = conds.begin(); it != conds.end();) {
-                if (predicate_manager.addPredicate(it->lhs_col.col_name, *it)) {
-                    it = conds.erase(it);
-                    continue;
-                }
-                assert(0);
-                ++it;
-            }
-            auto gap = Gap(predicate_manager.getIndexConds());
-            // RmRecord rm_record(index.col_tot_len);
-            // for (auto &[index_offset, col_meta]: index.cols) {
-            //     memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
-            // }
-            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
-        }
+        // for (auto &[index_name, index_meta]: tab_.indexes) {
+        //     auto predicate_manager = PredicateManager(index_meta);
+        //
+        //     // TODO 支持更多谓词的解析 > >
+        //     // 手动写个 cond index_col = val
+        //     std::vector<Condition> conds;
+        //     for (auto &[index_offset, col_meta]: index_meta.cols) {
+        //         Value v;
+        //         v.type = col_meta.type;
+        //         v.raw = std::make_shared<RmRecord>(rec.data + col_meta.offset, col_meta.len);
+        //         conds.emplace_back();
+        //         conds.back().op = OP_EQ;
+        //         conds.back().lhs_col = {"", col_meta.name};
+        //         conds.back().rhs_val = std::move(v);
+        //     }
+        //     for (auto it = conds.begin(); it != conds.end();) {
+        //         if (predicate_manager.addPredicate(it->lhs_col.col_name, *it)) {
+        //             it = conds.erase(it);
+        //             continue;
+        //         }
+        //         assert(0);
+        //         ++it;
+        //     }
+        //     auto gap = Gap(predicate_manager.getIndexConds());
+        //     // RmRecord rm_record(index.col_tot_len);
+        //     // for (auto &[index_offset, col_meta]: index.cols) {
+        //     //     memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
+        //     // }
+        //     context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        // }
 
         // Insert into record file
         rid_ = fh_->insert_record(rec.data, context_);
