@@ -8,6 +8,8 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
+#define NDEBUG
+
 #include <array>
 #include <netinet/in.h>
 #include <readline/history.h>
@@ -506,7 +508,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
