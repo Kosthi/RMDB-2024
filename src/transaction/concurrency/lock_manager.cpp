@@ -85,6 +85,9 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
                 }
             }
             if (!is_only_txn) {
+                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                }
                 contain_X = true;
                 break;
             }
