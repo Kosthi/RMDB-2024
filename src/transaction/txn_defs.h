@@ -295,6 +295,10 @@ public:
         return index_meta_ == other.index_meta_ && gap_hasher_(gap_) == gap_hasher_(other.gap_);
     }
 
+    bool operator!=(const LockDataId &other) const {
+        return !(*this == other);
+    }
+
     int fd_;
     Rid rid_;
     IndexMeta index_meta_; // 间隙锁，锁住的索引
