@@ -245,8 +245,12 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
             }
 
+            // 锁升级
+            lock_request.granted_ = false;
+            lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+
             lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
 
             std::unique_lock ul(latch_, std::adopt_lock);
             auto cur = lock_request_queue.request_queue_.begin();
@@ -942,12 +946,11 @@ bool LockManager::lock_shared_on_record(Transaction *txn, const Rid &rid, int ta
             for (auto &&it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
                  ++it) {
                 if (it->txn_id_ != txn->get_transaction_id()) {
-                    if (it->lock_mode_ != LockMode::SHARED || it->granted_) {
+                    if (it->lock_mode_ == LockMode::EXCLUSIVE && it->granted_) {
                         return false;
                     }
                 } else {
                     cur = it;
-                    break;
                 }
             }
             return true;
@@ -1021,8 +1024,13 @@ bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
             }
 
+            // 锁升级
+            lock_request.granted_ = false;
+            lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+
             lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+
             std::unique_lock<std::mutex> ul(latch_, std::adopt_lock);
             auto &&cur = lock_request_queue.request_queue_.begin();
             // 通过条件：当前请求之前没有任何已授权的请求
