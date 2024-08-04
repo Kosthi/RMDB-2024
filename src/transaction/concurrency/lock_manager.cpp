@@ -10,6 +10,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "lock_manager.h"
 
+#include <bits/types/siginfo_t.h>
+
 // 加锁阶段检查
 static inline bool check_lock(Transaction *txn) {
     auto &txn_state = txn->get_state();
@@ -406,38 +408,47 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
         return true;
     }
 
-    // 独占锁只要有区间相交就得等待
-    for (auto &[data_id, queue]: it->second) {
-        if (data_id.gap_.isInGap(record)) {
-            bool is_only_txn = true;
-            for (auto &req: queue.request_queue_) {
-                if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                    is_only_txn = false;
-                    break;
-                }
-            }
-            // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
-            if (is_only_txn) {
-                continue;
-            }
-
-            // wait-die
-            if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-            }
-
-            std::unique_lock ul(latch_, std::adopt_lock);
-            auto &&cur = queue.request_queue_.begin();
-            // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
-            queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+    int wait = 0;
+    while (true) {
+        wait = 0;
+        // 独占锁只要有区间相交就得等待
+        for (auto &[data_id, queue]: it->second) {
+            if (data_id.gap_.isInGap(record)) {
+                bool is_only_txn = true;
                 for (auto &req: queue.request_queue_) {
                     if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                        return false;
+                        is_only_txn = false;
+                        break;
                     }
                 }
-                return true;
-            });
-            ul.release();
+                // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
+                if (is_only_txn) {
+                    continue;
+                }
+
+                // wait-die
+                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                }
+
+                ++wait;
+                std::unique_lock ul(latch_, std::adopt_lock);
+                auto &&cur = queue.request_queue_.begin();
+                // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
+                queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+                    for (auto &req: queue.request_queue_) {
+                        if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+                ul.release();
+                break;
+            }
+        }
+        if (wait == 0) {
+            break;
         }
     }
     return true;
@@ -1661,12 +1672,13 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
     // 维护队列锁模式，为空则无锁
     // TODO 擦除锁表
     if (request_queue.empty()) {
-        lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
-        lock_request_queue.oldest_txn_id_ = INT32_MAX;
+        // lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
+        // lock_request_queue.oldest_txn_id_ = INT32_MAX;
         // 唤醒等待的事务
-        lock_request_queue.cv_.notify_all();
+        // lock_request_queue.cv_.notify_all();
 
         if (lock_data_id.type_ == LockDataType::GAP) {
+            ii->second.erase(it);
             // 相交的间隙锁也得唤醒
             for (auto &[data_id, queue]: ii->second) {
                 // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
@@ -1677,7 +1689,6 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            // ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
