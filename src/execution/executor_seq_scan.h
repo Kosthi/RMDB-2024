@@ -53,6 +53,24 @@ public:
         }
 
         // S 锁
+        // if (context_ != nullptr) {
+        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        // }
+        //
+        // // 如果表上有索引，对于全表扫操作加 (-INF, +INF) 的间隙锁
+        // for (auto &[ix_name, index_meta]: tab_.indexes) {
+        //     auto predicate_manager = PredicateManager(index_meta);
+        //     auto gap = Gap(predicate_manager.getIndexConds());
+        //     if (gap_mode_) {
+        //         context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        //     } else {
+        //         context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        //     }
+        // }
+    }
+
+    void beginTuple() override {
+        assert(0);
         if (context_ != nullptr) {
             context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
         }
@@ -67,9 +85,6 @@ public:
                 context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
             }
         }
-    }
-
-    void beginTuple() override {
         scan_ = std::make_unique<RmScan>(fh_);
         for (; !scan_->is_end(); scan_->next()) {
             rid_ = scan_->rid();
