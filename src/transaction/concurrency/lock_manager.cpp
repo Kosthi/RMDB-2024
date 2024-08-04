@@ -87,9 +87,9 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
                 }
             }
             if (!is_only_txn) {
-                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                }
+                // if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                //     throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                // }
                 contain_X = true;
                 break;
             }
@@ -211,9 +211,9 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                 }
                 if (!is_only_txn) {
                     // TODO 如果不过题八，不必回滚提高并发度
-                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                    }
+                    // if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                    //     throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    // }
                     contain = true;
                     break;
                 }
