@@ -1678,7 +1678,6 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
         // lock_request_queue.cv_.notify_all();
 
         if (lock_data_id.type_ == LockDataType::GAP) {
-            ii->second.erase(it);
             // 相交的间隙锁也得唤醒
             for (auto &[data_id, queue]: ii->second) {
                 // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
@@ -1689,6 +1688,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
+            ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
