@@ -1,4 +1,6 @@
 #include "buffer_pool_instance.h"
+
+#include "cassert"
 #include "recovery/log_manager.h"
 
 /**
@@ -227,6 +229,7 @@ void BufferPoolInstance::flush_all_pages(int fd) {
 
     for (auto &[pageId, frameId]: page_table_) {
         if (pageId.fd == fd) {
+            assert(frameId >= 0);
             auto &page = pages_[frameId];
 #ifdef ENABLE_LOGGING
             if (log_manager_ != nullptr && page.get_page_lsn() > log_manager_->get_persist_lsn()) {

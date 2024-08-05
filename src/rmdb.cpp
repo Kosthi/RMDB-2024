@@ -8,7 +8,7 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
-#define NDEBUG
+// #define NDEBUG
 
 #include <array>
 #include <netinet/in.h>
@@ -203,16 +203,16 @@ void *client_handler(void *sock_fd) {
         for (auto &future: futures) {
             future.get();
         }
-        // if (!futures.empty()) {
-        //     for (auto &[_, fh]: sm_manager->fhs_) {
-        //         std::ignore = _;
-        //         buffer_pool_manager->flush_all_pages(fh->GetFd());
-        //     }
-        //     for (auto &[_, ih]: sm_manager->ihs_) {
-        //         std::ignore = _;
-        //         buffer_pool_manager->flush_all_pages(ih->fd_);
-        //     }
-        // }
+        if (!futures.empty()) {
+            for (auto &[_, fh]: sm_manager->fhs_) {
+                std::ignore = _;
+                buffer_pool_manager->flush_all_pages(fh->GetFd());
+            }
+            for (auto &[_, ih]: sm_manager->ihs_) {
+                std::ignore = _;
+                buffer_pool_manager->flush_all_pages(ih->fd_);
+            }
+        }
         futures.clear();
         pool_mutex.unlock();
 #ifdef ENABLE_COUT
@@ -403,7 +403,7 @@ void start_server() {
         }
 
         // 将线程设置为分离状态，自动回收资源
-        pthread_detach(thread_id);
+        // pthread_detach(thread_id);
     }
 
     // Clear
@@ -411,12 +411,14 @@ void start_server() {
     int ret = shutdown(sockfd_server, SHUT_WR); // shut down the all or part of a full-duplex connection.
     if (ret == -1) { printf("%s\n", strerror(errno)); }
     //    assert(ret != -1);
+    std::cout << "before close db: " << std::endl;
     sm_manager->close_db();
-
+    std::cout << "before delete txn: " << std::endl;
     for (auto &[_, txn]: txn_manager->txn_map) {
         std::ignore = _;
         delete txn;
     }
+    txn_manager->txn_map.clear();
 
 #ifdef ENABLE_COUT
     std::cout << " DB has been closed.\n";
@@ -508,7 +510,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
-    // filename = doSort(filename, tabname);
+    filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);

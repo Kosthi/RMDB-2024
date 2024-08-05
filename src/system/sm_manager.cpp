@@ -140,12 +140,14 @@ void SmManager::close_db() {
     db_.tabs_.clear();
 
     // 记录文件落盘
+    std::cout << "before file: " << std::endl;
     for (auto &[_, file_handle]: fhs_) {
         std::ignore = _;
         rm_manager_->close_file(file_handle.get());
     }
 
     // 索引文件落盘
+    std::cout << "before index file: " << std::endl;
     for (auto &[_, index_handle]: ihs_) {
         std::ignore = _;
         ix_manager_->close_index(index_handle.get());
