@@ -25,8 +25,10 @@ void IxScan::next() {
         // go to next leaf
         iid_.slot_no = 0;
         iid_.page_no = cur_node_handle_->get_next_leaf();
+        cur_node_handle_->page->RUnlatch();
         bpm_->unpin_page(cur_node_handle_->page->get_page_id(), false);
         cur_node_handle_ = ih_->fetch_node(iid_.page_no);
+        cur_node_handle_->page->RLatch();
     }
     // unpin page! 否则多次大量扫描读会出问题
     // bpm_->unpin_page(node->page->get_page_id(), false);
@@ -36,23 +38,23 @@ Rid IxScan::rid() const {
     return ih_->get_rid(iid_);
 }
 
-Iid IxScan::prev_iid() {
-    auto slot = iid_.slot_no;
-    if (--slot >= 0) {
-        return {iid_.page_no, slot};
-    }
-    auto &&node = ih_->fetch_node(iid_.page_no);
-    assert(node->is_leaf_page());
-    if (node->get_page_no() != ih_->file_hdr_->first_leaf_) {
-        auto &&prev_node = ih_->fetch_node(node->get_prev_leaf());
-        Iid iid = {prev_node->get_page_no(), prev_node->get_size() - 1};
-        bpm_->unpin_page(prev_node->get_page_id(), false);
-        bpm_->unpin_page(node->get_page_id(), false);
-        return iid;
-    }
-    bpm_->unpin_page(node->get_page_id(), false);
-    return {-1, -1};
-}
+// Iid IxScan::prev_iid() {
+//     auto slot = iid_.slot_no;
+//     if (--slot >= 0) {
+//         return {iid_.page_no, slot};
+//     }
+//     auto &&node = ih_->fetch_node(iid_.page_no);
+//     assert(node->is_leaf_page());
+//     if (node->get_page_no() != ih_->file_hdr_->first_leaf_) {
+//         auto &&prev_node = ih_->fetch_node(node->get_prev_leaf());
+//         Iid iid = {prev_node->get_page_no(), prev_node->get_size() - 1};
+//         bpm_->unpin_page(prev_node->get_page_id(), false);
+//         bpm_->unpin_page(node->get_page_id(), false);
+//         return iid;
+//     }
+//     bpm_->unpin_page(node->get_page_id(), false);
+//     return {-1, -1};
+// }
 
 Iid IxScan::prev_iid(const Iid &iid) {
     auto slot = iid.slot_no;
@@ -60,14 +62,21 @@ Iid IxScan::prev_iid(const Iid &iid) {
         return {iid.page_no, slot};
     }
     auto node = ih_->fetch_node(iid.page_no);
+    node->page->RLatch();
     assert(node->is_leaf_page());
     if (node->get_page_no() != ih_->file_hdr_->first_leaf_) {
         auto prev_node = ih_->fetch_node(node->get_prev_leaf());
+        prev_node->page->RLatch();
         Iid iidd = {prev_node->get_page_no(), prev_node->get_size() - 1};
+        node->page->RUnlatch();
+        prev_node->page->RUnlatch();
         bpm_->unpin_page(prev_node->get_page_id(), false);
         bpm_->unpin_page(node->get_page_id(), false);
         return iidd;
     }
+    // 不可能到这里
+    assert(0);
+    node->page->RUnlatch();
     bpm_->unpin_page(node->get_page_id(), false);
     return {-1, -1};
 }

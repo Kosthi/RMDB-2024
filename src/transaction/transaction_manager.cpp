@@ -158,18 +158,20 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                 auto &rid = write_record->GetRid();
                 fh->update_record(rid, old_record.data, context);
                 // 删除新索引，插入旧索引
-                for (auto &[index_name, index_meta]: table_meta.indexes) {
-                    char *old_key = new char[index_meta.col_tot_len];
-                    char *new_key = new char[index_meta.col_tot_len];
-                    for (auto &[index_offset, col_meta]: index_meta.cols) {
-                        memcpy(old_key + index_offset, old_record.data + col_meta.offset, col_meta.len);
-                        memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
+                if (write_record->is_set_index_key()) {
+                    for (auto &[index_name, index_meta]: table_meta.indexes) {
+                        char *old_key = new char[index_meta.col_tot_len];
+                        char *new_key = new char[index_meta.col_tot_len];
+                        for (auto &[index_offset, col_meta]: index_meta.cols) {
+                            memcpy(old_key + index_offset, old_record.data + col_meta.offset, col_meta.len);
+                            memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
+                        }
+                        auto &&ih = sm_manager_->ihs_[index_name];
+                        ih->delete_entry(new_key, txn);
+                        ih->insert_entry(old_key, rid, txn);
+                        delete []old_key;
+                        delete []new_key;
                     }
-                    auto &&ih = sm_manager_->ihs_[index_name];
-                    ih->delete_entry(new_key, txn);
-                    ih->insert_entry(old_key, rid, txn);
-                    delete []old_key;
-                    delete []new_key;
                 }
 #ifdef ENABLE_LOGGING
                 // 生成插入日志

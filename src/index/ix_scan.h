@@ -29,9 +29,11 @@ public:
     IxScan(const IxIndexHandle *ih, const Iid &lower, const Iid &upper, BufferPoolManager *bpm)
         : ih_(ih), iid_(lower), end_(upper), bpm_(bpm) {
         cur_node_handle_ = ih_->fetch_node(iid_.page_no);
+        cur_node_handle_->page->RLatch();
     }
 
     ~IxScan() override {
+        cur_node_handle_->page->RUnlatch();
         bpm_->unpin_page(cur_node_handle_->get_page_id(), false);
     }
 

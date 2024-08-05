@@ -138,7 +138,7 @@ public:
 
             // 防止 double throw
             // 写入事务写集
-            auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record);
+            auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record, is_set_index_key_);
             context_->txn_->append_write_record(write_record);
         }
         return nullptr;

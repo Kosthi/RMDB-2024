@@ -57,8 +57,9 @@ public:
 
     // constructor for update operation
     WriteRecord(WType wtype, std::string tab_name, const Rid &rid, const RmRecord &old_record,
-                const RmRecord &new_record)
-        : wtype_(wtype), tab_name_(std::move(tab_name)), rid_(rid), record_(old_record), updated_record_(new_record) {
+                const RmRecord &new_record, bool is_set_index_key)
+        : wtype_(wtype), tab_name_(std::move(tab_name)), rid_(rid), record_(old_record), updated_record_(new_record),
+          is_set_index_key_(is_set_index_key) {
     }
 
     ~WriteRecord() = default;
@@ -73,12 +74,15 @@ public:
 
     inline std::string &GetTableName() { return tab_name_; }
 
+    inline bool &is_set_index_key() { return is_set_index_key_; }
+
 private:
     WType wtype_;
     std::string tab_name_;
     Rid rid_;
     RmRecord record_;
     RmRecord updated_record_;
+    bool is_set_index_key_;
 };
 
 /* 多粒度锁，加锁对象的类型，包括记录、表和间隙 */

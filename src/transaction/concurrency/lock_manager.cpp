@@ -10,8 +10,6 @@ See the Mulan PSL v2 for more details. */
 
 #include "lock_manager.h"
 
-#include <bits/types/siginfo_t.h>
-
 // 加锁阶段检查
 static inline bool check_lock(Transaction *txn) {
     auto &txn_state = txn->get_state();
