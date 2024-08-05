@@ -116,8 +116,10 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     for (auto &[index_offset, col_meta]: index_meta.cols) {
                         memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
-                    auto &&ih = sm_manager_->ihs_[index_name];
+                    auto ih = sm_manager_->ihs_[index_name].get();
+                    ih->rw_latch_.WLock();
                     ih->delete_entry(key, txn);
+                    ih->rw_latch_.WUnlock();
                     delete []key;
                 }
 #ifdef ENABLE_LOGGING
@@ -139,8 +141,10 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                     for (auto &[index_offset, col_meta]: index_meta.cols) {
                         memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
-                    auto &&ih = sm_manager_->ihs_[index_name];
+                    auto ih = sm_manager_->ihs_[index_name].get();
+                    ih->rw_latch_.WLock();
                     ih->insert_entry(key, rid, txn);
+                    ih->rw_latch_.WUnlock();
                     delete []key;
                 }
 #ifdef ENABLE_LOGGING
@@ -166,9 +170,11 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                             memcpy(old_key + index_offset, old_record.data + col_meta.offset, col_meta.len);
                             memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
                         }
-                        auto &&ih = sm_manager_->ihs_[index_name];
+                        auto ih = sm_manager_->ihs_[index_name].get();
+                        ih->rw_latch_.WLock();
                         ih->delete_entry(new_key, txn);
                         ih->insert_entry(old_key, rid, txn);
+                        ih->rw_latch_.WUnlock();
                         delete []old_key;
                         delete []new_key;
                     }

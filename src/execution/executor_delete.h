@@ -37,15 +37,15 @@ public:
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
         // X 锁
-        // if (!rids_.empty() && context_ != nullptr) {
-        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-        // }
+        if (!is_index_scan_ && !rids_.empty() && context_ != nullptr) {
+            context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+        }
     }
 
     // 只执行一次
     std::unique_ptr<RmRecord> Next() override {
         for (auto &rid: rids_) {
-            auto &&rec = fh_->get_record(rid, context_);
+            auto rec = fh_->get_record(rid, context_);
 
 #ifdef ENABLE_LOGGING
             auto *delete_log_record = new DeleteLogRecord(context_->txn_->get_transaction_id(), *rec, rid, tab_name_);
@@ -59,12 +59,14 @@ public:
 
             // 如果有索引，则必然是唯一索引
             for (auto &[index_name, index]: tab_.indexes) {
-                auto &&ih = sm_manager_->ihs_.at(index_name).get();
+                auto ih = sm_manager_->ihs_.at(index_name).get();
+                ih->rw_latch_.WLock();
                 char *key = new char[index.col_tot_len];
                 for (auto &[index_offset, col_meta]: index.cols) {
                     memcpy(key + index_offset, rec->data + col_meta.offset, col_meta.len);
                 }
                 ih->delete_entry(key, context_->txn_);
+                ih->rw_latch_.WUnlock();
                 delete []key;
             }
             fh_->delete_record(rid, context_);

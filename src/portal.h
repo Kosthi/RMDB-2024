@@ -139,9 +139,9 @@ public:
 
                 case T_Insert: {
                     std::unique_ptr<AbstractExecutor> root =
-                            std::make_unique<InsertExecutor>(sm_manager_, x->tab_name_, x->values_, context);
+                            std::make_unique<InsertExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->values_), context);
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
-                                                        std::move(root), plan);
+                                                        std::move(root), std::move(plan));
                 }
 
                 default:

@@ -192,6 +192,7 @@ class IxIndexHandle {
 
 public:
     int fd_; // 存储B+树的文件
+    RWLatch rw_latch_;
 
 private:
     DiskManager *disk_manager_;

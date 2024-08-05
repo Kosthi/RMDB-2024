@@ -80,19 +80,19 @@ public:
     inline void set_page_lsn(lsn_t page_lsn) { memcpy(get_data() + OFFSET_LSN, &page_lsn, sizeof(lsn_t)); }
 
     inline void WLatch() {
-        rwlatch_.WLock();
+        // rwlatch_.WLock();
     }
 
     inline void WUnlatch() {
-        rwlatch_.WUnlock();
+        // rwlatch_.WUnlock();
     }
 
     inline void RLatch() {
-        rwlatch_.RLock();
+        // rwlatch_.RLock();
     }
 
     inline void RUnlatch() {
-        rwlatch_.RUnlock();
+        // rwlatch_.RUnlock();
     }
 
     inline int get_pin_count() const { return pin_count_; }
