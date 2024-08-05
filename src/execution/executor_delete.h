@@ -60,13 +60,11 @@ public:
             // 如果有索引，则必然是唯一索引
             for (auto &[index_name, index]: tab_.indexes) {
                 auto ih = sm_manager_->ihs_.at(index_name).get();
-                ih->rw_latch_.WLock();
                 char *key = new char[index.col_tot_len];
                 for (auto &[index_offset, col_meta]: index.cols) {
                     memcpy(key + index_offset, rec->data + col_meta.offset, col_meta.len);
                 }
                 ih->delete_entry(key, context_->txn_);
-                ih->rw_latch_.WUnlock();
                 delete []key;
             }
             fh_->delete_record(rid, context_);

@@ -138,9 +138,7 @@ public:
 
         // 插入完成，释放内存
         for (int j = 0; j < i; ++j) {
-            ihs[j]->rw_latch_.WLock();
             ihs[j]->insert_entry(keys[j], rid_, context_->txn_);
-            ihs[j]->rw_latch_.WUnlock();
             delete []keys[j];
         }
         delete []keys;

@@ -403,7 +403,7 @@ void start_server() {
         }
 
         // 将线程设置为分离状态，自动回收资源
-        // pthread_detach(thread_id);
+        pthread_detach(thread_id);
     }
 
     // Clear

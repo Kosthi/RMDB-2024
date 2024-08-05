@@ -99,6 +99,8 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
         // delete 算子
         // 阻塞等待
 
+        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
         if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
             throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
         }
@@ -239,6 +241,8 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                 return true;
             }
 
+            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+
             if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
             }
@@ -308,6 +312,8 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
     if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK || contain) {
         // insert/delete 算子
         // 阻塞等待
+
+        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
 
         // TODO 间隙相交的队列要检查吗？不检查过不了题八
         if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
@@ -1666,15 +1672,15 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
 
         if (lock_data_id.type_ == LockDataType::GAP) {
             // 相交的间隙锁也得唤醒
-            for (auto &[data_id, queue]: ii->second) {
-                // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
-                // if (data_id != lock_data_id) {
-                if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
-                    queue.cv_.notify_all();
-                }
-                // }
-                // }
-            }
+            // for (auto &[data_id, queue]: ii->second) {
+            //     // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
+            //     // if (data_id != lock_data_id) {
+            //     if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
+            //         queue.cv_.notify_all();
+            //     }
+            //     // }
+            //     // }
+            // }
             ii->second.erase(it);
         } else {
             lock_table_.erase(it);
@@ -1697,15 +1703,15 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
     // 唤醒等待的事务
     lock_request_queue.cv_.notify_all();
 
-    if (lock_data_id.type_ == LockDataType::GAP) {
-        // 相交的锁表也得唤醒
-        for (auto &[data_id, queue]: ii->second) {
-            // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
-            if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
-                queue.cv_.notify_all();
-            }
-            // }
-        }
-    }
+    // if (lock_data_id.type_ == LockDataType::GAP) {
+    //     // 相交的锁表也得唤醒
+    //     for (auto &[data_id, queue]: ii->second) {
+    //         // if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
+    //         if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
+    //             queue.cv_.notify_all();
+    //         }
+    //         // }
+    //     }
+    // }
     return true;
 }
