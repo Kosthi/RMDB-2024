@@ -1,6 +1,5 @@
 #include "buffer_pool_instance.h"
 
-#include "cassert"
 #include "recovery/log_manager.h"
 
 /**
@@ -228,8 +227,7 @@ void BufferPoolInstance::flush_all_pages(int fd) {
     std::lock_guard lock(latch_);
 
     for (auto &[pageId, frameId]: page_table_) {
-        if (pageId.fd == fd) {
-            assert(frameId >= 0);
+        if (pageId.fd == fd && frameId != INVALID_FRAME_ID) {
             auto &page = pages_[frameId];
 #ifdef ENABLE_LOGGING
             if (log_manager_ != nullptr && page.get_page_lsn() > log_manager_->get_persist_lsn()) {
@@ -268,7 +266,7 @@ void BufferPoolInstance::delete_all_pages(int fd) {
     std::lock_guard lock(latch_);
 
     for (auto it = page_table_.begin(); it != page_table_.end();) {
-        if (it->first.fd == fd) {
+        if (it->first.fd == fd && it->second != INVALID_FRAME_ID) {
             // 清页面
             auto &page = pages_[it->second];
             page.reset_memory();
