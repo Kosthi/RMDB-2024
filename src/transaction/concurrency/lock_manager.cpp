@@ -49,103 +49,142 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
         // 新建
         it = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
                                      std::forward_as_tuple()).first;
-        it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                           std::forward_as_tuple());
     }
 
-    if (it->second.find(lock_data_id) == it->second.end()) {
-        it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                           std::forward_as_tuple());
-    }
+    if (it->second.find(lock_data_id) != it->second.end()) {
+        auto &lock_request_queue = it->second.at(lock_data_id);
+        for (auto &lock_request: lock_request_queue.request_queue_) {
+            // 如果锁请求队列上该事务已经有共享锁或更高级别的锁（X）了，加锁成功
+            // 得到锁，S 或 X 且不存在间隙冲突 通过
+            // 没得到锁，阻塞，不可能执行到这里
+            if (lock_request.txn_id_ == txn->get_transaction_id()) {
+                // 事务能执行到这里，要么第一次申请，要么等待结束了，拿到锁了
+                assert(lock_request.granted_);
+                return true;
+            }
+        }
 
-    auto &lock_request_queue = it->second.at(lock_data_id);
-    for (auto &lock_request: lock_request_queue.request_queue_) {
-        // 如果锁请求队列上该事务已经有共享锁或更高级别的锁（X）了，加锁成功
-        // 得到锁，S 或 X 且不存在间隙冲突 通过
-        // 没得到锁，阻塞，不可能执行到这里
-        if (lock_request.txn_id_ == txn->get_transaction_id()) {
-            // 事务能执行到这里，要么第一次申请，要么等待结束了，拿到锁了
-            assert(lock_request.granted_);
+        // 发生冲突
+        if (lock_request_queue.group_lock_mode_ == GroupLockMode::X) {
+            // delete 算子
+            // 阻塞等待
+
+            if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
+                throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+            }
+
+            lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED);
+            std::unique_lock ul(latch_, std::adopt_lock);
+            auto cur = lock_request_queue.request_queue_.begin();
+            // 通过条件：当前请求队列只有共享间隙锁且相交区间不存在 X 锁
+            lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
+                for (auto &&it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
+                     ++it_) {
+                    if (it_->txn_id_ != txn->get_transaction_id()) {
+                        if (it_->lock_mode_ == LockMode::EXCLUSIVE && it_->granted_) {
+                            return false;
+                        }
+                    } else {
+                        cur = it_;
+                    }
+                }
+
+                bool contain_X = false;
+                for (auto &[data_id, queue]: it->second) {
+                    if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
+                        bool is_only_txn = true;
+                        for (auto &req: queue.request_queue_) {
+                            if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                                is_only_txn = false;
+                                break;
+                            }
+                        }
+                        if (!is_only_txn) {
+                            contain_X = true;
+                            break;
+                        }
+                    }
+                }
+                return !contain_X;
+            });
+            cur->granted_ = true;
+            lock_request_queue.group_lock_mode_ = GroupLockMode::S;
+            ++lock_request_queue.shared_lock_num_;
+            txn->get_lock_set()->emplace(lock_data_id);
+            lock_request_queue.cv_.notify_all();
+            ul.release();
+            return true;
+        }
+    } else {
+        bool contain_X = false;
+        for (auto &[data_id, queue]: it->second) {
+            if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
+                bool is_only_txn = true;
+                for (auto &req: queue.request_queue_) {
+                    if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                        is_only_txn = false;
+                        break;
+                    }
+                }
+                if (!is_only_txn) {
+                    contain_X = true;
+                    break;
+                }
+            }
+        }
+
+        it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                        std::forward_as_tuple());
+
+        if (contain_X) {
+            auto &lock_request_queue = it->second.at(lock_data_id);
+            lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED);
+            std::unique_lock ul(latch_, std::adopt_lock);
+            auto cur = lock_request_queue.request_queue_.begin();
+            // 通过条件：当前请求队列只有共享间隙锁且相交区间不存在 X 锁
+            lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
+                for (auto &&it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
+                     ++it_) {
+                    if (it_->txn_id_ != txn->get_transaction_id()) {
+                        if (it_->lock_mode_ == LockMode::EXCLUSIVE && it_->granted_) {
+                            return false;
+                        }
+                    } else {
+                        cur = it_;
+                    }
+                }
+
+                bool contain_X = false;
+                for (auto &[data_id, queue]: it->second) {
+                    if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
+                        bool is_only_txn = true;
+                        for (auto &req: queue.request_queue_) {
+                            if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                                is_only_txn = false;
+                                break;
+                            }
+                        }
+                        if (!is_only_txn) {
+                            contain_X = true;
+                            break;
+                        }
+                    }
+                }
+                return !contain_X;
+            });
+            cur->granted_ = true;
+            lock_request_queue.group_lock_mode_ = GroupLockMode::S;
+            ++lock_request_queue.shared_lock_num_;
+            txn->get_lock_set()->emplace(lock_data_id);
+            lock_request_queue.cv_.notify_all();
+            ul.release();
             return true;
         }
     }
 
-    // 第一次申请，检查锁队列中有没有冲突的事务
-    // insert 算子检查是否在间隙里
-    // delete 算子在index_scan中检查是否在间隙里
-    // 检查间隙是否相交
-    bool contain_X = false;
-    for (auto &[data_id, queue]: it->second) {
-        if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
-            bool is_only_txn = true;
-            for (auto &req: queue.request_queue_) {
-                if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                    is_only_txn = false;
-                    break;
-                }
-            }
-            if (!is_only_txn) {
-                contain_X = true;
-                break;
-            }
-        }
-    }
-
-    // 发生冲突
-    if (lock_request_queue.group_lock_mode_ == GroupLockMode::X || contain_X) {
-        // delete 算子
-        // 阻塞等待
-
-        if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
-            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-        }
-
-        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-        lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED);
-        std::unique_lock ul(latch_, std::adopt_lock);
-
-        auto &&cur = lock_request_queue.request_queue_.begin();
-
-        // 通过条件：当前请求队列只有共享间隙锁且相交区间不存在 X 锁
-        lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
-            for (auto &&it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
-                 ++it_) {
-                if (it_->txn_id_ != txn->get_transaction_id()) {
-                    if (it_->lock_mode_ != LockMode::SHARED || it_->granted_) {
-                        return false;
-                    }
-                } else {
-                    cur = it_;
-                    break;
-                }
-            }
-
-            bool contain_X = false;
-            for (auto &[data_id, queue]: it->second) {
-                if (queue.group_lock_mode_ == GroupLockMode::X && lock_data_id.gap_.isCoincide(data_id.gap_)) {
-                    bool is_only_txn = true;
-                    for (auto &req: queue.request_queue_) {
-                        if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                            is_only_txn = false;
-                            break;
-                        }
-                    }
-                    if (!is_only_txn) {
-                        contain_X = true;
-                        break;
-                    }
-                }
-            }
-            return !contain_X;
-        });
-
-        cur->granted_ = true;
-        lock_request_queue.group_lock_mode_ = GroupLockMode::S;
-        ++lock_request_queue.shared_lock_num_;
-        txn->get_lock_set()->emplace(lock_data_id);
-        ul.release();
-        return true;
-    }
+    auto &lock_request_queue = it->second.at(lock_data_id);
 
     // 每次事务申请锁都要更新最老事务id
     if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
