@@ -97,15 +97,16 @@ public:
 
             // TODO 支持更多谓词的解析 > >
             // 手动写个 cond index_col = val
-            std::vector<Condition> conds;
+            std::vector<Condition> conds(index_meta.cols.size());
+            int idx = 0;
             for (auto &[index_offset, col_meta]: index_meta.cols) {
                 Value v;
                 v.type = col_meta.type;
                 v.raw = std::make_shared<RmRecord>(rec.data + col_meta.offset, col_meta.len);
-                conds.emplace_back();
-                conds.back().op = OP_EQ;
-                conds.back().lhs_col = {"", col_meta.name};
-                conds.back().rhs_val = std::move(v);
+                conds[idx].op = OP_EQ;
+                conds[idx].lhs_col = {"", col_meta.name};
+                conds[idx].rhs_val = std::move(v);
+                ++idx;
             }
             for (auto it = conds.begin(); it != conds.end();) {
                 if (predicate_manager.addPredicate(it->lhs_col.col_name, *it)) {
