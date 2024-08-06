@@ -467,81 +467,47 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
         return true;
     }
 
-    // if (it->second.find(lock_data_id) == it->second.end()) {
-    //     it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-    //                        std::forward_as_tuple());
-    // }
-    //
-    // auto &lock_request_queue = it->second.at(lock_data_id);
-    // for (auto &lock_request: lock_request_queue.request_queue_) {
-    //     // 如果锁请求队列上该事务已经有共享锁或更高级别的锁（X）了，加锁成功
-    //     if (lock_request.txn_id_ == txn->get_transaction_id()) {
-    //         // 事务能执行到这里，要么第一次申请，要么等待结束了，拿到锁了
-    //         assert(lock_request.granted_);
-    //         return true;
-    //     }
-    // }
-
-    // insert 算子检查记录是否在间隙里
-    // bool contain = false;
-    // bool contain_X = false;
-
-    // 独占锁只要有区间相交就得等待
-    for (auto &[data_id, queue]: it->second) {
-        if (data_id.gap_.isInGap(record)) {
-            bool is_only_txn = true;
-            for (auto &req: queue.request_queue_) {
-                if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                    is_only_txn = false;
-                    break;
-                }
-            }
-            // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
-            if (is_only_txn) {
-                continue;
-            }
-
-            // 当前事务独占 TODO may bugs
-            // if (queue.request_queue_.size() == 1 && queue.request_queue_.begin()->txn_id_ == txn->
-            //     get_transaction_id()) {
-            //     continue;
-            // }
-
-            // wait-die
-            if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-            }
-
-            // assert(queue.oldest_txn_id_ == txn->get_transaction_id());
-
-            // queue.oldest_txn_id_ = txn->get_transaction_id();
-            // queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
-
-            std::unique_lock ul(latch_, std::adopt_lock);
-            auto &&cur = queue.request_queue_.begin();
-            // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
-            queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+    int wait = 0;
+    while (true) {
+        wait = 0;
+        // 独占锁只要有区间相交就得等待
+        for (auto &[data_id, queue]: it->second) {
+            if (data_id.gap_.isInGap(record)) {
+                bool is_only_txn = true;
                 for (auto &req: queue.request_queue_) {
                     if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                        return false;
+                        is_only_txn = false;
+                        break;
                     }
                 }
-                return true;
+                // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
+                if (is_only_txn) {
+                    continue;
+                }
 
-                // for (auto &&it_ = queue.request_queue_.begin(); it_ != queue.request_queue_.end();
-                //      ++it_) {
-                //     if (it_->txn_id_ != txn->get_transaction_id()) {
-                //         if (it_->granted_) {
-                //             return false;
-                //         }
-                //     } else {
-                //         cur = it_;
-                //         break;
-                //     }
-                // }
-                // return true;
-            });
-            ul.release();
+                // wait-die
+                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                }
+
+                ++wait;
+                std::unique_lock ul(latch_, std::adopt_lock);
+                auto &&cur = queue.request_queue_.begin();
+                // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
+                queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+                    for (auto &req: queue.request_queue_) {
+                        if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+                ul.release();
+                break;
+            }
+        }
+        if (wait == 0) {
+            break;
         }
     }
     return true;
@@ -1287,7 +1253,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            // ii->second.erase(it);
+            ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
