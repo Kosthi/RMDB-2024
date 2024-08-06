@@ -37,14 +37,14 @@ public:
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
         context_ = context;
         // X 锁
-        if (tab_.indexes.empty() && context_ != nullptr) {
-            context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-            for (auto &[ix_name, index_meta]: tab_.indexes) {
-                auto predicate_manager = PredicateManager(index_meta);
-                auto gap = Gap(predicate_manager.getIndexConds());
-                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
-            }
-        }
+        // if (tab_.indexes.empty() && context_ != nullptr) {
+        //     context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+        //     for (auto &[ix_name, index_meta]: tab_.indexes) {
+        //         auto predicate_manager = PredicateManager(index_meta);
+        //         auto gap = Gap(predicate_manager.getIndexConds());
+        //         context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+        //     }
+        // }
     }
 
     std::unique_ptr<RmRecord> Next() override {
