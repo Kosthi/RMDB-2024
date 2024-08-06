@@ -31,7 +31,7 @@ private:
 
 public:
     UpdateExecutor(SmManager *sm_manager, std::string tab_name, std::vector<SetClause> set_clauses,
-                   std::vector<Condition> conds, std::vector<Rid> rids, bool is_set_index_key, Context *context) {
+                   std::vector<Condition> conds, std::vector<Rid> rids, bool is_set_index_key, bool is_index_scan, Context *context) {
         sm_manager_ = sm_manager;
         tab_name_ = std::move(tab_name);
         set_clauses_ = std::move(set_clauses);
@@ -49,8 +49,13 @@ public:
         }
 
         // X 锁
-        if (!rids_.empty() && context_ != nullptr) {
+        if (!is_index_scan && !rids_.empty() && context_ != nullptr) {
             context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+            for (auto &[ix_name, index_meta]: tab_.indexes) {
+                auto predicate_manager = PredicateManager(index_meta);
+                auto gap = Gap(predicate_manager.getIndexConds());
+                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta, gap, fh_->GetFd());
+            }
         }
     }
 

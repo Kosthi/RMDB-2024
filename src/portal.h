@@ -119,7 +119,7 @@ public:
                     }
                     std::unique_ptr<AbstractExecutor> root = std::make_unique<UpdateExecutor>(sm_manager_,
                         std::move(x->tab_name_), std::move(x->set_clauses_), std::move(x->conds_), std::move(rids),
-                        is_set_index_key, context);
+                        is_set_index_key, scan->getType() == "IndexScanExecutor", context);
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), plan);
                 }
