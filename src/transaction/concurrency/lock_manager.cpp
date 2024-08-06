@@ -211,10 +211,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
         }
     }
 
-    if (it->second.find(lock_data_id) == it->second.end() && !contain) {
-        it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                           std::forward_as_tuple());
-    } else {
+    if (it->second.find(lock_data_id) != it->second.end()) {
         auto &lock_request_queue = it->second.at(lock_data_id);
         for (auto &lock_request: lock_request_queue.request_queue_) {
             // 如果锁请求队列上该事务已经有共享锁或更高级别的锁（X）了，加锁成功
@@ -288,21 +285,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
             }
         }
 
-        // 第一次申请，检查锁队列中有没有冲突的事务
-        // insert 算子检查是否在间隙里
-        // delete 算子在index_scan中检查是否在间隙里
-        // 检查间隙是否相交
-        // bool contain = false;
-        // // 独占锁只要有区间相交就得等待
-        // for (auto &[data_id, queue]: it->second) {
-        //     if (gap.isCoincide(data_id.gap_)) {
-        //         contain = true;
-        //         break;
-        //     }
-        // }
-
-        // 发生冲突
-        if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK || contain) {
+        if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
             // insert/delete 算子
             // 阻塞等待
 
@@ -320,6 +303,54 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
             auto cur = lock_request_queue.request_queue_.begin();
             // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
             // 后面没有通过的 S 锁
+            lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
+                for (auto it_ = lock_request_queue.request_queue_.begin();
+                     it_ != lock_request_queue.request_queue_.end();
+                     ++it_) {
+                    if (it_->txn_id_ != txn->get_transaction_id()) {
+                        if (it_->granted_) {
+                            return false;
+                        }
+                    } else {
+                        cur = it_;
+                    }
+                }
+
+                bool contain = false;
+                for (auto &[data_id, queue]: it->second) {
+                    if (queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
+                        if (lock_data_id.gap_.isCoincide(data_id.gap_)) {
+                            bool is_only_txn = true;
+                            for (auto &req: queue.request_queue_) {
+                                if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                                    is_only_txn = false;
+                                    break;
+                                }
+                            }
+                            if (!is_only_txn) {
+                                contain = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                return !contain;
+            });
+            cur->granted_ = true;
+            lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+            txn->get_lock_set()->emplace(lock_data_id);
+            ul.release();
+            return true;
+        }
+    } else {
+        it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                           std::forward_as_tuple());
+        if (contain) {
+            auto &lock_request_queue = it->second.at(lock_data_id);
+            lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+            std::unique_lock ul(latch_, std::adopt_lock);
+            auto cur = lock_request_queue.request_queue_.begin();
             lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
                 for (auto it_ = lock_request_queue.request_queue_.begin();
                      it_ != lock_request_queue.request_queue_.end();
