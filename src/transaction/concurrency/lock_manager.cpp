@@ -211,7 +211,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
         }
     }
 
-    if (it->second.find(lock_data_id) == it->second.end()) {
+    if (it->second.find(lock_data_id) == it->second.end() && !contain) {
         it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
                            std::forward_as_tuple());
     } else {
