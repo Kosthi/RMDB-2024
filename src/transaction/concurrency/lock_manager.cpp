@@ -1120,51 +1120,40 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
     if (it == lock_table_.end()) {
         it = lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
                                  std::forward_as_tuple()).first;
-        it->second.oldest_txn_id_ = txn->get_transaction_id();
-    }
+    } else {
+        auto &lock_request_queue = it->second;
+        for (auto &lock_request: lock_request_queue.request_queue_) {
+            if (lock_request.txn_id_ == txn->get_transaction_id()) {
+                // 已经有 S 锁或更高级别的锁，则申请成功
+                if (lock_request.lock_mode_ == LockMode::SHARED ||
+                    lock_request.lock_mode_ == LockMode::S_IX ||
+                    lock_request.lock_mode_ == LockMode::EXCLUSIVE) {
+                    return true;
+                }
+                // wait-die 不可能执行到这里
+                assert(0);
+            }
+        }
 
-    auto &lock_request_queue = it->second;
-    for (auto &lock_request: lock_request_queue.request_queue_) {
-        if (lock_request.txn_id_ == txn->get_transaction_id()) {
-            // 已经有 S 锁或更高级别的锁，则申请成功
-            if (lock_request.lock_mode_ == LockMode::SHARED ||
-                lock_request.lock_mode_ == LockMode::S_IX ||
-                lock_request.lock_mode_ == LockMode::EXCLUSIVE) {
-                return true;
-            }
-            // wait-die 不可能执行到这里
-            assert(0);
-            // 如果事务已经有意向读锁，升级读锁需要其他事务不持有写锁
-            if (lock_request.lock_mode_ == LockMode::INTENTION_SHARED &&
-                (lock_request_queue.group_lock_mode_ == GroupLockMode::S || lock_request_queue.group_lock_mode_ ==
-                 GroupLockMode::IS)) {
-                lock_request.lock_mode_ = LockMode::SHARED;
-                lock_request_queue.group_lock_mode_ = GroupLockMode::S;
-                ++lock_request_queue.shared_lock_num_;
-                return true;
-            }
-            // 如果事务已经有 IX 锁，升级 S_IX 需要其他事务不持有 IX 锁
-            if (lock_request.lock_mode_ == LockMode::INTENTION_EXCLUSIVE && lock_request_queue.IX_lock_num_ == 1) {
-                lock_request.lock_mode_ = LockMode::S_IX;
-                lock_request_queue.group_lock_mode_ = GroupLockMode::SIX;
-                ++lock_request_queue.shared_lock_num_;
-                return true;
-            }
-
+        // 如果其他事务持有任意排他锁，加锁失败（no-wait）
+        if (lock_request_queue.group_lock_mode_ == GroupLockMode::X ||
+            lock_request_queue.group_lock_mode_ == GroupLockMode::IX ||
+            lock_request_queue.group_lock_mode_ == GroupLockMode::SIX) {
             // no-wait
             // throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
 
+            // Check for conflicting locks and apply wait-die logic
             if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
                 // Younger transaction requests the lock, abort the current transaction
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
             }
             lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
             lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED);
-            std::unique_lock<std::mutex> ul(latch_, std::adopt_lock);
+            std::unique_lock ul(latch_, std::adopt_lock);
             auto cur = lock_request_queue.request_queue_.begin();
             lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur]() {
-                for (auto it = lock_request_queue.request_queue_.begin();
-                     it != lock_request_queue.request_queue_.end(); ++it) {
+                for (auto it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
+                     ++it) {
                     if (it->txn_id_ != txn->get_transaction_id()) {
                         if (it->lock_mode_ == LockMode::EXCLUSIVE && it->granted_) {
                             return false;
@@ -1185,55 +1174,14 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
                     static_cast<int>(GroupLockMode::S), static_cast<int>(lock_request_queue.group_lock_mode_)));
             }
             txn->get_lock_set()->emplace(lock_data_id);
+            // 条件已经发生了变化，其他共享锁请求有机会获取
+            lock_request_queue.cv_.notify_all();
             ul.release();
             return true;
         }
     }
 
-    // 如果其他事务持有任意排他锁，加锁失败（no-wait）
-    if (lock_request_queue.group_lock_mode_ == GroupLockMode::X ||
-        lock_request_queue.group_lock_mode_ == GroupLockMode::IX ||
-        lock_request_queue.group_lock_mode_ == GroupLockMode::SIX) {
-        // no-wait
-        // throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-
-        // Check for conflicting locks and apply wait-die logic
-        if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
-            // Younger transaction requests the lock, abort the current transaction
-            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-        }
-        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-        lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::SHARED);
-        std::unique_lock ul(latch_, std::adopt_lock);
-        auto cur = lock_request_queue.request_queue_.begin();
-        lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur]() {
-            for (auto it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
-                 ++it) {
-                if (it->txn_id_ != txn->get_transaction_id()) {
-                    if (it->lock_mode_ == LockMode::EXCLUSIVE && it->granted_) {
-                        return false;
-                    }
-                } else {
-                    cur = it;
-                }
-            }
-            return true;
-        });
-        cur->granted_ = true;
-        ++lock_request_queue.shared_lock_num_;
-        // 锁合成
-        if (lock_request_queue.group_lock_mode_ == GroupLockMode::IX) {
-            lock_request_queue.group_lock_mode_ = GroupLockMode::SIX;
-        } else {
-            lock_request_queue.group_lock_mode_ = static_cast<GroupLockMode>(std::max(
-                static_cast<int>(GroupLockMode::S), static_cast<int>(lock_request_queue.group_lock_mode_)));
-        }
-        txn->get_lock_set()->emplace(lock_data_id);
-        // 条件已经发生了变化，其他共享锁请求有机会获取
-        lock_request_queue.cv_.notify_all();
-        ul.release();
-        return true;
-    }
+    auto &lock_request_queue = it->second;
 
     if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
         lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
@@ -1263,48 +1211,84 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
     }
 
     LockDataId lock_data_id(tab_fd, LockDataType::TABLE);
-    auto &&it = lock_table_.find(lock_data_id);
+
+    auto it = lock_table_.find(lock_data_id);
     if (it == lock_table_.end()) {
         it = lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
                                  std::forward_as_tuple()).first;
-        it->second.oldest_txn_id_ = txn->get_transaction_id();
-    }
+    } else {
+        auto &lock_request_queue = it->second;
+        for (auto &lock_request: lock_request_queue.request_queue_) {
+            if (lock_request.txn_id_ == txn->get_transaction_id()) {
+                // 已经有 X 锁，则申请成功
+                if (lock_request.lock_mode_ == LockMode::EXCLUSIVE) {
+                    return true;
+                }
+                // wait-die策略下，只有当前事务持有有 S 锁，才能升级表写锁
+                if (lock_request_queue.shared_lock_num_ == 1) {
+                    lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+                    lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+                    return true;
+                }
+                // no-wait
+                // throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
 
-    auto &lock_request_queue = it->second;
-    for (auto &lock_request: lock_request_queue.request_queue_) {
-        if (lock_request.txn_id_ == txn->get_transaction_id()) {
-            // 已经有 X 锁，则申请成功
-            if (lock_request.lock_mode_ == LockMode::EXCLUSIVE) {
-                return true;
-            }
-            // wait-die策略下，只有当前事务持有有 S 锁，才能升级表写锁
-            if (lock_request_queue.shared_lock_num_ == 1) {
+                // 判断回滚还是等待
+                if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
+                    // 不会执行到这里
+                    // Younger transaction requests the lock, abort the current transaction
+                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                }
+
+                // 锁升级
+                lock_request.granted_ = false;
                 lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+
+                lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+                // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+                std::unique_lock ul(latch_, std::adopt_lock);
+                auto cur = lock_request_queue.request_queue_.begin();
+                // 当前请求前面没有任何已授权的请求
+                lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur]() {
+                    for (auto it = lock_request_queue.request_queue_.begin();
+                         it != lock_request_queue.request_queue_.end(); ++it) {
+                        if (it->txn_id_ != txn->get_transaction_id()) {
+                            if (it->granted_) {
+                                return false;
+                            }
+                        } else {
+                            cur = it;
+                            break;
+                        }
+                    }
+                    return true;
+                });
+                cur->granted_ = true;
                 lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+                txn->get_lock_set()->emplace(lock_data_id);
+                ul.release();
                 return true;
             }
+        }
+
+        // 如果其他事务持有任意锁，加锁失败（no-wait）
+        if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
             // no-wait
             // throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
 
             // 判断回滚还是等待
             if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
-                // 不会执行到这里
                 // Younger transaction requests the lock, abort the current transaction
                 throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
             }
-
-            // 锁升级
-            lock_request.granted_ = false;
-            lock_request.lock_mode_ = LockMode::EXCLUSIVE;
-
             lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
             std::unique_lock ul(latch_, std::adopt_lock);
             auto cur = lock_request_queue.request_queue_.begin();
             // 当前请求前面没有任何已授权的请求
             lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur]() {
-                for (auto it = lock_request_queue.request_queue_.begin();
-                     it != lock_request_queue.request_queue_.end(); ++it) {
+                for (auto it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
+                     ++it) {
                     if (it->txn_id_ != txn->get_transaction_id()) {
                         if (it->granted_) {
                             return false;
@@ -1324,41 +1308,7 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
         }
     }
 
-    // 如果其他事务持有任意锁，加锁失败（no-wait）
-    if (lock_request_queue.group_lock_mode_ != GroupLockMode::NON_LOCK) {
-        // no-wait
-        // throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-
-        // 判断回滚还是等待
-        if (txn->get_transaction_id() > lock_request_queue.oldest_txn_id_) {
-            // Younger transaction requests the lock, abort the current transaction
-            throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-        }
-        lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-        lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
-        std::unique_lock ul(latch_, std::adopt_lock);
-        auto cur = lock_request_queue.request_queue_.begin();
-        // 当前请求前面没有任何已授权的请求
-        lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur]() {
-            for (auto it = lock_request_queue.request_queue_.begin(); it != lock_request_queue.request_queue_.end();
-                 ++it) {
-                if (it->txn_id_ != txn->get_transaction_id()) {
-                    if (it->granted_) {
-                        return false;
-                    }
-                } else {
-                    cur = it;
-                    break;
-                }
-            }
-            return true;
-        });
-        cur->granted_ = true;
-        lock_request_queue.group_lock_mode_ = GroupLockMode::X;
-        txn->get_lock_set()->emplace(lock_data_id);
-        ul.release();
-        return true;
-    }
+    auto &lock_request_queue = it->second;
 
     if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
         lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
@@ -1635,7 +1585,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
     auto &lock_request_queue = it->second;
     auto &request_queue = lock_request_queue.request_queue_;
 
-    auto &&request = request_queue.begin();
+    auto request = request_queue.begin();
     for (; request != request_queue.end(); ++request) {
         if (request->txn_id_ == txn->get_transaction_id()) {
             break;
