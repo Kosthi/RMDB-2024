@@ -124,9 +124,9 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context) {
     // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
     // 行级 X 锁
     // 有间隙锁保护，不需要行级X锁
-    // if (context != nullptr) {
-    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
-    // }
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    }
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
