@@ -79,7 +79,8 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
             auto cur = lock_request_queue.request_queue_.begin();
             // 通过条件：当前请求队列只有共享间隙锁且相交区间不存在 X 锁
             lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
-                for (auto &&it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
+                for (auto it_ = lock_request_queue.request_queue_.begin();
+                     it_ != lock_request_queue.request_queue_.end();
                      ++it_) {
                     if (it_->txn_id_ != txn->get_transaction_id()) {
                         if (it_->lock_mode_ == LockMode::EXCLUSIVE && it_->granted_) {
@@ -135,7 +136,7 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
         }
 
         it->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                        std::forward_as_tuple());
+                           std::forward_as_tuple());
 
         if (contain_X) {
             auto &lock_request_queue = it->second.at(lock_data_id);
@@ -145,7 +146,8 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
             auto cur = lock_request_queue.request_queue_.begin();
             // 通过条件：当前请求队列只有共享间隙锁且相交区间不存在 X 锁
             lock_request_queue.cv_.wait(ul, [&lock_request_queue, txn, &cur, &it, &lock_data_id]() {
-                for (auto &&it_ = lock_request_queue.request_queue_.begin(); it_ != lock_request_queue.request_queue_.end();
+                for (auto it_ = lock_request_queue.request_queue_.begin();
+                     it_ != lock_request_queue.request_queue_.end();
                      ++it_) {
                     if (it_->txn_id_ != txn->get_transaction_id()) {
                         if (it_->lock_mode_ == LockMode::EXCLUSIVE && it_->granted_) {
@@ -277,8 +279,11 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
                     throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
                 }
 
+                lock_request.granted_ = false;
+                lock_request.lock_mode_ = LockMode::EXCLUSIVE;
+
                 lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-                lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
+                // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE);
 
                 std::unique_lock ul(latch_, std::adopt_lock);
                 auto cur = lock_request_queue.request_queue_.begin();
@@ -876,7 +881,6 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
                             }
                         } else {
                             cur = it;
-                            break;
                         }
                     }
                     return true;
@@ -913,7 +917,6 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
                         }
                     } else {
                         cur = it;
-                        break;
                     }
                 }
                 return true;
@@ -1237,10 +1240,10 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
     // 维护队列锁模式，为空则无锁
     // TODO 擦除锁表
     if (request_queue.empty()) {
-        lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
-        lock_request_queue.oldest_txn_id_ = INT32_MAX;
+        // lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
+        // lock_request_queue.oldest_txn_id_ = INT32_MAX;
         // 唤醒等待的事务
-        lock_request_queue.cv_.notify_all();
+        // lock_request_queue.cv_.notify_all();
 
         if (lock_data_id.type_ == LockDataType::GAP) {
             // 相交的间隙锁也得唤醒
