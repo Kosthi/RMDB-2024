@@ -136,7 +136,7 @@ void *client_handler(void *sock_fd) {
 
     while (true) {
 #ifdef ENABLE_COUT
-        std::cout << "Waiting for request..." << std::endl;
+        // std::cout << "Waiting for request..." << std::endl;
 #endif
         memset(data_recv, 0, BUFFER_LENGTH);
 
@@ -157,7 +157,7 @@ void *client_handler(void *sock_fd) {
         }
 
 #ifdef ENABLE_COUT
-        printf("i_recvBytes: %d \n ", i_recvBytes);
+        // printf("i_recvBytes: %d \n ", i_recvBytes);
 #endif
 
         if (strcmp(data_recv, "exit") == 0) {
