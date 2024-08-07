@@ -10,6 +10,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "lock_manager.h"
 
+#include "execution/predicate_manager.h"
+
 // 加锁阶段检查
 static inline bool check_lock(Transaction *txn) {
     auto &txn_state = txn->get_state();
@@ -460,58 +462,106 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
  * @param {Rmcord&} rid 加锁的间隙上限记录
  * @param {int} tab_fd
  */
-bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord &record) {
+bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord &record, int tab_fd) {
     std::lock_guard lock(latch_);
 
     // if (!check_lock(txn)) {
     //     return false;
     // }
 
-    auto &&it = gap_lock_table_.find(index_meta);
-    if (it == gap_lock_table_.end()) {
-        return true;
-    }
+    auto it = gap_lock_table_.find(index_meta);
 
     int wait = 0;
     while (true) {
         wait = 0;
-        // 独占锁只要有区间相交就得等待
-        for (auto &[data_id, queue]: it->second) {
-            if (data_id.gap_.isInGap(record)) {
-                bool is_only_txn = true;
-                for (auto &req: queue.request_queue_) {
-                    if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                        is_only_txn = false;
-                        break;
-                    }
-                }
-                // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
-                if (is_only_txn) {
-                    continue;
-                }
-
-                // wait-die
-                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                }
-
-                ++wait;
-                std::unique_lock ul(latch_, std::adopt_lock);
-                auto &&cur = queue.request_queue_.begin();
-                // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
-                queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+        if (it != gap_lock_table_.end()) {
+            // 独占锁只要有区间相交就得等待
+            for (auto &[data_id, queue]: it->second) {
+                if (data_id.gap_.isInGap(record)) {
+                    bool is_only_txn = true;
                     for (auto &req: queue.request_queue_) {
                         if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                            return false;
+                            is_only_txn = false;
+                            break;
                         }
                     }
-                    return true;
-                });
-                ul.release();
-                break;
+                    // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
+                    if (is_only_txn) {
+                        continue;
+                    }
+
+                    // wait-die
+                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    }
+
+                    ++wait;
+                    std::unique_lock ul(latch_, std::adopt_lock);
+                    auto &&cur = queue.request_queue_.begin();
+                    // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
+                    queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+                        for (auto &req: queue.request_queue_) {
+                            if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                    ul.release();
+                    break;
+                }
             }
         }
         if (wait == 0) {
+            auto predicate_manager = PredicateManager(index_meta);
+
+            // TODO 支持更多谓词的解析 > >
+            // 手动写个 cond index_col = val
+            std::vector<Condition> conds(index_meta.cols.size());
+            int idx = 0;
+            for (auto &[index_offset, col_meta]: index_meta.cols) {
+                Value v;
+                v.type = col_meta.type;
+                v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
+                conds[idx].op = OP_EQ;
+                conds[idx].lhs_col = {"", col_meta.name};
+                conds[idx].rhs_val = std::move(v);
+                ++idx;
+            }
+            for (auto it_ = conds.begin(); it_ != conds.end();) {
+                if (predicate_manager.addPredicate(it_->lhs_col.col_name, *it_)) {
+                    it_ = conds.erase(it_);
+                    continue;
+                }
+                assert(0);
+                ++it;
+            }
+            auto gap = Gap(predicate_manager.getIndexConds());
+
+            LockDataId lock_data_id(tab_fd, index_meta, gap, LockDataType::GAP);
+            auto it_ = gap_lock_table_.find(index_meta);
+            if (it_ == gap_lock_table_.end()) {
+                // 新建
+                it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
+                                              std::forward_as_tuple()).first;
+            }
+
+            // 因为有索引不可能插入两条相同的记录
+            it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                                std::forward_as_tuple());
+
+            auto &lock_request_queue = it_->second.at(lock_data_id);
+
+            // 每次事务申请锁都要更新最老事务id
+            if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+                lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            }
+
+            // 将当前事务锁请求加到锁请求队列中
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
+            // 更新锁请求队列锁模式为 X 锁
+            lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+            txn->get_lock_set()->emplace(lock_data_id);
             break;
         }
     }
