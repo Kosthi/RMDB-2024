@@ -110,6 +110,7 @@ public:
                 auto &lhs_rec = lhs_cond.rhs_val.raw;
                 auto &rhs_rec = rhs_cond.rhs_val.raw;
                 int cmp = compare(lhs_rec->data, rhs_rec->data, lhs_rec->size, type);
+                // cmp = 0 等值的判定
                 // 1.1 > 5 < 5 不相交
                 // 1.2 > 5 = 5 不相交
                 // 1.3 > 5 <= 5 不相交
@@ -121,8 +122,35 @@ public:
                 // 3.1 = 5 < 5 不相交
                 // 3.2 = 5 = 5 相交
                 // 3.3 = 5 <= 5 相交
+
+                // cmp > 0 大于的判定
+                // 4.1 > 6 < 5 不相交
+                // 4.2 > 6 = 5 不相交
+                // 4.3 > 6 <= 5 不相交
+
+                // 5.1 >= 6 < 5 不相交
+                // 5.2 >= 6 = 5 不相交
+                // 5.3 >= 6 <= 5 不相交
+
+                // 6.1 = 6 < 5 不相交
+                // 6.2 = 6 = 5 不相交
+                // 6.3 = 6 <= 5 不相交
+
+                // cmp < 0 小于的判定
+                // 7.1 > 5 < 6 相交 整数不相交，浮点数和字符串相交，从数据库间隙锁并发控制角度当相交处理
+                // 7.2 > 5 = 6 相交
+                // 7.3 > 5 <= 6 相交
+
+                // 8.1 >= 5 < 6 相交
+                // 8.2 >= 5 = 6 相交
+                // 8.3 >= 5 <= 6 相交
+
+                // 9.1 = 5 < 6 相交
+                // 9.2 = 5 = 6 ！！！不相交！！！
+                // 9.3 = 5 <= 6 相交
                 // (OP_GE || OP_EQ) && (OP_LE || OP_EQ) -> (!OP_GE && !OP_EQ) || (!OP_LE && !OP_EQ) -> (OP_GT) || (OP_LT)
-                if (cmp > 0 || (cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
+                if (cmp > 0 || (cmp < 0 && lhs_cond.op == OP_EQ && rhs_cond.op == OP_EQ) || (
+                        cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
             }
@@ -136,19 +164,8 @@ public:
                 auto &lhs_rec = lhs_cond.rhs_val.raw;
                 auto &rhs_rec = rhs_cond.rhs_val.raw;
                 int cmp = compare(lhs_rec->data, rhs_rec->data, lhs_rec->size, type);
-                // 1.1 > 5 < 5 不相交
-                // 1.2 > 5 = 5 不相交
-                // 1.3 > 5 <= 5 不相交
-
-                // 2.1 >= 5 < 5 不相交
-                // 2.2 >= 5 = 5 相交
-                // 2.3 >= 5 <= 5 相交
-
-                // 3.1 = 5 < 5 不相交
-                // 3.2 = 5 = 5 相交
-                // 3.3 = 5 <= 5 相交
-                // !(OP_GE || OP_EQ) && (OP_LE || OP_EQ) -> (!OP_GE && !OP_EQ) || (!OP_LE && !OP_EQ) -> (OP_GT) || (OP_LT)
-                if (cmp > 0 || (cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
+                if (cmp > 0 || (cmp < 0 && lhs_cond.op == OP_EQ && rhs_cond.op == OP_EQ) || (
+                        cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
             }
