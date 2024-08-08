@@ -54,6 +54,7 @@ private:
     BufferPoolManager *buffer_pool_manager_;
     int fd_; // 打开文件后产生的文件句柄
     RmFileHdr file_hdr_; // 文件头，维护当前表文件的元数据
+    std::mutex latch_;
 
 public:
     RmFileHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
