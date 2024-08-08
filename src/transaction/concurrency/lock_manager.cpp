@@ -1290,10 +1290,10 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
     // 维护队列锁模式，为空则无锁
     // TODO 擦除锁表
     if (request_queue.empty()) {
-        // lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
-        // lock_request_queue.oldest_txn_id_ = INT32_MAX;
+        lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
+        lock_request_queue.oldest_txn_id_ = INT32_MAX;
         // 唤醒等待的事务
-        // lock_request_queue.cv_.notify_all();
+        lock_request_queue.cv_.notify_all();
 
         if (lock_data_id.type_ == LockDataType::GAP) {
             // 相交的间隙锁也得唤醒
@@ -1306,9 +1306,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            ii->second.erase(it);
-        } else {
-            lock_table_.erase(it);
+            // ii->second.erase(it);
         }
 
         return true;
