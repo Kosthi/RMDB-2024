@@ -521,8 +521,22 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
             int idx = 0;
             for (auto &[index_offset, col_meta]: index_meta.cols) {
                 Value v;
-                v.type = col_meta.type;
                 v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
+                switch (col_meta.type) {
+                    case TYPE_INT: {
+                        v.set_int(*reinterpret_cast<int *>(v.raw->data));
+                        break;
+                    }
+                    case TYPE_FLOAT: {
+                        v.set_float(*reinterpret_cast<float *>(v.raw->data));
+                        break;
+                    }
+                    case TYPE_STRING: {
+                        std::string s(v.raw->data, v.raw->size);
+                        v.set_str(s);
+                        break;
+                    }
+                }
                 conds[idx].op = OP_EQ;
                 conds[idx].lhs_col = {"", col_meta.name};
                 conds[idx].rhs_val = std::move(v);
@@ -546,9 +560,10 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
                                               std::forward_as_tuple()).first;
             }
 
-            // 因为有索引不可能插入两条相同的记录
-            it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                                std::forward_as_tuple());
+            // auto hash = std::hash<LockDataId>{}(lock_data_id);
+
+            assert(it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                std::forward_as_tuple()).second);
 
             auto &lock_request_queue = it_->second.at(lock_data_id);
 
@@ -1306,7 +1321,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            // ii->second.erase(it);
+            ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
