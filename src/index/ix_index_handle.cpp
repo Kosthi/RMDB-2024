@@ -81,7 +81,8 @@ int IxNodeHandle::upper_bound(const char *target) const {
             l = mid + 1;
         }
     }
-    return l;
+    // 这里返回 r 可以直接解决空树问题，而 l 会导致查到错误的上下界
+    return r;
 }
 
 /**

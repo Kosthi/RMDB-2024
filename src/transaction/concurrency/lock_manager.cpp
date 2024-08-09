@@ -562,8 +562,14 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
 
             // auto hash = std::hash<LockDataId>{}(lock_data_id);
 
-            assert(it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                std::forward_as_tuple()).second);
+            // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
+            // 那么其中另外一个应该不满足索引一致性而抛出异常，其实也可以先申请行间隙锁，再校验唯一索引，但是这样如果不满足唯一索引不能立即返回了
+            // 按照 mysql 8.0 的实现，抛出异常
+            if (!it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                std::forward_as_tuple()).second) {
+                return false;
+                // throw NonUniqueIndexError(index_meta.tab_name, {});
+            }
 
             auto &lock_request_queue = it_->second.at(lock_data_id);
 
