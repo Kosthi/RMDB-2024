@@ -21,9 +21,9 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     // 1. 获取指定记录所在的page handle
     // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
     // 行级 S 锁
-    if (context != nullptr && context->lock_mgr_ != nullptr) {
-        context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
-    }
+    // if (context != nullptr && context->lock_mgr_ != nullptr) {
+    //     context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
+    // }
     auto page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
@@ -56,10 +56,16 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     auto slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
-                                                     fd_);
-    }
+    // if (context != nullptr) {
+    //     try {
+    //         context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
+    //                                                      fd_);
+    //     } catch (TransactionAbortException &e) {
+    //         // 这里记得要先解锁，不能会死锁
+    //         page_handle.page->WUnlatch();
+    //         throw e;
+    //     }
+    // }
 
     // TODO 优化插入
     memcpy(page_handle.get_slot(slot_no), buf, file_hdr_.record_size);

@@ -153,6 +153,8 @@ public:
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
+            } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
+                break;
             }
         }
 
@@ -167,7 +169,9 @@ public:
                 if (cmp > 0 || (cmp < 0 && lhs_cond.op == OP_EQ && rhs_cond.op == OP_EQ) || (
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
-                }
+                        }
+            } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
+                break;
             }
         }
 
