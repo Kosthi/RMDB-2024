@@ -471,44 +471,44 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
 
     auto it = gap_lock_table_.find(index_meta);
 
-    // auto predicate_manager = PredicateManager(index_meta);
-    //
-    // // TODO 支持更多谓词的解析 > >
-    // // 手动写个 cond index_col = val
-    // std::vector<Condition> conds(index_meta.cols.size());
-    // int idx = 0;
-    // for (auto &[index_offset, col_meta]: index_meta.cols) {
-    //     Value v;
-    //     v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
-    //     switch (col_meta.type) {
-    //         case TYPE_INT: {
-    //             v.set_int(*reinterpret_cast<int *>(v.raw->data));
-    //             break;
-    //         }
-    //         case TYPE_FLOAT: {
-    //             v.set_float(*reinterpret_cast<float *>(v.raw->data));
-    //             break;
-    //         }
-    //         case TYPE_STRING: {
-    //             std::string s(v.raw->data, v.raw->size);
-    //             v.set_str(s);
-    //             break;
-    //         }
-    //     }
-    //     conds[idx].op = OP_EQ;
-    //     conds[idx].lhs_col = {"", col_meta.name};
-    //     conds[idx].rhs_val = std::move(v);
-    //     ++idx;
-    // }
-    // for (auto it_ = conds.begin(); it_ != conds.end();) {
-    //     if (predicate_manager.addPredicate(it_->lhs_col.col_name, *it_)) {
-    //         it_ = conds.erase(it_);
-    //         continue;
-    //     }
-    //     assert(0);
-    //     ++it;
-    // }
-    // auto gap = Gap(predicate_manager.getIndexConds());
+    auto predicate_manager = PredicateManager(index_meta);
+
+    // TODO 支持更多谓词的解析 > >
+    // 手动写个 cond index_col = val
+    std::vector<Condition> conds(index_meta.cols.size());
+    int idx = 0;
+    for (auto &[index_offset, col_meta]: index_meta.cols) {
+        Value v;
+        v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
+        switch (col_meta.type) {
+            case TYPE_INT: {
+                v.set_int(*reinterpret_cast<int *>(v.raw->data));
+                break;
+            }
+            case TYPE_FLOAT: {
+                v.set_float(*reinterpret_cast<float *>(v.raw->data));
+                break;
+            }
+            case TYPE_STRING: {
+                std::string s(v.raw->data, v.raw->size);
+                v.set_str(s);
+                break;
+            }
+        }
+        conds[idx].op = OP_EQ;
+        conds[idx].lhs_col = {"", col_meta.name};
+        conds[idx].rhs_val = std::move(v);
+        ++idx;
+    }
+    for (auto it_ = conds.begin(); it_ != conds.end();) {
+        if (predicate_manager.addPredicate(it_->lhs_col.col_name, *it_)) {
+            it_ = conds.erase(it_);
+            continue;
+        }
+        assert(0);
+        ++it;
+    }
+    auto gap = Gap(predicate_manager.getIndexConds());
 
     int wait = 0;
     while (true) {
