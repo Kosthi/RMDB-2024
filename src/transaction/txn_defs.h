@@ -153,6 +153,9 @@ public:
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
+                if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
+                    break;
+                }
             } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
                 break;
             }
@@ -169,7 +172,10 @@ public:
                 if (cmp > 0 || (cmp < 0 && lhs_cond.op == OP_EQ && rhs_cond.op == OP_EQ) || (
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
-                        }
+                }
+                if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
+                    break;
+                }
             } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
                 break;
             }
@@ -181,9 +187,6 @@ public:
     bool cmpIndexLeftConds(const RmRecord &rec) const {
         for (auto &[cond, _]: index_conds_) {
             std::ignore = _;
-            if (cond.op == OP_INVALID) {
-                return true;
-            }
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
@@ -194,9 +197,6 @@ public:
     bool cmpIndexRightConds(const RmRecord &rec) const {
         for (auto &[_, cond]: index_conds_) {
             std::ignore = _;
-            if (cond.op == OP_INVALID) {
-                return true;
-            }
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
