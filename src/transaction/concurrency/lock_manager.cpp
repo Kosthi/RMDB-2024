@@ -471,44 +471,44 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
 
     auto it = gap_lock_table_.find(index_meta);
 
-    auto predicate_manager = PredicateManager(index_meta);
-
-    // TODO 支持更多谓词的解析 > >
-    // 手动写个 cond index_col = val
-    std::vector<Condition> conds(index_meta.cols.size());
-    int idx = 0;
-    for (auto &[index_offset, col_meta]: index_meta.cols) {
-        Value v;
-        v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
-        switch (col_meta.type) {
-            case TYPE_INT: {
-                v.set_int(*reinterpret_cast<int *>(v.raw->data));
-                break;
-            }
-            case TYPE_FLOAT: {
-                v.set_float(*reinterpret_cast<float *>(v.raw->data));
-                break;
-            }
-            case TYPE_STRING: {
-                std::string s(v.raw->data, v.raw->size);
-                v.set_str(s);
-                break;
-            }
-        }
-        conds[idx].op = OP_EQ;
-        conds[idx].lhs_col = {"", col_meta.name};
-        conds[idx].rhs_val = std::move(v);
-        ++idx;
-    }
-    for (auto it_ = conds.begin(); it_ != conds.end();) {
-        if (predicate_manager.addPredicate(it_->lhs_col.col_name, *it_)) {
-            it_ = conds.erase(it_);
-            continue;
-        }
-        assert(0);
-        ++it;
-    }
-    auto gap = Gap(predicate_manager.getIndexConds());
+    // auto predicate_manager = PredicateManager(index_meta);
+    //
+    // // TODO 支持更多谓词的解析 > >
+    // // 手动写个 cond index_col = val
+    // std::vector<Condition> conds(index_meta.cols.size());
+    // int idx = 0;
+    // for (auto &[index_offset, col_meta]: index_meta.cols) {
+    //     Value v;
+    //     v.raw = std::make_shared<RmRecord>(record.data + col_meta.offset, col_meta.len);
+    //     switch (col_meta.type) {
+    //         case TYPE_INT: {
+    //             v.set_int(*reinterpret_cast<int *>(v.raw->data));
+    //             break;
+    //         }
+    //         case TYPE_FLOAT: {
+    //             v.set_float(*reinterpret_cast<float *>(v.raw->data));
+    //             break;
+    //         }
+    //         case TYPE_STRING: {
+    //             std::string s(v.raw->data, v.raw->size);
+    //             v.set_str(s);
+    //             break;
+    //         }
+    //     }
+    //     conds[idx].op = OP_EQ;
+    //     conds[idx].lhs_col = {"", col_meta.name};
+    //     conds[idx].rhs_val = std::move(v);
+    //     ++idx;
+    // }
+    // for (auto it_ = conds.begin(); it_ != conds.end();) {
+    //     if (predicate_manager.addPredicate(it_->lhs_col.col_name, *it_)) {
+    //         it_ = conds.erase(it_);
+    //         continue;
+    //     }
+    //     assert(0);
+    //     ++it;
+    // }
+    // auto gap = Gap(predicate_manager.getIndexConds());
 
     int wait = 0;
     while (true) {
@@ -516,7 +516,7 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
         if (it != gap_lock_table_.end()) {
             // 独占锁只要有区间相交就得等待
             for (auto &[data_id, queue]: it->second) {
-                if (data_id.gap_.isCoincide(gap)) {
+                if (data_id.gap_.isInGap(record)) {
                     bool is_only_txn = true;
                     for (auto &req: queue.request_queue_) {
                         if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
@@ -552,37 +552,37 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
             }
         }
         if (wait == 0) {
-            LockDataId lock_data_id(tab_fd, index_meta, gap, LockDataType::GAP);
-            auto it_ = gap_lock_table_.find(index_meta);
-            if (it_ == gap_lock_table_.end()) {
-                // 新建
-                it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
-                                              std::forward_as_tuple()).first;
-            }
-
-            // auto hash = std::hash<LockDataId>{}(lock_data_id);
-
-            // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
-            // 那么其中另外一个应该不满足索引一致性而抛出异常，其实也可以先申请行间隙锁，再校验唯一索引，但是这样如果不满足唯一索引不能立即返回了
-            // 按照 mysql 8.0 的实现，抛出异常
-            if (!it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-                                     std::forward_as_tuple()).second) {
-                return false;
-                // throw NonUniqueIndexError(index_meta.tab_name, {});
-            }
-
-            auto &lock_request_queue = it_->second.at(lock_data_id);
-
-            // 每次事务申请锁都要更新最老事务id
-            if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
-                lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            }
-
-            // 将当前事务锁请求加到锁请求队列中
-            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
-            // 更新锁请求队列锁模式为 X 锁
-            lock_request_queue.group_lock_mode_ = GroupLockMode::X;
-            txn->get_lock_set()->emplace(lock_data_id);
+            // LockDataId lock_data_id(tab_fd, index_meta, gap, LockDataType::GAP);
+            // auto it_ = gap_lock_table_.find(index_meta);
+            // if (it_ == gap_lock_table_.end()) {
+            //     // 新建
+            //     it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
+            //                                   std::forward_as_tuple()).first;
+            // }
+            //
+            // // auto hash = std::hash<LockDataId>{}(lock_data_id);
+            //
+            // // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
+            // // 那么其中另外一个应该不满足索引一致性而抛出异常，其实也可以先申请行间隙锁，再校验唯一索引，但是这样如果不满足唯一索引不能立即返回了
+            // // 按照 mysql 8.0 的实现，抛出异常
+            // if (!it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+            //                          std::forward_as_tuple()).second) {
+            //     return false;
+            //     // throw NonUniqueIndexError(index_meta.tab_name, {});
+            // }
+            //
+            // auto &lock_request_queue = it_->second.at(lock_data_id);
+            //
+            // // 每次事务申请锁都要更新最老事务id
+            // if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+            //     lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            // }
+            //
+            // // 将当前事务锁请求加到锁请求队列中
+            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
+            // // 更新锁请求队列锁模式为 X 锁
+            // lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+            // txn->get_lock_set()->emplace(lock_data_id);
             break;
         }
     }
