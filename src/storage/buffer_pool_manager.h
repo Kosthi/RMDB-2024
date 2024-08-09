@@ -82,5 +82,5 @@ public:
     // auto NewPageGuarded(PageId *page_id) -> BasicPageGuard;
 
 private:
-    inline std::size_t get_instance_no(const PageId &page_id) { return 0; }
+    inline std::size_t get_instance_no(const PageId &page_id) { return hasher_(page_id) % BUFFER_POOL_INSTANCES; }
 };
