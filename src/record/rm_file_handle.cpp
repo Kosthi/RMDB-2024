@@ -165,9 +165,9 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context) {
     // 1. 获取指定记录所在的page handle
     // 2. 更新记录
     // 行级 X 锁
-    // if (context != nullptr) {
-    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
-    // }
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    }
     // 不需要加页锁
     auto page_handle = fetch_page_handle(rid.page_no);
     assert(Bitmap::is_set(page_handle.bitmap, rid.slot_no));
