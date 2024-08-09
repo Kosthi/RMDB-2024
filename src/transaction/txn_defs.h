@@ -181,6 +181,9 @@ public:
     bool cmpIndexLeftConds(const RmRecord &rec) const {
         for (auto &[cond, _]: index_conds_) {
             std::ignore = _;
+            if (cond.op == OP_INVALID) {
+                return true;
+            }
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
@@ -191,6 +194,9 @@ public:
     bool cmpIndexRightConds(const RmRecord &rec) const {
         for (auto &[_, cond]: index_conds_) {
             std::ignore = _;
+            if (cond.op == OP_INVALID) {
+                return true;
+            }
             if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
                 return false;
             }
