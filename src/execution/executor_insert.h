@@ -80,7 +80,7 @@ public:
             for (auto &[index_offset, col_meta]: index.cols) {
                 memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
             }
-            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
+            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record, fh_->GetFd());
         }
 
         // Insert into record file

@@ -56,7 +56,7 @@ public:
 
     bool lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta, Gap &gap, int tab_fd);
 
-    bool isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord &record);
+    bool isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord &record, int tab_fd);
 
     bool lock_shared_on_record(Transaction *txn, const Rid &rid, int tab_fd);
 
