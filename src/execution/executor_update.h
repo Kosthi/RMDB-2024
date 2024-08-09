@@ -103,6 +103,16 @@ public:
                     ++i;
                 }
 
+                // 再检查是否有间隙锁
+                // TPCC 测试中 update 不会涉及键的变化，在 index scan 算子加了写间隙锁后就不用再检查了
+                for (auto &[index_name, index]: tab_.indexes) {
+                    RmRecord rm_record(index.col_tot_len);
+                    for (auto &[index_offset, col_meta]: index.cols) {
+                        memcpy(rm_record.data + index_offset, updated_record->data + col_meta.offset, col_meta.len);
+                    }
+                    context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record, fh_->GetFd());
+                }
+
                 // Unique Index -> Insert into index
                 for (int j = 0; j < i; ++j) {
                     // TODO 如果不涉及索引建的变化，直接原地更新记录，不需要维护索引，避免B+树分裂重组的不必要耗时
