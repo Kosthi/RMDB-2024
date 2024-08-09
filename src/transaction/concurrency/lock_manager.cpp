@@ -552,37 +552,37 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
             }
         }
         if (wait == 0) {
-            // LockDataId lock_data_id(tab_fd, index_meta, gap, LockDataType::GAP);
-            // auto it_ = gap_lock_table_.find(index_meta);
-            // if (it_ == gap_lock_table_.end()) {
-            //     // 新建
-            //     it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
-            //                                   std::forward_as_tuple()).first;
-            // }
-            //
-            // // auto hash = std::hash<LockDataId>{}(lock_data_id);
-            //
-            // // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
-            // // 那么其中另外一个应该不满足索引一致性而抛出异常，其实也可以先申请行间隙锁，再校验唯一索引，但是这样如果不满足唯一索引不能立即返回了
-            // // 按照 mysql 8.0 的实现，抛出异常
-            // if (!it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
-            //                          std::forward_as_tuple()).second) {
-            //     return false;
-            //     // throw NonUniqueIndexError(index_meta.tab_name, {});
-            // }
-            //
-            // auto &lock_request_queue = it_->second.at(lock_data_id);
-            //
-            // // 每次事务申请锁都要更新最老事务id
-            // if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
-            //     lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
-            // }
-            //
-            // // 将当前事务锁请求加到锁请求队列中
-            // lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
-            // // 更新锁请求队列锁模式为 X 锁
-            // lock_request_queue.group_lock_mode_ = GroupLockMode::X;
-            // txn->get_lock_set()->emplace(lock_data_id);
+            LockDataId lock_data_id(tab_fd, index_meta, gap, LockDataType::GAP);
+            auto it_ = gap_lock_table_.find(index_meta);
+            if (it_ == gap_lock_table_.end()) {
+                // 新建
+                it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
+                                              std::forward_as_tuple()).first;
+            }
+
+            // auto hash = std::hash<LockDataId>{}(lock_data_id);
+
+            // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
+            // 那么其中另外一个应该不满足索引一致性而抛出异常，其实也可以先申请行间隙锁，再校验唯一索引，但是这样如果不满足唯一索引不能立即返回了
+            // 按照 mysql 8.0 的实现，抛出异常
+            if (!it_->second.emplace(std::piecewise_construct, std::forward_as_tuple(lock_data_id),
+                                     std::forward_as_tuple()).second) {
+                return false;
+                // throw NonUniqueIndexError(index_meta.tab_name, {});
+            }
+
+            auto &lock_request_queue = it_->second.at(lock_data_id);
+
+            // 每次事务申请锁都要更新最老事务id
+            if (txn->get_transaction_id() < lock_request_queue.oldest_txn_id_) {
+                lock_request_queue.oldest_txn_id_ = txn->get_transaction_id();
+            }
+
+            // 将当前事务锁请求加到锁请求队列中
+            lock_request_queue.request_queue_.emplace_back(txn->get_transaction_id(), LockMode::EXCLUSIVE, true);
+            // 更新锁请求队列锁模式为 X 锁
+            lock_request_queue.group_lock_mode_ = GroupLockMode::X;
+            txn->get_lock_set()->emplace(lock_data_id);
             break;
         }
     }
