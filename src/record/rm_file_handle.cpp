@@ -56,10 +56,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     auto slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
-    // if (context != nullptr) {
-    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
-    //                                                  fd_);
-    // }
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
+                                                     fd_);
+    }
 
     // TODO 优化插入
     memcpy(page_handle.get_slot(slot_no), buf, file_hdr_.record_size);
@@ -165,9 +165,9 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context) {
     // 1. 获取指定记录所在的page handle
     // 2. 更新记录
     // 行级 X 锁
-    if (context != nullptr) {
-        context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
-    }
+    // if (context != nullptr) {
+    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    // }
     // 不需要加页锁
     auto page_handle = fetch_page_handle(rid.page_no);
     assert(Bitmap::is_set(page_handle.bitmap, rid.slot_no));
