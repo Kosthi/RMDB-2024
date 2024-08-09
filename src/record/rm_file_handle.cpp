@@ -53,10 +53,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     auto &&slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
     // 行级 X 锁
-    // if (context != nullptr) {
-    //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
-    //                                                  fd_);
-    // }
+    if (context != nullptr) {
+        context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no},
+                                                     fd_);
+    }
 
     memcpy(page_handle.get_slot(slot_no), buf, file_hdr_.record_size);
     Bitmap::set(page_handle.bitmap, slot_no);
