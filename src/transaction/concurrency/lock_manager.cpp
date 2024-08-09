@@ -734,7 +734,6 @@ bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int
                             }
                         } else {
                             cur = it;
-                            break;
                         }
                     }
                     return true;
@@ -768,7 +767,6 @@ bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int
                         }
                     } else {
                         cur = it;
-                        break;
                     }
                 }
                 return true;
@@ -1314,7 +1312,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
         lock_request_queue.group_lock_mode_ = GroupLockMode::NON_LOCK;
         lock_request_queue.oldest_txn_id_ = INT32_MAX;
         // 唤醒等待的事务
-        lock_request_queue.cv_.notify_all();
+        // lock_request_queue.cv_.notify_all();
 
         if (lock_data_id.type_ == LockDataType::GAP) {
             // 相交的间隙锁也得唤醒
@@ -1327,7 +1325,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            // ii->second.erase(it);
+            ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
