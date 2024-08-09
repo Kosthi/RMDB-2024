@@ -29,13 +29,14 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
     // 2. 如果为空指针，创建新事务
     // 3. 把开始事务加入到全局事务表中
     // 4. 返回当前事务指针
-    std::lock_guard lock(latch_);
 
     if (txn == nullptr) {
         txn = new Transaction(next_txn_id_++);
     }
     txn->set_start_ts(next_timestamp_++);
+    latch_.lock();
     txn_map.emplace(txn->get_transaction_id(), txn);
+    latch_.unlock();
 #ifdef ENABLE_LOGGING
     auto *begin_log_record = new BeginLogRecord(txn->get_transaction_id());
     begin_log_record->prev_lsn_ = txn->get_prev_lsn();
@@ -58,15 +59,13 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     // 3. 释放事务相关资源，eg.锁集
     // 4. 把事务日志刷入磁盘中
     // 5. 更新事务状态
-    std::lock_guard lock(latch_);
-
     // 释放写集指针
     for (auto &it: *txn->get_write_set()) {
         delete it;
     }
 
     // 释放所有锁
-    auto &&lock_set = txn->get_lock_set();
+    auto lock_set = txn->get_lock_set();
     for (auto &it: *lock_set) {
         lock_manager_->unlock(txn, it);
     }
@@ -94,9 +93,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     // 3. 清空事务相关资源，eg.锁集
     // 4. 把事务日志刷入磁盘中
     // 5. 更新事务状态
-    std::lock_guard lock(latch_);
+    // std::lock_guard lock(latch_);
 
-    auto &&write_set = txn->get_write_set();
+    auto write_set = txn->get_write_set();
     auto *context = new Context(lock_manager_, log_manager, txn);
     // 从最后一个向前回滚
     for (auto &&it = write_set->rbegin(); it != write_set->rend(); ++it) {
@@ -117,9 +116,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                         memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
                     auto ih = sm_manager_->ihs_[index_name].get();
-                    ih->rw_latch_.WLock();
+                    // ih->rw_latch_.WLock();
                     ih->delete_entry(key, txn);
-                    ih->rw_latch_.WUnlock();
+                    // ih->rw_latch_.WUnlock();
                     delete []key;
                 }
 #ifdef ENABLE_LOGGING
@@ -142,9 +141,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                         memcpy(key + index_offset, record.data + col_meta.offset, col_meta.len);
                     }
                     auto ih = sm_manager_->ihs_[index_name].get();
-                    ih->rw_latch_.WLock();
+                    // ih->rw_latch_.WLock();
                     ih->insert_entry(key, rid, txn);
-                    ih->rw_latch_.WUnlock();
+                    // ih->rw_latch_.WUnlock();
                     delete []key;
                 }
 #ifdef ENABLE_LOGGING
@@ -171,10 +170,10 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
                             memcpy(new_key + index_offset, new_record.data + col_meta.offset, col_meta.len);
                         }
                         auto ih = sm_manager_->ihs_[index_name].get();
-                        ih->rw_latch_.WLock();
+                        // ih->rw_latch_.WLock();
                         ih->delete_entry(new_key, txn);
                         ih->insert_entry(old_key, rid, txn);
-                        ih->rw_latch_.WUnlock();
+                        // ih->rw_latch_.WUnlock();
                         delete []old_key;
                         delete []new_key;
                     }
