@@ -1327,7 +1327,7 @@ bool LockManager::unlock(Transaction *txn, const LockDataId &lock_data_id) {
                 // }
                 // }
             }
-            ii->second.erase(it);
+            // ii->second.erase(it);
         } else {
             lock_table_.erase(it);
         }
