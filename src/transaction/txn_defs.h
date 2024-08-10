@@ -153,12 +153,14 @@ public:
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
-                if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
-                    break;
-                }
-            } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
-                break;
+                // 加上索引上的间隙锁使用，加在谓词上的不需要，可以实现更细的粒度
+                // if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
+                //     break;
+                // }
             }
+            // else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
+            //     break;
+            // }
         }
 
         for (size_t i = 0; i < index_conds_.size(); ++i) {
@@ -173,12 +175,14 @@ public:
                         cmp == 0 && (lhs_cond.op == OP_GT || rhs_cond.op == OP_LT))) {
                     return false;
                 }
-                if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
-                    break;
-                }
-            } else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
-                break;
+                // 加上索引上的间隙锁使用，加在谓词上的不需要，可以实现更细的粒度
+                // if (lhs_cond.op != OP_EQ || rhs_cond.op != OP_EQ) {
+                //     break;
+                // }
             }
+            // else if (lhs_cond.op == OP_INVALID && rhs_cond.op == OP_INVALID) {
+            //     break;
+            // }
         }
 
         return true;
