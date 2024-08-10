@@ -129,6 +129,10 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
                     }
                 }
                 if (!is_only_txn) {
+                    // wait-die 策略死锁预防，否则会死锁，而且题八会卡在幻读4测试点
+                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    }
                     contain_X = true;
                     break;
                 }
