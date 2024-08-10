@@ -478,40 +478,42 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
     int wait = 0;
     while (true) {
         wait = 0;
-        // 独占锁只要有区间相交就得等待
-        for (auto &[data_id, queue]: it->second) {
-            if (data_id.gap_.isInGap(record)) {
-                bool is_only_txn = true;
-                for (auto &req: queue.request_queue_) {
-                    if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                        is_only_txn = false;
-                        break;
-                    }
-                }
-                // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
-                if (is_only_txn) {
-                    continue;
-                }
-
-                // wait-die
-                if (txn->get_transaction_id() > queue.oldest_txn_id_) {
-                    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
-                }
-
-                ++wait;
-                std::unique_lock ul(latch_, std::adopt_lock);
-                auto &&cur = queue.request_queue_.begin();
-                // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
-                queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+        if (it != gap_lock_table_.end()) {
+            // 独占锁只要有区间相交就得等待
+            for (auto &[data_id, queue]: it->second) {
+                if (data_id.gap_.isInGap(record)) {
+                    bool is_only_txn = true;
                     for (auto &req: queue.request_queue_) {
                         if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
-                            return false;
+                            is_only_txn = false;
+                            break;
                         }
                     }
-                    return true;
-                });
-                ul.release();
-                break;
+                    // 队列中没有其他事务取得锁，则当前事务一定拿到了锁（如果没拿到锁阻塞也不可能执行到这里），那么就可以插入
+                    if (is_only_txn) {
+                        continue;
+                    }
+
+                    // wait-die
+                    if (txn->get_transaction_id() > queue.oldest_txn_id_) {
+                        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::DEADLOCK_PREVENTION);
+                    }
+
+                    ++wait;
+                    std::unique_lock ul(latch_, std::adopt_lock);
+                    auto &&cur = queue.request_queue_.begin();
+                    // 通过条件：当前请求之前没有任何已授权的请求并且不存在相交区间
+                    queue.cv_.wait(ul, [&queue, txn, &cur, &it, &record]() {
+                        for (auto &req: queue.request_queue_) {
+                            if (req.txn_id_ != txn->get_transaction_id() && req.granted_) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                    ul.release();
+                    break;
+                }
             }
         }
         if (wait == 0) {
