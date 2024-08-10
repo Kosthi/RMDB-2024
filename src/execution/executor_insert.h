@@ -67,33 +67,28 @@ public:
         auto **keys = new char *[tab_.indexes.size()];
         auto **ihs = new IxIndexHandle *[tab_.indexes.size()];
 
+        // 同时检查是否有间隙锁和唯一性
         int i = 0;
-        // 先索引查重
-        for (auto &[ix_name, index]: tab_.indexes) {
-            ihs[i] = sm_manager_->ihs_[ix_name].get();
+        bool not_inserted = true;
+        for (auto &[index_name, index]: tab_.indexes) {
+            ihs[i] = sm_manager_->ihs_[index_name].get();
             keys[i] = new char[index.col_tot_len];
             for (auto &[index_offset, col_meta]: index.cols) {
                 memcpy(keys[i] + index_offset,
                        rec.data + col_meta.offset, col_meta.len);
             }
-            if (!ihs[i]->is_unique(keys[i], rid_, context_->txn_)) {
-                for (int j = 0; j <= i; ++j) {
-                    delete []keys[j];
+            RmRecord rm_record(keys[i], index.col_tot_len);
+            not_inserted = context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record, fh_->GetFd());
+            if (!not_inserted || !ihs[i]->is_unique(keys[i], rid_, context_->txn_)) {
+                // 释放内存
+                for (int k = 0; k <= i; ++k) {
+                    delete []keys[k];
                 }
                 delete []keys;
                 delete []ihs;
-                throw NonUniqueIndexError("", {ix_name});
+                throw NonUniqueIndexError("", {index_name});
             }
             ++i;
-        }
-
-        // 再检查是否有间隙锁
-        for (auto &[index_name, index]: tab_.indexes) {
-            RmRecord rm_record(index.col_tot_len);
-            for (auto &[index_offset, col_meta]: index.cols) {
-                memcpy(rm_record.data + index_offset, rec.data + col_meta.offset, col_meta.len);
-            }
-            context_->lock_mgr_->isSafeInGap(context_->txn_, index, rm_record);
         }
 
         // 再检查是否有间隙锁冲突，这里间隙锁退化成了行锁
