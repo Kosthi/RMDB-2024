@@ -24,6 +24,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
     // if (context != nullptr && context->lock_mgr_ != nullptr) {
     //     context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
     // }
+    // 读记录会有表锁或间隙锁保护，不需要加锁
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
@@ -49,6 +50,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     // TODO 不需要加行级写锁？
     // TODO 这里实际上是以一个页面放一个记录，太占用空间了！
     auto &&page_handle = create_page_handle();
+    page_handle.page->WLatch();
     // TODO 算法优化
     auto &&slot_no = Bitmap::first_bit(false, page_handle.bitmap, file_hdr_.num_records_per_page);
 
@@ -66,6 +68,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     }
 
     Rid rid{page_handle.page->get_page_id().page_no, slot_no};
+    page_handle.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
     return rid;
 }
@@ -82,6 +85,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
     //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, {page_handle.page->get_page_id().page_no, slot_no}, fd_);
     // }
     auto &&page_handle = fetch_page_handle(rid.page_no);
+    page_handle.page->WLatch();
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         Bitmap::set(page_handle.bitmap, rid.slot_no);
         if (++page_handle.page_hdr->num_records == file_hdr_.num_records_per_page) {
@@ -89,6 +93,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
         }
     }
     memcpy(page_handle.get_slot(rid.slot_no), buf, file_hdr_.record_size);
+    page_handle.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
 }
 
@@ -128,6 +133,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context) {
     //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
     // }
     auto &&page_handle = fetch_page_handle(rid.page_no);
+    page_handle.page->WLatch();
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
     }
@@ -135,6 +141,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context) {
     if (page_handle.page_hdr->num_records-- == file_hdr_.num_records_per_page) {
         release_page_handle(page_handle);
     }
+    page_handle.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_handle.page->get_page_id(), true);
 }
 
@@ -152,6 +159,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context) {
     // if (context != nullptr) {
     //     context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
     // }
+    // 不需要加页锁，如果更新同一记录由间隙锁保护
     auto &&page_handle = fetch_page_handle(rid.page_no);
     if (!Bitmap::is_set(page_handle.bitmap, rid.slot_no)) {
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
@@ -220,6 +228,8 @@ RmPageHandle RmFileHandle::create_page_handle() {
     //     1.1 没有空闲页：使用缓冲池来创建一个新page；可直接调用create_new_page_handle()
     //     1.2 有空闲页：直接获取第一个空闲页
     // 2. 生成page handle并返回给上层
+    // TODO 注意并发插入，重中之中，关键！！！
+    std::lock_guard lock(latch_);
     if (file_hdr_.first_free_page_no == INVALID_PAGE_ID) {
         return create_new_page_handle();
     }
