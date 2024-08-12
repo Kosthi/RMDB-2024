@@ -57,7 +57,13 @@ public:
 
     void beginTuple() override { prev_->beginTuple(); }
 
-    void nextTuple() override { prev_->nextTuple(); }
+    void nextTuple() override {
+        // limit 有效时，如果还需要输出记录的条数已经为 0 了，没必要再调用
+        if (limit_ == 0) {
+            return;
+        }
+        prev_->nextTuple();
+    }
 
     std::unique_ptr<RmRecord> Next() override {
         --limit_;

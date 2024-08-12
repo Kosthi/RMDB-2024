@@ -821,6 +821,7 @@ public:
         while (!scan_->is_end()) {
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
+            // TODO 这里尽量把比较次数减少，如果选出来的记录都落在索引上了，就可以跳过
             if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
                 // 回表，查不在索引里的谓词
                 rid_ = scan_->rid();
@@ -835,6 +836,8 @@ public:
     }
 
     void nextTuple() override {
+        // 这里只对逆向扫描的 max 作了 return，如果是正向扫描 min 还会调用一次 nextTuple，并没有完全做到 limit 1
+        // 所以还是在投影算子的 nextTuple 写个判断比较好
         if (!asc_) {
             return;
         }
