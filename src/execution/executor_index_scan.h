@@ -229,7 +229,7 @@ public:
         //     return;
         // }
 
-        // lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+        lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
 
         // 全表扫索引
         if (scan_index_) {
