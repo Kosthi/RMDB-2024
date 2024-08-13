@@ -73,6 +73,17 @@ public:
 
     void delete_all_pages(int fd);
 
+    void ouput_info() {
+        // printf("page2instance size: %lu\n", page2instance_.size());
+        for (auto &instance: instances_) {
+            printf("bpm size: %lu\n", instance->page_table_.size());
+            printf("free list size: %lu\n", instance->free_list_.size());
+            printf("fetch cnt: %d\n", instance->cnt_fetch);
+            printf("vitcm cnt: %d\n", instance->cnt_vitcm);
+            printf("update cnt: %d\n", instance->cnt_update);
+        }
+    }
+
     // auto FetchPageBasic(PageId page_id) -> BasicPageGuard;
     //
     // auto FetchPageRead(PageId page_id) -> ReadPageGuard;

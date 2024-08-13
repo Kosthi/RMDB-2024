@@ -32,6 +32,7 @@ void BufferPoolInstance::update_page(Page *page, PageId new_page_id, frame_id_t 
     // 2 更新page table
     // 3 重置page的data，更新page id
     if (page->is_dirty()) {
+        // ++cnt_update;
 #ifdef ENABLE_LOGGING
         // 置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
         if (log_manager_ != nullptr && page->get_page_lsn() > log_manager_->get_persist_lsn()) {
@@ -67,9 +68,11 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
     // 4.     固定目标页，更新pin_count_
     // 5.     返回目标页
     std::lock_guard lock(latch_);
+    // ++cnt_fetch;
 
     auto &&it = page_table_.find(page_id);
     if (it == page_table_.end()) {
+        // ++cnt_vitcm;
         frame_id_t frame_id = INVALID_FRAME_ID;
         if (find_victim_page(&frame_id)) {
             update_page(&pages_[frame_id], page_id, frame_id);

@@ -15,7 +15,7 @@
 class LogManager;
 
 class BufferPoolInstance {
-private:
+public:
     size_t pool_size_; // buffer_pool中可容纳页面的个数，即帧的个数
     Page *pages_; // buffer_pool中的Page对象数组，在构造空间中申请内存空间，在析构函数中释放，大小为BUFFER_POOL_SIZE
     std::unordered_map<PageId, frame_id_t> page_table_; // 帧号和页面号的映射哈希表，用于根据页面的PageId定位该页面的帧编号
@@ -24,6 +24,9 @@ private:
     ClockReplacer *replacer_; // buffer_pool的置换策略，当前赛题中为LRU置换策略
     LogManager *log_manager_;
     std::mutex latch_; // 用于共享数据结构的并发控制
+    int cnt_fetch = 0;
+    int cnt_vitcm = 0;
+    int cnt_update = 0;
 
 public:
     BufferPoolInstance(size_t pool_size, DiskManager *disk_manager, LogManager *log_manager = nullptr)

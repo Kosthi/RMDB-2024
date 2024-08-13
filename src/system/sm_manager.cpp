@@ -131,34 +131,34 @@ void SmManager::flush_meta() {
  * @description: 关闭数据库并把数据落盘
  */
 void SmManager::close_db() {
-    // if (db_.name_.empty()) {
-    //     throw DatabaseNotOpenError(db_.name_);
-    // }
+    if (db_.name_.empty()) {
+        throw DatabaseNotOpenError(db_.name_);
+    }
 
-    // flush_meta();
-    // db_.name_.clear();
-    // db_.tabs_.clear();
+    flush_meta();
+    db_.name_.clear();
+    db_.tabs_.clear();
 
     // 记录文件落盘
     std::cout << "before file: " << std::endl;
-    // for (auto &[_, file_handle]: fhs_) {
-    //     std::ignore = _;
-    //     rm_manager_->close_file(file_handle.get());
-    // }
+    for (auto &[_, file_handle]: fhs_) {
+        std::ignore = _;
+        rm_manager_->close_file(file_handle.get());
+    }
 
     // 索引文件落盘
     std::cout << "before index file: " << std::endl;
-    // for (auto &[_, index_handle]: ihs_) {
-    //     std::ignore = _;
-    //     ix_manager_->close_index(index_handle.get());
-    // }
+    for (auto &[_, index_handle]: ihs_) {
+        std::ignore = _;
+        ix_manager_->close_index(index_handle.get());
+    }
 
-    // fhs_.clear();
-    // ihs_.clear();
+    fhs_.clear();
+    ihs_.clear();
 
-    // if (chdir("..") < 0) {
-    //     throw UnixError();
-    // }
+    if (chdir("..") < 0) {
+        throw UnixError();
+    }
 }
 
 /**

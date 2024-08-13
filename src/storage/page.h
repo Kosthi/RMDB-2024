@@ -23,6 +23,8 @@ struct PageId {
 
     friend bool operator==(const PageId &x, const PageId &y) { return x.fd == y.fd && x.page_no == y.page_no; }
 
+    friend bool operator!=(const PageId &x, const PageId &y) { return !(x == y); }
+
     bool operator<(const PageId &x) const {
         if (fd < x.fd) return true;
         return page_no < x.page_no;
@@ -46,6 +48,7 @@ namespace std {
     template<>
     struct hash<PageId> {
         size_t operator()(const PageId &obj) const {
+            // return (obj.fd << 16) | obj.page_no;
             std::size_t h1 = std::hash<int>{}(obj.fd);
             std::size_t h2 = std::hash<page_id_t>{}(obj.page_no);
             return h1 ^ (h2 << 1);

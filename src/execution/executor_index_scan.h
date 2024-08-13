@@ -229,7 +229,7 @@ public:
         //     return;
         // }
 
-        lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+        // lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
 
         // 全表扫索引
         if (scan_index_) {
@@ -419,20 +419,19 @@ public:
             // 找出上界 )
             switch (last_right_op) {
                 // 在前面查下界时已经确定
-                case OP_INVALID: {
-                    break;
-                }
+                case OP_INVALID:
                 // 全部都是等值查询
-                case OP_EQ: {
+                case OP_EQ:
+                    // 优化：如果这里是 EQ，前面找下界已经确定过了，不需要再走一遍
                     // where p_id = 0, name = 'bztyhnmj';
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
                     // set_remaining_all_min(offset, last_idx, right_key);
                     // assert(last_idx == index_meta_.cols.size());
 
-                    lower_ = ih_->lower_bound(right_key);
+                    // lower_ = ih_->lower_bound(right_key);
                     // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
                     // set_remaining_all_max(offset, last_idx, right_key);
-                    upper_ = ih_->upper_bound(right_key);
+                    // upper_ = ih_->upper_bound(right_key);
 
                     // 1.最简单的情况，唯一索引等值锁定存在的数据：加行锁index(a, b, c) a = 1, b = 1, c = 1
                     // 加间隙锁
@@ -440,7 +439,6 @@ public:
                     // 1.2 a = 1, b = 1
 
                     break;
-                }
                 case OP_LT: {
                     // where name < 'bztyhnmj';                      last_idx = 0, + 1
                     // where name < 'bztyhnmj' and id = 1;           last_idx = 0, + 1
