@@ -81,6 +81,10 @@ public:
             printf("fetch cnt: %d\n", instance->cnt_fetch);
             printf("vitcm cnt: %d\n", instance->cnt_vitcm);
             printf("update cnt: %d\n", instance->cnt_update);
+            printf("unpin cnt: %d\n", instance->cnt_unpin);
+            printf("read seconds: %lf\n", instance->read_time / 1e6);
+            printf("fetch seconds: %lf\n", instance->fetch_time / 1e6);
+            printf("wait seconds: %lf\n", instance->wait_time / 1e6);
         }
     }
 
@@ -93,5 +97,5 @@ public:
     // auto NewPageGuarded(PageId *page_id) -> BasicPageGuard;
 
 private:
-    inline std::size_t get_instance_no(const PageId &page_id) { return hasher_(page_id) % BUFFER_POOL_INSTANCES; }
+    inline std::size_t get_instance_no(const PageId &page_id) { return 0; }
 };

@@ -67,7 +67,13 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
     // 3.     调用disk_manager_的read_page读取目标页到frame
     // 4.     固定目标页，更新pin_count_
     // 5.     返回目标页
-    std::lock_guard lock(latch_);
+    // auto wait_start = std::chrono::high_resolution_clock::now();
+    // // std::lock_guard lock(latch_);
+    // auto wait_end = std::chrono::high_resolution_clock::now();
+    // wait_time += std::chrono::duration_cast<std::chrono::microseconds>(wait_end - wait_start).count();
+
+    // auto start = std::chrono::high_resolution_clock::now();  // 开始计时
+
     // ++cnt_fetch;
 
     auto &&it = page_table_.find(page_id);
@@ -76,10 +82,15 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
         frame_id_t frame_id = INVALID_FRAME_ID;
         if (find_victim_page(&frame_id)) {
             update_page(&pages_[frame_id], page_id, frame_id);
+            // auto startt = std::chrono::high_resolution_clock::now();  // 开始计时
             disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[frame_id].get_data(), PAGE_SIZE);
+            // auto end = std::chrono::high_resolution_clock::now();  // 结束计时
+            // read_time += std::chrono::duration_cast<std::chrono::microseconds>(end - startt).count();
             // 不知道是从freelist还是replacer来的，都pin一下，待优化
             replacer_->pin(frame_id);
             pages_[frame_id].pin_count_ = 1;
+            // end = std::chrono::high_resolution_clock::now();  // 结束计时
+            // fetch_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
             return &pages_[frame_id];
         }
         return nullptr;
@@ -90,6 +101,8 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
         replacer_->pin(it->second);
     }
 
+    // auto end = std::chrono::high_resolution_clock::now();  // 结束计时
+    // fetch_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     return &pages_[it->second];
 }
 
@@ -110,7 +123,8 @@ bool BufferPoolInstance::unpin_page(PageId page_id, bool is_dirty) {
     // 2.2.1 若自减后等于0，则调用replacer_的Unpin
     // 3 根据参数is_dirty，更改P的is_dirty_
     // 缓冲池够用 没必要 unpin，决赛不行了
-    std::lock_guard lock(latch_);
+    // std::lock_guard lock(latch_);
+    // ++cnt_unpin;
 
     auto &&it = page_table_.find(page_id);
     // 不在页表中

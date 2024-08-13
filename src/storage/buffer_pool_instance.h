@@ -27,6 +27,10 @@ public:
     int cnt_fetch = 0;
     int cnt_vitcm = 0;
     int cnt_update = 0;
+    int cnt_unpin = 0;
+    int read_time = 0;
+    int fetch_time = 0;
+    int wait_time = 0;
 
 public:
     BufferPoolInstance(size_t pool_size, DiskManager *disk_manager, LogManager *log_manager = nullptr)
