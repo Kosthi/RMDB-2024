@@ -314,7 +314,8 @@ void *client_handler(void *sock_fd) {
         }
         // future TODO: 格式化 sql_handler.result, 传给客户端
         // send result with fixed format, use protobuf in the future
-        if (write(fd, data_send, offset + 1) == -1) {
+        if (send(fd, data_send, offset + 1, 0) == -1) {
+            perror("Send failed");
             break;
         }
         // 如果是单挑语句，需要按照一个完整的事务来执行，所以执行完当前语句后，自动提交事务

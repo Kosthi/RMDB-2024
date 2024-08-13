@@ -46,7 +46,7 @@ void BufferPoolInstance::update_page(Page *page, PageId new_page_id, frame_id_t 
     page_table_.erase(page->get_page_id());
     page_table_[new_page_id] = new_frame_id;
 
-    page->reset_memory();
+    // page->reset_memory();
     page->id_ = new_page_id;
     page->pin_count_ = 0;
 }
@@ -175,6 +175,7 @@ Page *BufferPoolInstance::new_page(PageId *page_id) {
     if (find_victim_page(&frame_id)) {
         // page_id->page_no = disk_manager_->allocate_page(page_id->fd);
         update_page(&pages_[frame_id], *page_id, frame_id);
+        pages_[frame_id].reset_memory();
         // 不知道是从freelist还是replacer来的，都pin一下，待优化
         replacer_->pin(frame_id);
         pages_[frame_id].pin_count_ = 1;
