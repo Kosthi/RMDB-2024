@@ -26,6 +26,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/common.h"
 #include "analyze/analyze.h"
 
+static std::map<ast::SvType, ColType> m = {
+    {ast::SV_TYPE_INT, TYPE_INT}, {ast::SV_TYPE_FLOAT, TYPE_FLOAT}, {ast::SV_TYPE_STRING, TYPE_STRING}
+};
+
 class Planner {
 private:
     SmManager *sm_manager_;
@@ -47,7 +51,7 @@ public:
     void set_enable_output_file(bool set_val) { enable_output_file = set_val; }
 
     // 是否把输入写入 output.txt 文件中，默认开启
-    bool enable_output_file = false;
+    bool enable_output_file = true;
 
 private:
     std::shared_ptr<Query> logical_optimization(std::shared_ptr<Query> query, Context *context);
@@ -69,10 +73,7 @@ private:
     bool get_index_cols(std::string &tab_name, std::vector<Condition> &curr_conds,
                         std::vector<std::string> &index_col_names);
 
-    ColType interp_sv_type(ast::SvType sv_type) {
-        std::map<ast::SvType, ColType> m = {
-            {ast::SV_TYPE_INT, TYPE_INT}, {ast::SV_TYPE_FLOAT, TYPE_FLOAT}, {ast::SV_TYPE_STRING, TYPE_STRING}
-        };
-        return m.at(sv_type);
+    static ColType interp_sv_type(ast::SvType &sv_type) {
+        return m[sv_type];
     }
 };
