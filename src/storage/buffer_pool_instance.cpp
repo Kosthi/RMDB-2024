@@ -68,7 +68,7 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
     // 4.     固定目标页，更新pin_count_
     // 5.     返回目标页
     // auto wait_start = std::chrono::high_resolution_clock::now();
-    // // std::lock_guard lock(latch_);
+    std::unique_lock lk(latch_);
     // auto wait_end = std::chrono::high_resolution_clock::now();
     // wait_time += std::chrono::duration_cast<std::chrono::microseconds>(wait_end - wait_start).count();
 
@@ -76,12 +76,13 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
 
     // ++cnt_fetch;
 
+    frame_id_t frame_id = INVALID_FRAME_ID;
     auto &&it = page_table_.find(page_id);
     if (it == page_table_.end()) {
         // ++cnt_vitcm;
-        frame_id_t frame_id = INVALID_FRAME_ID;
         if (find_victim_page(&frame_id)) {
             update_page(&pages_[frame_id], page_id, frame_id);
+            // lk.unlock();
             // auto startt = std::chrono::high_resolution_clock::now();  // 开始计时
             disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[frame_id].get_data(), PAGE_SIZE);
             // auto end = std::chrono::high_resolution_clock::now();  // 结束计时
@@ -95,15 +96,17 @@ Page *BufferPoolInstance::fetch_page(PageId page_id) {
         }
         return nullptr;
     }
+    frame_id = it->second;
+    // lk.unlock();
 
     // 如果已经在页表中，只有第一次使用需要pin
-    if (++pages_[it->second].pin_count_ == 1) {
-        replacer_->pin(it->second);
+    if (++pages_[frame_id].pin_count_ == 1) {
+        replacer_->pin(frame_id);
     }
 
     // auto end = std::chrono::high_resolution_clock::now();  // 结束计时
     // fetch_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    return &pages_[it->second];
+    return &pages_[frame_id];
 }
 
 /**

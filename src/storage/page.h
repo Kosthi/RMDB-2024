@@ -51,7 +51,7 @@ namespace std {
             // return (obj.fd << 16) | obj.page_no;
             std::size_t h1 = std::hash<int>{}(obj.fd);
             std::size_t h2 = std::hash<page_id_t>{}(obj.page_no);
-            return h1 ^ (h2 << 1);
+            return (h1 << 1) ^ (h2);
         }
     };
 }
