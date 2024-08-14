@@ -175,7 +175,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
 
         std::vector<ColMeta> all_cols;
         // 得到扫描的表的所有列
-        get_all_cols(query->tables, all_cols);
+        get_all_cols({x->tab_name}, all_cols);
 
         // 处理where条件
         get_clause(x->conds, query->conds);
@@ -184,7 +184,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         // 处理where条件
         std::vector<ColMeta> all_cols;
         // 得到扫描的表的所有列
-        get_all_cols(query->tables, all_cols);
+        get_all_cols({x->tab_name}, all_cols);
 
         get_clause(x->conds, query->conds);
         check_clause(query->conds, all_cols);
@@ -242,7 +242,7 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vecto
     }
 }
 
-void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds,
+void Analyze::get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds,
                          std::vector<Condition> &conds) {
     conds.clear();
     for (auto &expr: sv_conds) {

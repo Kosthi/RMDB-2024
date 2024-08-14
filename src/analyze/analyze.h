@@ -78,7 +78,7 @@ private:
 
     void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
 
-    void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds, std::vector<Condition> &conds);
+    void get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds, std::vector<Condition> &conds);
 
     static void get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr> > &sv_conds,
                                   std::vector<Condition> &conds);
