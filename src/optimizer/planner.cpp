@@ -331,7 +331,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
         auto it = conds.begin();
         while (it != conds.end()) {
             std::shared_ptr<Plan> left, right;
-            std::vector<Condition> join_conds{std::move(*it)};
+            std::vector<Condition> join_conds{*it};
             left = pop_scan(scantbl, it->lhs_col.tab_name, joined_tables, table_scan_executors);
             right = pop_scan(scantbl, it->rhs_col.tab_name, joined_tables, table_scan_executors);
             // 检查左连接条件上是否有索引
