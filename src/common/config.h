@@ -15,7 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstdint>
 #include <string>
 
-#define BUFFER_LENGTH 8192
+#define BUFFER_LENGTH 1500
 // 定义日志控制宏
 #define ENABLE_LOGGING
 
