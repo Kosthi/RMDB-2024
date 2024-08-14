@@ -177,13 +177,53 @@ struct Condition {
     TabCol rhs_col; // right-hand side column
     Value rhs_val; // right-hand side value
     std::vector<Value> rhs_value_list; // 值列表
+
+    // Condition() noexcept = default;
+    //
+    // Condition(const Condition&) noexcept = default;
+    //
+    // Condition(Condition&& other) noexcept
+    // : agg_type(other.agg_type),
+    //   lhs_col(std::move(other.lhs_col)),
+    //   op(other.op),
+    //   is_rhs_val(other.is_rhs_val),
+    //   is_sub_query(other.is_sub_query),
+    //   sub_query(std::move(other.sub_query)),
+    //   sub_query_plan(std::move(other.sub_query_plan)),
+    //   prev(std::move(other.prev)),
+    //   rhs_col(std::move(other.rhs_col)),
+    //   rhs_val(std::move(other.rhs_val)),
+    //   rhs_value_list(std::move(other.rhs_value_list)) {
+    // }
+    //
+    // Condition& operator=(Condition&& other) noexcept {
+    //     if (this != &other) {  // 防止自赋值
+    //         agg_type = other.agg_type;
+    //         lhs_col = std::move(other.lhs_col);
+    //         op = other.op;
+    //         is_rhs_val = other.is_rhs_val;
+    //         is_sub_query = other.is_sub_query;
+    //         sub_query = std::move(other.sub_query);
+    //         sub_query_plan = std::move(other.sub_query_plan);
+    //         prev = std::move(other.prev);
+    //         rhs_col = std::move(other.rhs_col);
+    //         rhs_val = std::move(other.rhs_val);
+    //         rhs_value_list = std::move(other.rhs_value_list);
+    //     }
+    //     return *this;
+    // }
 };
 
 struct SetClause {
     TabCol lhs;
     Value rhs;
     // 是否是 v=v+1
-    bool is_incr;
+    bool is_incr = false;
+
+    SetClause() noexcept = default;
+
+    SetClause(TabCol lhs_, Value rhs_, bool is_incr_) :
+    lhs(std::move(lhs_)), rhs(std::move(rhs_)), is_incr(is_incr_) {}
 };
 
 // Utility function to combine hashes

@@ -331,7 +331,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
         auto it = conds.begin();
         while (it != conds.end()) {
             std::shared_ptr<Plan> left, right;
-            std::vector<Condition> join_conds{*it};
+            std::vector<Condition> join_conds{std::move(*it)};
             left = pop_scan(scantbl, it->lhs_col.tab_name, joined_tables, table_scan_executors);
             right = pop_scan(scantbl, it->rhs_col.tab_name, joined_tables, table_scan_executors);
             // 检查左连接条件上是否有索引
@@ -451,7 +451,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
             }
 
             if (left_need_to_join_executors != nullptr && right_need_to_join_executors != nullptr) {
-                std::vector<Condition> join_conds{*it};
+                std::vector<Condition> join_conds{std::move(*it)};
                 std::shared_ptr<Plan> temp_join_executors = std::make_shared<JoinPlan>(T_NestLoop,
                     std::move(left_need_to_join_executors),
                     std::move(right_need_to_join_executors),
@@ -468,7 +468,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query, Contex
                     it->op = swap_op.at(it->op);
                     left_need_to_join_executors = std::move(right_need_to_join_executors);
                 }
-                std::vector<Condition> join_conds{*it};
+                std::vector<Condition> join_conds{std::move(*it)};
                 table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left_need_to_join_executors),
                                                                   std::move(table_join_executors), join_conds);
             } else {
