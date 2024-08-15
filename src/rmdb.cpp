@@ -54,7 +54,7 @@ auto recovery = std::make_unique<RecoveryManager>(disk_manager.get(), buffer_poo
                                                   log_manager.get(), txn_manager.get());
 auto portal = std::make_unique<Portal>(sm_manager.get());
 auto analyze = std::make_unique<Analyze>(sm_manager.get());
-pthread_mutex_t *buffer_mutex;
+// pthread_mutex_t *buffer_mutex;
 pthread_mutex_t *sockfd_mutex;
 
 // 定义线程池大小
@@ -128,6 +128,9 @@ void *client_handler(void *sock_fd) {
     int offset = 0;
     // 记录客户端当前正在执行的事务ID
     txn_id_t txn_id = INVALID_TXN_ID;
+    // 每个 client 分配一个词法分析器解析 SQL 语句
+    yyscan_t scanner;
+    yylex_init(&scanner);
 
 #ifdef ENABLE_COUT
     std::string output = "establish client connection, sockfd: " + std::to_string(fd) + "\n";
@@ -140,7 +143,7 @@ void *client_handler(void *sock_fd) {
 #endif
         memset(data_recv, 0, BUFFER_LENGTH);
 
-        i_recvBytes = read(fd, data_recv, BUFFER_LENGTH);
+        i_recvBytes = recv(fd, data_recv, BUFFER_LENGTH, 0);
 
         if (i_recvBytes == 0) {
 #ifdef ENABLE_COUT
@@ -225,18 +228,19 @@ void *client_handler(void *sock_fd) {
         Context *context = new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset);
         SetTransaction(&txn_id, context);
 
-        // 用于判断是否已经调用了yy_delete_buffer来删除buf
+        // 用于判断是否已经调用了 yy_delete_buffer 来删除 buf
         bool finish_analyze = false;
-        pthread_mutex_lock(buffer_mutex);
-        YY_BUFFER_STATE buf = yy_scan_string(data_recv);
-        if (yyparse() == 0) {
+        // pthread_mutex_lock(buffer_mutex);
+        YY_BUFFER_STATE buf = yy_scan_string(data_recv, scanner);
+        if (yyparse(scanner) == 0) {
             if (ast::parse_tree != nullptr) {
                 try {
                     // analyze and rewrite
-                    std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);
-                    yy_delete_buffer(buf);
+                    // 查询计划生成
+                    std::shared_ptr<Query> query = analyze->do_analyze(std::move(ast::parse_tree));
+                    yy_delete_buffer(buf, scanner);
                     finish_analyze = true;
-                    pthread_mutex_unlock(buffer_mutex);
+                    // pthread_mutex_unlock(buffer_mutex);
                     // 全表 count 走 fast_count
                     if (query->agg_types.size() == 1 && query->agg_types[0] == AGG_COUNT && query->conds.empty()) {
                         // 后续支持笛卡尔积 count，这里先简化只有单个表
@@ -309,8 +313,8 @@ void *client_handler(void *sock_fd) {
             }
         }
         if (finish_analyze == false) {
-            yy_delete_buffer(buf);
-            pthread_mutex_unlock(buffer_mutex);
+            yy_delete_buffer(buf, scanner);
+            // pthread_mutex_unlock(buffer_mutex);
         }
         // future TODO: 格式化 sql_handler.result, 传给客户端
         // send result with fixed format, use protobuf in the future
@@ -338,9 +342,9 @@ void *client_handler(void *sock_fd) {
 
 void start_server() {
     // init mutex
-    buffer_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
+    // buffer_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
     sockfd_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
-    pthread_mutex_init(buffer_mutex, nullptr);
+    // pthread_mutex_init(buffer_mutex, nullptr);
     pthread_mutex_init(sockfd_mutex, nullptr);
 
     int sockfd_server;
@@ -568,7 +572,8 @@ void load_data(std::string filename, std::string tabname) {
     int col_idx = 0;
     auto &cols_meta = tab_.cols;
 
-    int index_pages = 0;
+    // int index_pages = 0;
+    // int ih_fd = -1;
 
     if (!tab_.indexes.empty()) {
         // 只有一个索引
@@ -595,6 +600,7 @@ void load_data(std::string filename, std::string tabname) {
 
         auto &ix_name = tab_.indexes.begin()->first;
         auto &ih = sm_manager->ihs_[ix_name];
+        // ih_fd = ih->fd_;
 
         auto &index_meta = tab_.indexes.begin()->second;
         int &tot_len = index_meta.col_tot_len;
@@ -816,7 +822,7 @@ void load_data(std::string filename, std::string tabname) {
             ih->create_upper_parent_nodes(key_temp, rid_temp, blocks + 2, blocks);
         }
 
-        index_pages = ih->file_hdr_->num_pages_;
+        // index_pages = ih->file_hdr_->num_pages_;
 
         // delete txn;
 
@@ -887,8 +893,8 @@ void load_data(std::string filename, std::string tabname) {
         fh->set_first_free_page_no(page_no - 1);
     }
 
-    // printf("table: %s, used table pages: %d\n", tabname.c_str(), page_no - 1);
-    // printf("table: %s, used index pages: %d\n", tabname.c_str(), index_pages);
+    // printf("table: %s, fd: %d, used table pages: %d\n", tabname.c_str(), fh->GetFd(), page_no - 1);
+    // printf("table: %s, fd: %d, used index pages: %d\n", tabname.c_str(), ih_fd, index_pages);
 
     // 释放内存
     delete []data;
