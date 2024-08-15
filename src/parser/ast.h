@@ -91,8 +91,8 @@ namespace ast {
         std::string col_name;
         std::shared_ptr<TypeLen> type_len;
 
-        ColDef(std::string col_name_, std::shared_ptr<TypeLen> type_len_) : col_name(std::move(col_name_)),
-                                                                            type_len(std::move(type_len_)) {
+        ColDef(std::string &col_name_, std::shared_ptr<TypeLen> &type_len_) : col_name(std::move(col_name_)),
+                                                                              type_len(std::move(type_len_)) {
         }
     };
 
@@ -179,8 +179,8 @@ namespace ast {
         std::string tab_name;
         std::string col_name;
 
-        Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)),
-                                                            col_name(std::move(col_name_)) {
+        Col(std::string &&tab_name_, std::string &&col_name_) : tab_name(std::move(tab_name_)),
+                                                                col_name(std::move(col_name_)) {
         }
     };
 
@@ -217,17 +217,10 @@ namespace ast {
         AggType type;
         std::string alias; // 别名
 
-        // BoundExpr(std::shared_ptr<Col> col_) : col(std::move(col_)) {}
-
-        BoundExpr(std::shared_ptr<Col> col_, AggType type_) : col(std::move(col_)),
-                                                              type(type_) {
-        }
-
-        BoundExpr(std::shared_ptr<Col> col_, AggType type_, std::string &alias_) : col(std::move(col_)),
+        // 用万能引用，写成一个构造
+        BoundExpr(std::shared_ptr<Col> &&col_, AggType &&type_, std::string &&alias_ = "") : col(std::move(col_)),
             type(type_), alias(std::move(alias_)) {
         }
-
-        // inline bool is_aggregate() const { return type != AGG_COL; }
     };
 
     struct OrderBy : public TreeNode {

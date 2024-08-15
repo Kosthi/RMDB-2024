@@ -584,13 +584,13 @@ static const yytype_int16 yyrline[] =
      100,   101,   102,   106,   110,   114,   118,   125,   129,   136,
      143,   147,   151,   155,   159,   163,   170,   174,   178,   182,
      186,   193,   197,   204,   208,   215,   222,   226,   230,   234,
-     241,   245,   252,   256,   260,   264,   271,   275,   282,   283,
-     290,   294,   301,   305,   312,   316,   323,   327,   331,   335,
-     339,   343,   347,   354,   358,   362,   369,   373,   380,   384,
-     391,   395,   399,   403,   407,   411,   415,   419,   426,   430,
-     434,   441,   445,   449,   456,   460,   464,   471,   472,   473,
-     477,   481,   485,   489,   493,   497,   501,   505,   506,   507,
-     510,   512,   514
+     241,   245,   252,   256,   260,   264,   271,   275,   283,   286,
+     293,   297,   304,   308,   315,   319,   326,   330,   334,   338,
+     342,   346,   350,   357,   361,   365,   372,   376,   383,   387,
+     394,   399,   405,   409,   413,   417,   421,   425,   432,   436,
+     440,   447,   451,   455,   462,   467,   473,   480,   484,   489,
+     495,   500,   506,   510,   515,   521,   526,   532,   536,   540,
+     546,   548,   550
 };
 #endif
 
@@ -1629,7 +1629,7 @@ yyreduce:
   case 2:
 #line 66 "yacc.y"
     {
-        parse_tree = (yyvsp[-1].sv_node);
+        parse_tree = std::move((yyvsp[-1].sv_node));
         YYACCEPT;
     }
 #line 1636 "yacc.tab.cpp"
@@ -1827,7 +1827,7 @@ yyreduce:
   case 31:
 #line 194 "yacc.y"
     {
-        (yyval.sv_fields) = std::vector<std::shared_ptr<Field>>{(yyvsp[0].sv_field)};
+        (yyval.sv_fields) = std::vector<std::shared_ptr<Field>>{std::move((yyvsp[0].sv_field))};
     }
 #line 1833 "yacc.tab.cpp"
     break;
@@ -1835,7 +1835,7 @@ yyreduce:
   case 32:
 #line 198 "yacc.y"
     {
-        (yyval.sv_fields).push_back((yyvsp[0].sv_field));
+        (yyval.sv_fields).emplace_back(std::move((yyvsp[0].sv_field)));
     }
 #line 1841 "yacc.tab.cpp"
     break;
@@ -1843,7 +1843,7 @@ yyreduce:
   case 33:
 #line 205 "yacc.y"
     {
-        (yyval.sv_strs) = std::vector<std::string>{(yyvsp[0].sv_str)};
+        (yyval.sv_strs) = std::vector<std::string>{std::move((yyvsp[0].sv_str))};
     }
 #line 1849 "yacc.tab.cpp"
     break;
@@ -1851,7 +1851,7 @@ yyreduce:
   case 34:
 #line 209 "yacc.y"
     {
-        (yyval.sv_strs).push_back((yyvsp[0].sv_str));
+        (yyval.sv_strs).emplace_back(std::move((yyvsp[0].sv_str)));
     }
 #line 1857 "yacc.tab.cpp"
     break;
@@ -1899,7 +1899,7 @@ yyreduce:
   case 40:
 #line 242 "yacc.y"
     {
-        (yyval.sv_vals) = std::vector<std::shared_ptr<Value>>{(yyvsp[0].sv_val)};
+        (yyval.sv_vals) = std::vector<std::shared_ptr<Value>>{std::move((yyvsp[0].sv_val))};
     }
 #line 1905 "yacc.tab.cpp"
     break;
@@ -1907,7 +1907,7 @@ yyreduce:
   case 41:
 #line 246 "yacc.y"
     {
-        (yyval.sv_vals).push_back((yyvsp[0].sv_val));
+        (yyval.sv_vals).emplace_back(std::move((yyvsp[0].sv_val)));
     }
 #line 1913 "yacc.tab.cpp"
     break;
@@ -1961,399 +1961,423 @@ yyreduce:
     break;
 
   case 48:
-#line 282 "yacc.y"
-                      { /* ignore*/ }
-#line 1967 "yacc.tab.cpp"
+#line 283 "yacc.y"
+    {
+        /* ignore */
+    }
+#line 1969 "yacc.tab.cpp"
     break;
 
   case 49:
-#line 284 "yacc.y"
+#line 287 "yacc.y"
     {
-        (yyval.sv_conds) = (yyvsp[0].sv_conds);
+        (yyval.sv_conds) = std::move((yyvsp[0].sv_conds));
     }
-#line 1975 "yacc.tab.cpp"
+#line 1977 "yacc.tab.cpp"
     break;
 
   case 50:
-#line 291 "yacc.y"
+#line 294 "yacc.y"
     {
-        (yyval.sv_conds) = std::vector<std::shared_ptr<BinaryExpr>>{(yyvsp[0].sv_cond)};
+        (yyval.sv_conds) = std::vector<std::shared_ptr<BinaryExpr>>{std::move((yyvsp[0].sv_cond))};
     }
-#line 1983 "yacc.tab.cpp"
+#line 1985 "yacc.tab.cpp"
     break;
 
   case 51:
-#line 295 "yacc.y"
+#line 298 "yacc.y"
     {
-        (yyval.sv_conds).push_back((yyvsp[0].sv_cond));
+        (yyval.sv_conds).emplace_back(std::move((yyvsp[0].sv_cond)));
     }
-#line 1991 "yacc.tab.cpp"
+#line 1993 "yacc.tab.cpp"
     break;
 
   case 52:
-#line 302 "yacc.y"
+#line 305 "yacc.y"
     {
-        (yyval.sv_col) = std::make_shared<Col>((yyvsp[-2].sv_str), (yyvsp[0].sv_str));
+        (yyval.sv_col) = std::make_shared<Col>(std::move((yyvsp[-2].sv_str)), std::move((yyvsp[0].sv_str)));
     }
-#line 1999 "yacc.tab.cpp"
+#line 2001 "yacc.tab.cpp"
     break;
 
   case 53:
-#line 306 "yacc.y"
+#line 309 "yacc.y"
     {
-        (yyval.sv_col) = std::make_shared<Col>("", (yyvsp[0].sv_str));
+        (yyval.sv_col) = std::make_shared<Col>("", std::move((yyvsp[0].sv_str)));
     }
-#line 2007 "yacc.tab.cpp"
+#line 2009 "yacc.tab.cpp"
     break;
 
   case 54:
-#line 313 "yacc.y"
+#line 316 "yacc.y"
     {
-        (yyval.sv_cols) = std::vector<std::shared_ptr<Col>>{(yyvsp[0].sv_col)};
+        (yyval.sv_cols) = std::vector<std::shared_ptr<Col>>{std::move((yyvsp[0].sv_col))};
     }
-#line 2015 "yacc.tab.cpp"
+#line 2017 "yacc.tab.cpp"
     break;
 
   case 55:
-#line 317 "yacc.y"
+#line 320 "yacc.y"
     {
-        (yyval.sv_cols).push_back((yyvsp[0].sv_col));
+        (yyval.sv_cols).emplace_back(std::move((yyvsp[0].sv_col)));
     }
-#line 2023 "yacc.tab.cpp"
+#line 2025 "yacc.tab.cpp"
     break;
 
   case 56:
-#line 324 "yacc.y"
+#line 327 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_EQ;
     }
-#line 2031 "yacc.tab.cpp"
+#line 2033 "yacc.tab.cpp"
     break;
 
   case 57:
-#line 328 "yacc.y"
+#line 331 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_LT;
     }
-#line 2039 "yacc.tab.cpp"
+#line 2041 "yacc.tab.cpp"
     break;
 
   case 58:
-#line 332 "yacc.y"
+#line 335 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_GT;
     }
-#line 2047 "yacc.tab.cpp"
+#line 2049 "yacc.tab.cpp"
     break;
 
   case 59:
-#line 336 "yacc.y"
+#line 339 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_NE;
     }
-#line 2055 "yacc.tab.cpp"
+#line 2057 "yacc.tab.cpp"
     break;
 
   case 60:
-#line 340 "yacc.y"
+#line 343 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_LE;
     }
-#line 2063 "yacc.tab.cpp"
+#line 2065 "yacc.tab.cpp"
     break;
 
   case 61:
-#line 344 "yacc.y"
+#line 347 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_GE;
     }
-#line 2071 "yacc.tab.cpp"
+#line 2073 "yacc.tab.cpp"
     break;
 
   case 62:
-#line 348 "yacc.y"
+#line 351 "yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_IN;
     }
-#line 2079 "yacc.tab.cpp"
+#line 2081 "yacc.tab.cpp"
     break;
 
   case 63:
-#line 355 "yacc.y"
+#line 358 "yacc.y"
     {
         (yyval.sv_expr) = std::static_pointer_cast<Expr>((yyvsp[0].sv_val));
     }
-#line 2087 "yacc.tab.cpp"
+#line 2089 "yacc.tab.cpp"
     break;
 
   case 64:
-#line 359 "yacc.y"
+#line 362 "yacc.y"
     {
         (yyval.sv_expr) = std::static_pointer_cast<Expr>((yyvsp[0].sv_col));
     }
-#line 2095 "yacc.tab.cpp"
+#line 2097 "yacc.tab.cpp"
     break;
 
   case 65:
-#line 363 "yacc.y"
+#line 366 "yacc.y"
     {
         (yyval.sv_expr) = std::make_shared<SelectStmt>((yyvsp[-7].sv_bounds), (yyvsp[-5].sv_strs), (yyvsp[-4].sv_conds), (yyvsp[-3].sv_cols), (yyvsp[-2].sv_havings), (yyvsp[-1].sv_orderby));
     }
-#line 2103 "yacc.tab.cpp"
+#line 2105 "yacc.tab.cpp"
     break;
 
   case 66:
-#line 370 "yacc.y"
+#line 373 "yacc.y"
     {
-        (yyval.sv_set_clauses) = std::vector<std::shared_ptr<SetClause>>{(yyvsp[0].sv_set_clause)};
+        (yyval.sv_set_clauses) = std::vector<std::shared_ptr<SetClause>>{std::move((yyvsp[0].sv_set_clause))};
     }
-#line 2111 "yacc.tab.cpp"
+#line 2113 "yacc.tab.cpp"
     break;
 
   case 67:
-#line 374 "yacc.y"
+#line 377 "yacc.y"
     {
-        (yyval.sv_set_clauses).push_back((yyvsp[0].sv_set_clause));
+        (yyval.sv_set_clauses).emplace_back(std::move((yyvsp[0].sv_set_clause)));
     }
-#line 2119 "yacc.tab.cpp"
+#line 2121 "yacc.tab.cpp"
     break;
 
   case 68:
-#line 381 "yacc.y"
+#line 384 "yacc.y"
     {
         (yyval.sv_set_clause) = std::make_shared<SetClause>((yyvsp[-2].sv_str), (yyvsp[0].sv_val));
     }
-#line 2127 "yacc.tab.cpp"
+#line 2129 "yacc.tab.cpp"
     break;
 
   case 69:
-#line 385 "yacc.y"
+#line 388 "yacc.y"
     {
         (yyval.sv_set_clause) = std::make_shared<SetClause>((yyvsp[-3].sv_str), (yyvsp[0].sv_val), true);
     }
-#line 2135 "yacc.tab.cpp"
+#line 2137 "yacc.tab.cpp"
     break;
 
   case 70:
-#line 392 "yacc.y"
+#line 395 "yacc.y"
     {
-        (yyval.sv_str) = (yyvsp[0].sv_str);
+        (yyval.sv_str) = std::move((yyvsp[0].sv_str));
     }
-#line 2143 "yacc.tab.cpp"
+#line 2145 "yacc.tab.cpp"
     break;
 
   case 71:
-#line 395 "yacc.y"
-        { (yyval.sv_str) = ""; }
-#line 2149 "yacc.tab.cpp"
+#line 399 "yacc.y"
+    {
+        (yyval.sv_str) = "";
+    }
+#line 2153 "yacc.tab.cpp"
     break;
 
   case 72:
-#line 400 "yacc.y"
+#line 406 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>((yyvsp[-1].sv_col), AGG_COL, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::move((yyvsp[-1].sv_col)), AGG_COL, std::move((yyvsp[0].sv_str)));
     }
-#line 2157 "yacc.tab.cpp"
+#line 2161 "yacc.tab.cpp"
     break;
 
   case 73:
-#line 404 "yacc.y"
+#line 410 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::make_shared<Col>("", ""), AGG_COUNT, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::make_shared<Col>("", ""), AGG_COUNT, std::move((yyvsp[0].sv_str)));
     }
-#line 2165 "yacc.tab.cpp"
+#line 2169 "yacc.tab.cpp"
     break;
 
   case 74:
-#line 408 "yacc.y"
+#line 414 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>((yyvsp[-2].sv_col), AGG_COUNT, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::move((yyvsp[-2].sv_col)), AGG_COUNT, std::move((yyvsp[0].sv_str)));
     }
-#line 2173 "yacc.tab.cpp"
+#line 2177 "yacc.tab.cpp"
     break;
 
   case 75:
-#line 412 "yacc.y"
+#line 418 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>((yyvsp[-2].sv_col), AGG_MAX, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::move((yyvsp[-2].sv_col)), AGG_MAX, std::move((yyvsp[0].sv_str)));
     }
-#line 2181 "yacc.tab.cpp"
+#line 2185 "yacc.tab.cpp"
     break;
 
   case 76:
-#line 416 "yacc.y"
+#line 422 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>((yyvsp[-2].sv_col), AGG_MIN, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::move((yyvsp[-2].sv_col)), AGG_MIN, std::move((yyvsp[0].sv_str)));
     }
-#line 2189 "yacc.tab.cpp"
+#line 2193 "yacc.tab.cpp"
     break;
 
   case 77:
-#line 420 "yacc.y"
+#line 426 "yacc.y"
     {
-        (yyval.sv_bound) = std::make_shared<BoundExpr>((yyvsp[-2].sv_col), AGG_SUM, (yyvsp[0].sv_str));
+        (yyval.sv_bound) = std::make_shared<BoundExpr>(std::move((yyvsp[-2].sv_col)), AGG_SUM, std::move((yyvsp[0].sv_str)));
     }
-#line 2197 "yacc.tab.cpp"
+#line 2201 "yacc.tab.cpp"
     break;
 
   case 78:
-#line 427 "yacc.y"
+#line 433 "yacc.y"
     {
         (yyval.sv_bounds) = {};
     }
-#line 2205 "yacc.tab.cpp"
+#line 2209 "yacc.tab.cpp"
     break;
 
   case 79:
-#line 431 "yacc.y"
+#line 437 "yacc.y"
     {
-        (yyval.sv_bounds) = std::vector<std::shared_ptr<BoundExpr>>{(yyvsp[0].sv_bound)};
+        (yyval.sv_bounds) = std::vector<std::shared_ptr<BoundExpr>>{std::move((yyvsp[0].sv_bound))};
     }
-#line 2213 "yacc.tab.cpp"
+#line 2217 "yacc.tab.cpp"
     break;
 
   case 80:
-#line 435 "yacc.y"
+#line 441 "yacc.y"
     {
-        (yyval.sv_bounds).push_back((yyvsp[0].sv_bound));
+        (yyval.sv_bounds).emplace_back(std::move((yyvsp[0].sv_bound)));
     }
-#line 2221 "yacc.tab.cpp"
+#line 2225 "yacc.tab.cpp"
     break;
 
   case 81:
-#line 442 "yacc.y"
+#line 448 "yacc.y"
     {
-        (yyval.sv_strs) = std::vector<std::string>{(yyvsp[0].sv_str)};
+        (yyval.sv_strs) = std::vector<std::string>{std::move((yyvsp[0].sv_str))};
     }
-#line 2229 "yacc.tab.cpp"
+#line 2233 "yacc.tab.cpp"
     break;
 
   case 82:
-#line 446 "yacc.y"
+#line 452 "yacc.y"
     {
-        (yyval.sv_strs).push_back((yyvsp[0].sv_str));
+        (yyval.sv_strs).emplace_back(std::move((yyvsp[0].sv_str)));
     }
-#line 2237 "yacc.tab.cpp"
+#line 2241 "yacc.tab.cpp"
     break;
 
   case 83:
-#line 450 "yacc.y"
+#line 456 "yacc.y"
     {
-        (yyval.sv_strs).push_back((yyvsp[0].sv_str));
+        (yyval.sv_strs).emplace_back(std::move((yyvsp[0].sv_str)));
     }
-#line 2245 "yacc.tab.cpp"
+#line 2249 "yacc.tab.cpp"
     break;
 
   case 84:
-#line 457 "yacc.y"
+#line 463 "yacc.y"
     { 
-        (yyval.sv_orderby) = (yyvsp[0].sv_orderby); 
+        (yyval.sv_orderby) = std::move((yyvsp[0].sv_orderby));
     }
-#line 2253 "yacc.tab.cpp"
+#line 2257 "yacc.tab.cpp"
     break;
 
   case 85:
-#line 460 "yacc.y"
-                      { /* ignore*/ }
-#line 2259 "yacc.tab.cpp"
+#line 467 "yacc.y"
+    {
+        /* ignore */
+    }
+#line 2265 "yacc.tab.cpp"
     break;
 
   case 86:
-#line 465 "yacc.y"
+#line 474 "yacc.y"
     { 
         (yyval.sv_orderby) = std::make_shared<OrderBy>((yyvsp[-1].sv_col), (yyvsp[0].sv_orderby_dir));
     }
-#line 2267 "yacc.tab.cpp"
-    break;
-
-  case 87:
-#line 471 "yacc.y"
-                 { (yyval.sv_orderby_dir) = OrderBy_ASC;     }
 #line 2273 "yacc.tab.cpp"
     break;
 
+  case 87:
+#line 481 "yacc.y"
+    {
+        (yyval.sv_orderby_dir) = OrderBy_ASC;
+    }
+#line 2281 "yacc.tab.cpp"
+    break;
+
   case 88:
-#line 472 "yacc.y"
-                 { (yyval.sv_orderby_dir) = OrderBy_DESC;    }
-#line 2279 "yacc.tab.cpp"
+#line 485 "yacc.y"
+    {
+        (yyval.sv_orderby_dir) = OrderBy_DESC;
+    }
+#line 2289 "yacc.tab.cpp"
     break;
 
   case 89:
-#line 473 "yacc.y"
-            { (yyval.sv_orderby_dir) = OrderBy_DEFAULT; }
-#line 2285 "yacc.tab.cpp"
+#line 489 "yacc.y"
+    {
+        (yyval.sv_orderby_dir) = OrderBy_DEFAULT;
+    }
+#line 2297 "yacc.tab.cpp"
     break;
 
   case 90:
-#line 478 "yacc.y"
+#line 496 "yacc.y"
     {
-        (yyval.sv_cols) = (yyvsp[0].sv_cols);
+        (yyval.sv_cols) = std::move((yyvsp[0].sv_cols));
     }
-#line 2293 "yacc.tab.cpp"
+#line 2305 "yacc.tab.cpp"
     break;
 
   case 91:
-#line 481 "yacc.y"
-                      { /* ignore*/ }
-#line 2299 "yacc.tab.cpp"
+#line 500 "yacc.y"
+    {
+        /* ignore */
+    }
+#line 2313 "yacc.tab.cpp"
     break;
 
   case 92:
-#line 486 "yacc.y"
+#line 507 "yacc.y"
     {
         (yyval.sv_havings).emplace_back(std::make_shared<HavingExpr>((yyvsp[-2].sv_bound), (yyvsp[-1].sv_comp_op), (yyvsp[0].sv_expr)));
     }
-#line 2307 "yacc.tab.cpp"
-    break;
-
-  case 93:
-#line 490 "yacc.y"
-    {
-        (yyval.sv_havings).emplace_back(std::make_shared<HavingExpr>((yyvsp[-2].sv_bound), (yyvsp[-1].sv_comp_op), (yyvsp[0].sv_expr)));
-    }
-#line 2315 "yacc.tab.cpp"
-    break;
-
-  case 94:
-#line 493 "yacc.y"
-                      { /* ignore*/ }
 #line 2321 "yacc.tab.cpp"
     break;
 
-  case 95:
-#line 498 "yacc.y"
+  case 93:
+#line 511 "yacc.y"
     {
-        (yyval.sv_havings) = (yyvsp[0].sv_havings);
+        (yyval.sv_havings).emplace_back(std::make_shared<HavingExpr>((yyvsp[-2].sv_bound), (yyvsp[-1].sv_comp_op), (yyvsp[0].sv_expr)));
     }
 #line 2329 "yacc.tab.cpp"
     break;
 
+  case 94:
+#line 515 "yacc.y"
+    {
+        /* ignore */
+    }
+#line 2337 "yacc.tab.cpp"
+    break;
+
+  case 95:
+#line 522 "yacc.y"
+    {
+        (yyval.sv_havings) = std::move((yyvsp[0].sv_havings));
+    }
+#line 2345 "yacc.tab.cpp"
+    break;
+
   case 96:
-#line 501 "yacc.y"
-                      { /* ignore*/ }
-#line 2335 "yacc.tab.cpp"
-    break;
-
-  case 97:
-#line 505 "yacc.y"
-                        { (yyval.sv_setKnobType) = EnableNestLoop; }
-#line 2341 "yacc.tab.cpp"
-    break;
-
-  case 98:
-#line 506 "yacc.y"
-                         { (yyval.sv_setKnobType) = EnableSortMerge; }
-#line 2347 "yacc.tab.cpp"
-    break;
-
-  case 99:
-#line 507 "yacc.y"
-                    { (yyval.sv_setKnobType) = EnableOutputFile; }
+#line 526 "yacc.y"
+    {
+        /* ignore */
+    }
 #line 2353 "yacc.tab.cpp"
     break;
 
+  case 97:
+#line 533 "yacc.y"
+    {
+        (yyval.sv_setKnobType) = EnableNestLoop;
+    }
+#line 2361 "yacc.tab.cpp"
+    break;
 
-#line 2357 "yacc.tab.cpp"
+  case 98:
+#line 537 "yacc.y"
+    {
+        (yyval.sv_setKnobType) = EnableSortMerge;
+    }
+#line 2369 "yacc.tab.cpp"
+    break;
+
+  case 99:
+#line 541 "yacc.y"
+    {
+        (yyval.sv_setKnobType) = EnableOutputFile;
+    }
+#line 2377 "yacc.tab.cpp"
+    break;
+
+
+#line 2381 "yacc.tab.cpp"
 
       default: break;
     }
@@ -2591,5 +2615,5 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 515 "yacc.y"
+#line 551 "yacc.y"
 

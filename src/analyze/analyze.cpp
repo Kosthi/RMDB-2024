@@ -87,7 +87,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                 if (query->agg_types[i] == AGG_COUNT && query->cols[i].tab_name.empty() && query->cols[i].col_name.
                     empty()) {
                     continue;
-                    }
+                }
                 // TODO 直接引用减少拷贝
                 check_column(all_cols, query->cols[i]); // 列元数据校验
             }
@@ -154,7 +154,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         // 构造set_clauses
         for (auto &set: x->set_clauses) {
             // set语句只对某个表修改，不需要表名
-            query->set_clauses.emplace_back(std::move(TabCol{"", set->col_name}), std::move(convert_sv_value(set->val)), set->is_incr);
+            query->set_clauses.emplace_back(std::move(TabCol{"", set->col_name}), std::move(convert_sv_value(set->val)),
+                                            set->is_incr);
         }
 
         // 检查set左右值类型是否相同
@@ -276,7 +277,7 @@ void Analyze::get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_cond
                 }
                 // 如果 select * 只有单列 col，则补全为 select col
                 auto bound_expr = std::make_shared<ast::BoundExpr>(
-                    std::make_shared<ast::Col>(all_cols[0].tab_name, all_cols[0].name), AGG_COL);
+                    std::make_shared<ast::Col>(std::move(all_cols[0].tab_name), std::move(all_cols[0].name)), AGG_COL);
                 rhs_select->select_list.emplace_back(std::move(bound_expr));
             }
             if (rhs_select->select_list.size() > 1) {

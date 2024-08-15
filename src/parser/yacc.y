@@ -64,7 +64,7 @@ COUNT MAX MIN SUM AS GROUP HAVING IN STATIC_CHECKPOINT LOAD OUTPUT_FILE ON OFF
 start:
         stmt ';'
     {
-        parse_tree = $1;
+        parse_tree = std::move($1);
         YYACCEPT;
     }
     |   SET set_knob_type OFF
@@ -192,22 +192,22 @@ dml:
 fieldList:
         field
     {
-        $$ = std::vector<std::shared_ptr<Field>>{$1};
+        $$ = std::vector<std::shared_ptr<Field>>{std::move($1)};
     }
     |   fieldList ',' field
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
 colNameList:
         colName
     {
-        $$ = std::vector<std::string>{$1};
+        $$ = std::vector<std::string>{std::move($1)};
     }
-    | colNameList ',' colName
+    |   colNameList ',' colName
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
@@ -240,11 +240,11 @@ type:
 valueList:
         value
     {
-        $$ = std::vector<std::shared_ptr<Value>>{$1};
+        $$ = std::vector<std::shared_ptr<Value>>{std::move($1)};
     }
     |   valueList ',' value
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
@@ -279,43 +279,46 @@ condition:
     ;
 
 optWhereClause:
-        /* epsilon */ { /* ignore*/ }
+        /* epsilon */
+    {
+        /* ignore */
+    }
     |   WHERE whereClause
     {
-        $$ = $2;
+        $$ = std::move($2);
     }
     ;
 
 whereClause:
         condition 
     {
-        $$ = std::vector<std::shared_ptr<BinaryExpr>>{$1};
+        $$ = std::vector<std::shared_ptr<BinaryExpr>>{std::move($1)};
     }
     |   whereClause AND condition
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
 col:
         tbName '.' colName
     {
-        $$ = std::make_shared<Col>($1, $3);
+        $$ = std::make_shared<Col>(std::move($1), std::move($3));
     }
     |   colName
     {
-        $$ = std::make_shared<Col>("", $1);
+        $$ = std::make_shared<Col>("", std::move($1));
     }
     ;
 
 colList:
         col
     {
-        $$ = std::vector<std::shared_ptr<Col>>{$1};
+        $$ = std::vector<std::shared_ptr<Col>>{std::move($1)};
     }
     |   colList ',' col
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
@@ -368,11 +371,11 @@ expr:
 setClauses:
         setClause
     {
-        $$ = std::vector<std::shared_ptr<SetClause>>{$1};
+        $$ = std::vector<std::shared_ptr<SetClause>>{std::move($1)};
     }
     |   setClauses ',' setClause
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
@@ -390,35 +393,38 @@ setClause:
 asClause:
         AS alias
     {
-        $$ = $2;
+        $$ = std::move($2);
     }
-    |   { $$ = ""; }
+    |
+    {
+        $$ = "";
+    }
     ;
 
 select_item:
         col asClause
     {
-        $$ = std::make_shared<BoundExpr>($1, AGG_COL, $2);
+        $$ = std::make_shared<BoundExpr>(std::move($1), AGG_COL, std::move($2));
     }
     |   COUNT '(' '*' ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>(std::make_shared<Col>("", ""), AGG_COUNT, $5);
+        $$ = std::make_shared<BoundExpr>(std::make_shared<Col>("", ""), AGG_COUNT, std::move($5));
     }
     |   COUNT '(' col ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>($3, AGG_COUNT, $5);
+        $$ = std::make_shared<BoundExpr>(std::move($3), AGG_COUNT, std::move($5));
     }
     |   MAX '(' col ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>($3, AGG_MAX, $5);
+        $$ = std::make_shared<BoundExpr>(std::move($3), AGG_MAX, std::move($5));
     }
     |   MIN '(' col ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>($3, AGG_MIN, $5);
+        $$ = std::make_shared<BoundExpr>(std::move($3), AGG_MIN, std::move($5));
     }
     |   SUM '(' col ')' asClause
     {
-        $$ = std::make_shared<BoundExpr>($3, AGG_SUM, $5);
+        $$ = std::make_shared<BoundExpr>(std::move($3), AGG_SUM, std::move($5));
     }
     ;
 
@@ -429,56 +435,71 @@ select_list:
     }
     |   select_item
     {
-        $$ = std::vector<std::shared_ptr<BoundExpr>>{$1};
+        $$ = std::vector<std::shared_ptr<BoundExpr>>{std::move($1)};
     }
     |   select_list ',' select_item
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
 tableList:
         tbName
     {
-        $$ = std::vector<std::string>{$1};
+        $$ = std::vector<std::string>{std::move($1)};
     }
     |   tableList ',' tbName
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     |   tableList JOIN tbName
     {
-        $$.push_back($3);
+        $$.emplace_back(std::move($3));
     }
     ;
 
 opt_order_clause:
-    ORDER BY order_clause      
+        ORDER BY order_clause
     { 
-        $$ = $3; 
+        $$ = std::move($3);
     }
-    |   /* epsilon */ { /* ignore*/ }
+    |   /* epsilon */
+    {
+        /* ignore */
+    }
     ;
 
 order_clause:
-      col  opt_asc_desc 
+        col opt_asc_desc
     { 
         $$ = std::make_shared<OrderBy>($1, $2);
     }
-    ;   
+    ;
 
 opt_asc_desc:
-    ASC          { $$ = OrderBy_ASC;     }
-    |  DESC      { $$ = OrderBy_DESC;    }
-    |       { $$ = OrderBy_DEFAULT; }
-    ;    
+        ASC
+    {
+        $$ = OrderBy_ASC;
+    }
+    |   DESC
+    {
+        $$ = OrderBy_DESC;
+    }
+    |
+    {
+        $$ = OrderBy_DEFAULT;
+    }
+    ;
 
 group_by_clause:
         GROUP BY colList
     {
-        $$ = $3;
+        $$ = std::move($3);
     }
-    |   /* epsilon */ { /* ignore*/ }
+    |   /* epsilon */
+    {
+        /* ignore */
+    }
     ;
 
 having_clause:
@@ -490,21 +511,36 @@ having_clause:
     {
         $$.emplace_back(std::make_shared<HavingExpr>($3, $4, $5));
     }
-    |   /* epsilon */ { /* ignore*/ }
+    |   /* epsilon */
+    {
+        /* ignore */
+    }
     ;
 
 having_clauses:
         HAVING having_clause
     {
-        $$ = $2;
+        $$ = std::move($2);
     }
-    |   /* epsilon */ { /* ignore*/ }
+    |   /* epsilon */
+    {
+        /* ignore */
+    }
     ;
 
 set_knob_type:
-        ENABLE_NESTLOOP { $$ = EnableNestLoop; }
-    |   ENABLE_SORTMERGE { $$ = EnableSortMerge; }
-    |   OUTPUT_FILE { $$ = EnableOutputFile; }
+        ENABLE_NESTLOOP
+    {
+        $$ = EnableNestLoop;
+    }
+    |   ENABLE_SORTMERGE
+    {
+        $$ = EnableSortMerge;
+    }
+    |   OUTPUT_FILE
+    {
+        $$ = EnableOutputFile;
+    }
     ;
 
 tbName: IDENTIFIER;
