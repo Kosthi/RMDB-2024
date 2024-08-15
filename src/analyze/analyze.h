@@ -74,16 +74,18 @@ public:
     std::shared_ptr<Query> do_analyze(std::shared_ptr<ast::TreeNode> root);
 
 private:
-    void check_column(const std::vector<ColMeta> &all_cols, TabCol &target);
+    // void check_column(const std::vector<ColMeta> &all_cols, TabCol &target);
 
-    void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
+    // void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
+
+    void check_column(const std::vector<std::string> &tables, TabCol &target);
 
     void get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds, std::vector<Condition> &conds);
 
     static void get_having_clause(const std::vector<std::shared_ptr<ast::HavingExpr> > &sv_conds,
                                   std::vector<Condition> &conds);
 
-    void check_clause(std::vector<Condition> &conds, std::vector<ColMeta> &all_cols);
+    void check_clause(std::vector<Condition> &conds, const std::vector<std::string> &tables);
 
     static Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
 

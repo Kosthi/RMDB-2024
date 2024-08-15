@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <utility>
 #include <vector>
+#include <sys/socket.h>
 
 #include "errors.h"
 #include "sm_defs.h"
@@ -29,16 +30,14 @@ struct ColMeta {
     ColType type; // 字段类型
     int len; // 字段长度
     int offset; // 字段位于记录中的偏移量
-    bool index; /** unused */
 
     friend std::ostream &operator<<(std::ostream &os, const ColMeta &col) {
         // ColMeta中有各个基本类型的变量，然后调用重载的这些变量的操作符<<（具体实现逻辑在defs.h）
-        return os << col.tab_name << ' ' << col.name << ' ' << col.type << ' ' << col.len << ' ' << col.offset << ' '
-               << col.index;
+        return os << col.tab_name << ' ' << col.name << ' ' << col.type << ' ' << col.len << ' ' << col.offset;
     }
 
     friend std::istream &operator>>(std::istream &is, ColMeta &col) {
-        return is >> col.tab_name >> col.name >> col.type >> col.len >> col.offset >> col.index;
+        return is >> col.tab_name >> col.name >> col.type >> col.len >> col.offset;
     }
 
     // 重载相等运算符
@@ -125,21 +124,21 @@ struct TabMeta {
     std::string name; // 表名称
     std::vector<ColMeta> cols; // 表包含的字段
     std::unordered_map<std::string, IndexMeta> indexes; // 表上建立的索引 索引名 -> 索引元信息
+    std::unordered_map<std::string, std::vector<ColMeta>::iterator> cols_map; // 空间换时间，在 Analyze 阶段快速确定列是否存在
 
-    TabMeta() {
-    }
+    // TabMeta() {
+    // }
 
-    TabMeta(const TabMeta &other) {
-        name = other.name;
-        for (auto &col: other.cols) {
-            cols.emplace_back(col);
-        }
-    }
+    // TabMeta(const TabMeta &other) {
+    //     name = other.name;
+    //     for (auto &col: other.cols) {
+    //         cols.emplace_back(col);
+    //     }
+    // }
 
     /* 判断当前表中是否存在名为col_name的字段 */
     bool is_col(const std::string &col_name) const {
-        auto pos = std::find_if(cols.begin(), cols.end(), [&](const ColMeta &col) { return col.name == col_name; });
-        return pos != cols.end();
+        return cols_map.count(col_name);
     }
 
     std::string get_index_name(const std::vector<std::string> &index_cols) {
@@ -189,11 +188,12 @@ struct TabMeta {
 
     /* 根据字段名称获取字段元数据 */
     std::vector<ColMeta>::iterator get_col(const std::string &col_name) {
-        auto pos = std::find_if(cols.begin(), cols.end(), [&](const ColMeta &col) { return col.name == col_name; });
-        if (pos == cols.end()) {
+        auto pos = cols_map.find(col_name);
+        // auto pos = std::find_if(cols.begin(), cols.end(), [&](const ColMeta &col) { return col.name == col_name; });
+        if (pos == cols_map.end()) {
             throw ColumnNotFoundError(col_name);
         }
-        return pos;
+        return pos->second;
     }
 
     friend std::ostream &operator<<(std::ostream &os, const TabMeta &tab) {
@@ -217,6 +217,9 @@ struct TabMeta {
             is >> col;
             tab.cols.emplace_back(col);
         }
+        for (auto it = tab.cols.begin(); it != tab.cols.end(); ++it) {
+            tab.cols_map.emplace(it->name, it);
+        }
         is >> n;
         std::string index_name;
         IndexMeta index;
@@ -236,16 +239,17 @@ struct TabMeta {
 /* 数据库元数据 */
 class DbMeta {
     friend class SmManager;
+    friend class Analyze;
 
 private:
     std::string name_; // 数据库名称
-    std::map<std::string, TabMeta> tabs_; // 数据库中包含的表
+    std::unordered_map<std::string, TabMeta> tabs_; // 数据库中包含的表
 
 public:
     // DbMeta(std::string name) : name_(name) {}
 
     /* 判断数据库中是否存在指定名称的表 */
-    bool is_table(const std::string &tab_name) const { return tabs_.find(tab_name) != tabs_.end(); }
+    bool is_table(const std::string &tab_name) const { return tabs_.count(tab_name); }
 
     void SetTabMeta(const std::string &tab_name, const TabMeta &meta) {
         tabs_[tab_name] = meta;

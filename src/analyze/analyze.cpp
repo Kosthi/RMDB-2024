@@ -64,21 +64,23 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                         throw InternalError("Unexpected aggregate type！");
                 }
             } else {
-                query->alias.emplace_back(item->alias);
+                query->alias.emplace_back(std::move(item->alias));
             }
         }
 
-        std::vector<ColMeta> all_cols;
-        // 得到扫描的表的所有列
-        get_all_cols(query->tables, all_cols);
+        // std::vector<ColMeta> all_cols;
+        // // 得到扫描的表的所有列
+        // get_all_cols(query->tables, all_cols);
 
         if (query->cols.empty()) {
             // select all columns
             if (!x->group_bys.empty() || !x->havings.empty()) {
                 throw InternalError("select * 不能包含聚合和分组子句！");
             }
-            for (auto &col: all_cols) {
-                query->cols.emplace_back(TabCol{col.tab_name, col.name});
+            for (auto &table: query->tables) {
+                for (auto &col: sm_manager_->db_.tabs_[table].cols) {
+                    query->cols.emplace_back(TabCol{col.tab_name, col.name});
+                }
             }
         } else {
             // 表名不存在，从列名推断表名；如果表名存在则对列做检查
@@ -89,7 +91,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                     continue;
                 }
                 // TODO 直接引用减少拷贝
-                check_column(all_cols, query->cols[i]); // 列元数据校验
+                check_column(query->tables, query->cols[i]); // 列元数据校验
             }
         }
 
@@ -103,7 +105,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
 
         // 填充表名和列校验
         for (auto &tab_col: query->group_bys) {
-            check_column(all_cols, tab_col);
+            check_column(query->tables, tab_col);
         }
 
         // 没有 group，不能出现 AGG_COL，必须都是聚合函数
@@ -142,13 +144,13 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         // 处理 sortby 条件
         if (x->has_sort) {
             TabCol tab_col = {std::move(x->order->cols->tab_name), std::move(x->order->cols->col_name)};
-            check_column(all_cols, tab_col);
+            check_column(query->tables, tab_col);
             query->sort_bys = std::move(tab_col);
         }
 
         // 推断表名和检查左右类型是否匹配
-        check_clause(query->conds, all_cols);
-        check_clause(query->havings, all_cols);
+        check_clause(query->conds, query->tables);
+        check_clause(query->havings, query->tables);
     } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
         /** TODO: */
         // 构造set_clauses
@@ -174,21 +176,21 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             set.rhs.init_raw(len);
         }
 
-        std::vector<ColMeta> all_cols;
-        // 得到扫描的表的所有列
-        get_all_cols({x->tab_name}, all_cols);
+        // std::vector<ColMeta> all_cols;
+        // // 得到扫描的表的所有列
+        // get_all_cols({x->tab_name}, all_cols);
 
         // 处理where条件
         get_clause(x->conds, query->conds);
-        check_clause(query->conds, all_cols);
+        check_clause(query->conds, {x->tab_name});
     } else if (auto x = std::dynamic_pointer_cast<ast::DeleteStmt>(parse)) {
         // 处理where条件
-        std::vector<ColMeta> all_cols;
-        // 得到扫描的表的所有列
-        get_all_cols({x->tab_name}, all_cols);
+        // std::vector<ColMeta> all_cols;
+        // // 得到扫描的表的所有列
+        // get_all_cols({x->tab_name}, all_cols);
 
         get_clause(x->conds, query->conds);
-        check_clause(query->conds, all_cols);
+        check_clause(query->conds, {x->tab_name});
     } else if (auto x = std::dynamic_pointer_cast<ast::InsertStmt>(parse)) {
         // 处理insert 的values值
         for (auto &sv_val: x->vals) {
@@ -201,17 +203,17 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     return query;
 }
 
-void Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol &target) {
+// 优化成常数级别
+void Analyze::check_column(const std::vector<std::string> &tables, TabCol &target) {
     if (target.tab_name.empty()) {
         // Table name not specified, infer table name from column name
         std::string tab_name;
-        for (auto &col: all_cols) {
-            if (col.name == target.col_name) {
+        for (auto &table: tables) {
+            if (sm_manager_->db_.tabs_[table].is_col(target.col_name)) {
                 if (!tab_name.empty()) {
                     throw AmbiguousColumnError(target.col_name);
                 }
-                tab_name = col.tab_name;
-                break;
+                tab_name = table;
             }
         }
         if (tab_name.empty()) {
@@ -221,11 +223,12 @@ void Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol &target)
     } else {
         /** TODO: Make sure target column exists */
         bool not_exist = true;
-        for (auto &col: all_cols) {
-            // select t.id from t,d where id = 1;
-            if (col.tab_name == target.tab_name && col.name == target.col_name) {
-                not_exist = false;
-                break;
+        for (auto &table: tables) {
+            if (sm_manager_->db_.tabs_[table].is_col(target.col_name)) {
+                if (table == target.tab_name) {
+                    not_exist = false;
+                    break;
+                }
             }
         }
         if (not_exist) {
@@ -234,14 +237,47 @@ void Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol &target)
     }
 }
 
-// 确保只用一次
-void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols) {
-    for (auto &sel_tab_name: tab_names) {
-        // 这里db_不能写成get_db(), 注意要传指针
-        const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
-        all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
-    }
-}
+// void Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol &target) {
+//     if (target.tab_name.empty()) {
+//         // Table name not specified, infer table name from column name
+//         std::string tab_name;
+//         for (auto &col: all_cols) {
+//             if (col.name == target.col_name) {
+//                 if (!tab_name.empty()) {
+//                     throw AmbiguousColumnError(target.col_name);
+//                 }
+//                 tab_name = col.tab_name;
+//                 break;
+//             }
+//         }
+//         if (tab_name.empty()) {
+//             throw ColumnNotFoundError(target.col_name);
+//         }
+//         target.tab_name = std::move(tab_name);
+//     } else {
+//         /** TODO: Make sure target column exists */
+//         bool not_exist = true;
+//         for (auto &col: all_cols) {
+//             // select t.id from t,d where id = 1;
+//             if (col.tab_name == target.tab_name && col.name == target.col_name) {
+//                 not_exist = false;
+//                 break;
+//             }
+//         }
+//         if (not_exist) {
+//             throw ColumnNotFoundError(target.col_name);
+//         }
+//     }
+// }
+
+// 确保只用一次，直接不用，效率太低
+// void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols) {
+//     for (auto &sel_tab_name: tab_names) {
+//         // 这里db_不能写成get_db(), 注意要传指针
+//         const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
+//         all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
+//     }
+// }
 
 void Analyze::get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds,
                          std::vector<Condition> &conds) {
@@ -266,19 +302,19 @@ void Analyze::get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_cond
             // 这里应该只用保证单列就行，是否单行具体由算子检查
             if (rhs_select->select_list.empty()) {
                 throw InternalError("Operand should contain 1 column!");
-                if (rhs_select->tabs.size() > 1) {
-                    throw InternalError("Operand should contain 1 column!");
-                }
-                std::vector<ColMeta> all_cols;
-                get_all_cols(rhs_select->tabs, all_cols);
-                // select * 一个表但是包括多行
-                if (all_cols.size() > 1) {
-                    throw InternalError("Operand should contain 1 column!");
-                }
-                // 如果 select * 只有单列 col，则补全为 select col
-                auto bound_expr = std::make_shared<ast::BoundExpr>(
-                    std::make_shared<ast::Col>(std::move(all_cols[0].tab_name), std::move(all_cols[0].name)), AGG_COL);
-                rhs_select->select_list.emplace_back(std::move(bound_expr));
+                // if (rhs_select->tabs.size() > 1) {
+                //     throw InternalError("Operand should contain 1 column!");
+                // }
+                // std::vector<ColMeta> all_cols;
+                // get_all_cols(rhs_select->tabs, all_cols);
+                // // select * 一个表但是包括多行
+                // if (all_cols.size() > 1) {
+                //     throw InternalError("Operand should contain 1 column!");
+                // }
+                // // 如果 select * 只有单列 col，则补全为 select col
+                // auto bound_expr = std::make_shared<ast::BoundExpr>(
+                //     std::make_shared<ast::Col>(std::move(all_cols[0].tab_name), std::move(all_cols[0].name)), AGG_COL);
+                // rhs_select->select_list.emplace_back(std::move(bound_expr));
             }
             if (rhs_select->select_list.size() > 1) {
                 throw InternalError("Operand should contain 1 column!");
@@ -332,7 +368,7 @@ void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::HavingExp
     }
 }
 
-void Analyze::check_clause(std::vector<Condition> &conds, std::vector<ColMeta> &all_cols) {
+void Analyze::check_clause(std::vector<Condition> &conds, const std::vector<std::string> &tables) {
     // Get raw values in where clause
     for (auto &cond: conds) {
         // count(*)
@@ -346,9 +382,9 @@ void Analyze::check_clause(std::vector<Condition> &conds, std::vector<ColMeta> &
             continue;
         }
         // Infer table name from column name
-        check_column(all_cols, cond.lhs_col);
+        check_column(tables, cond.lhs_col);
         if (!cond.is_rhs_val && !cond.is_sub_query) {
-            check_column(all_cols, cond.rhs_col);
+            check_column(tables, cond.rhs_col);
         }
         TabMeta &lhs_tab = sm_manager_->db_.get_table(cond.lhs_col.tab_name);
         auto lhs_col = lhs_tab.get_col(cond.lhs_col.col_name);

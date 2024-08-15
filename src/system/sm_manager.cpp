@@ -229,7 +229,7 @@ void SmManager::desc_table(const std::string &tab_name, Context *context) {
     printer.print_separator(context);
     // Print fields
     for (auto &col: tab.cols) {
-        std::vector<std::string> field_info = {col.name, coltype2str(col.type), col.index ? "YES" : "NO"};
+        std::vector<std::string> field_info = {col.name, coltype2str(col.type)};
         printer.print_record(field_info, context);
     }
     // Print footer
@@ -256,16 +256,18 @@ void SmManager::create_table(const std::string &tab_name, const std::vector<ColD
             .name = col_def.name,
             .type = col_def.type,
             .len = col_def.len,
-            .offset = curr_offset,
-            .index = false
+            .offset = curr_offset
         };
         curr_offset += col_def.len;
-        tab.cols.push_back(col);
+        tab.cols.emplace_back(col);
+    }
+    for (auto it = tab.cols.begin(); it != tab.cols.end(); ++it) {
+        tab.cols_map.emplace(it->name, it);
     }
     // Create & open record file
     int record_size = curr_offset; // record_size就是col meta所占的大小（表的元数据也是以记录的形式进行存储的）
     rm_manager_->create_file(tab_name, record_size);
-    db_.tabs_[tab_name] = tab;
+    db_.tabs_[tab_name] = std::move(tab);
     // fhs_[tab_name] = rm_manager_->open_file(tab_name);
     fhs_.emplace(tab_name, rm_manager_->open_file(tab_name));
 
