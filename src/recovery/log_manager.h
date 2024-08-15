@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details. */
 #include <mutex>
 #include <vector>
 #include <iostream>
+#include <thread>
+
 #include "log_defs.h"
 #include "common/config.h"
 #include "record/rm_defs.h"
@@ -470,21 +472,49 @@ public:
 /* 日志管理器，负责把日志写入日志缓冲区，以及把日志缓冲区中的内容写入磁盘中 */
 class LogManager {
 public:
-    LogManager(DiskManager *disk_manager) { disk_manager_ = disk_manager; }
+    explicit LogManager(DiskManager *disk_manager) : disk_manager_(disk_manager), run_background_thread_(true),
+                                                     log_flush_interval_(std::chrono::seconds(1)) {
+        background_thread_ = std::thread([this] { background_flush(); });
+    }
+
+    ~LogManager() { {
+            std::lock_guard lock(latch_);
+            run_background_thread_ = false;
+        }
+        cv_.notify_one();
+        if (background_thread_.joinable()) {
+            background_thread_.join();
+        }
+    }
 
     lsn_t add_log_to_buffer(LogRecord *log_record);
 
     void flush_log_to_disk();
 
     inline LogBuffer *get_log_buffer() { return &log_buffer_; }
-    inline lsn_t get_persist_lsn() { return persist_lsn_; }
+    inline lsn_t get_persist_lsn() const { return persist_lsn_; }
     inline void set_global_lsn(lsn_t global_lsn) { global_lsn_.store(global_lsn); }
     inline void set_persist_lsn(lsn_t persist_lsn) { persist_lsn_ = persist_lsn; }
 
 private:
+    void background_flush() {
+        std::unique_lock lk(latch_);
+        while (run_background_thread_) {
+            if (cv_.wait_for(lk, log_flush_interval_, [this] { return !run_background_thread_; })) {
+                break;
+            }
+            flush_log_to_disk();
+        }
+    }
+
+    std::condition_variable cv_;
+    std::thread background_thread_;
+    bool run_background_thread_{};
+    std::chrono::seconds log_flush_interval_{};
+
     std::atomic<lsn_t> global_lsn_{0}; // 全局lsn，递增，用于为每条记录分发lsn
     std::mutex latch_; // 用于对log_buffer_的互斥访问
     LogBuffer log_buffer_; // 日志缓冲区
-    lsn_t persist_lsn_; // 记录已经持久化到磁盘中的最后一条日志的日志号
+    lsn_t persist_lsn_{}; // 记录已经持久化到磁盘中的最后一条日志的日志号
     DiskManager *disk_manager_;
 };

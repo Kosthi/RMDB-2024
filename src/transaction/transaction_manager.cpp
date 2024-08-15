@@ -29,13 +29,13 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
     // 2. 如果为空指针，创建新事务
     // 3. 把开始事务加入到全局事务表中
     // 4. 返回当前事务指针
-    std::lock_guard lock(latch_);
-
     if (txn == nullptr) {
         txn = new Transaction(next_txn_id_++);
     }
     txn->set_start_ts(next_timestamp_++);
+    latch_.lock();
     txn_map.emplace(txn->get_transaction_id(), txn);
+    latch_.unlock();
 #ifdef ENABLE_LOGGING
     auto *begin_log_record = new BeginLogRecord(txn->get_transaction_id());
     begin_log_record->prev_lsn_ = txn->get_prev_lsn();
@@ -58,7 +58,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     // 3. 释放事务相关资源，eg.锁集
     // 4. 把事务日志刷入磁盘中
     // 5. 更新事务状态
-    std::lock_guard lock(latch_);
+    // std::lock_guard lock(latch_);
 
     // 释放写集指针
     for (auto &it: *txn->get_write_set()) {
@@ -76,7 +76,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
     commit_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(commit_log_record));
-    log_manager->flush_log_to_disk();
+    // log_manager->flush_log_to_disk();
     delete commit_log_record;
 #endif
     txn->set_state(TransactionState::COMMITTED);
@@ -208,7 +208,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     abort_log_record->prev_lsn_ = txn->get_prev_lsn();
     // TODO 日志管理
     txn->set_prev_lsn(log_manager->add_log_to_buffer(abort_log_record));
-    log_manager->flush_log_to_disk();
+    // log_manager->flush_log_to_disk();
     delete abort_log_record;
 #endif
     txn->set_state(TransactionState::ABORTED);

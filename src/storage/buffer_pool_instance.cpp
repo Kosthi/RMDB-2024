@@ -35,9 +35,9 @@ void BufferPoolInstance::update_page(Page *page, PageId new_page_id, frame_id_t 
         // ++cnt_update;
 #ifdef ENABLE_LOGGING
         // 置换出脏页且 lsn 大于 persist 时需要刷日志回磁盘
-        if (log_manager_ != nullptr && page->get_page_lsn() > log_manager_->get_persist_lsn()) {
-            log_manager_->flush_log_to_disk();
-        }
+        // if (log_manager_ != nullptr && page->get_page_lsn() > log_manager_->get_persist_lsn()) {
+        //     log_manager_->flush_log_to_disk();
+        // }
 #endif
         disk_manager_->write_page(page->get_page_id().fd, page->get_page_id().page_no, page->get_data(), PAGE_SIZE);
         page->is_dirty_ = false;
