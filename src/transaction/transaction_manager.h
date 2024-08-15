@@ -28,6 +28,7 @@ public:
         sm_manager_ = sm_manager;
         lock_manager_ = lock_manager;
         concurrency_mode_ = concurrency_mode;
+        txn_map.reserve(20);
     }
 
     ~TransactionManager() = default;

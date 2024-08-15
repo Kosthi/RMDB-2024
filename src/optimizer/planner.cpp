@@ -232,6 +232,7 @@ std::shared_ptr<Query> Planner::logical_optimization(std::shared_ptr<Query> quer
     // where w_id=:w_id and c_w_id=w_id and c_d_id=:d_id and c_id=:c_id;
     // where w_id=:w_id and c_w_id=:w_id and c_d_id=:d_id and c_id=:c_id;
     std::unordered_map<TabCol, Value> map;
+    map.reserve(query->conds.size());
 
     // 记录每个左列对应的右值
     for (auto &cond: query->conds) {

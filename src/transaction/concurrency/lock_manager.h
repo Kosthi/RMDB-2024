@@ -48,7 +48,10 @@ class LockManager {
     };
 
 public:
-    LockManager() = default;
+    LockManager() {
+        lock_table_.reserve(200);
+        gap_lock_table_.reserve(10);
+    }
 
     ~LockManager() = default;
 
