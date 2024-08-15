@@ -7,6 +7,7 @@ THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
+
 #pragma once
 
 #include <utility>
@@ -91,7 +92,7 @@ namespace ast {
         std::shared_ptr<TypeLen> type_len;
 
         ColDef(std::string col_name_, std::shared_ptr<TypeLen> type_len_) : col_name(std::move(col_name_)),
-                                                                              type_len(std::move(type_len_)) {
+                                                                            type_len(std::move(type_len_)) {
         }
     };
 
@@ -179,7 +180,7 @@ namespace ast {
         std::string col_name;
 
         Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)),
-                                                              col_name(std::move(col_name_)) {
+                                                            col_name(std::move(col_name_)) {
         }
     };
 
@@ -219,7 +220,7 @@ namespace ast {
         // BoundExpr(std::shared_ptr<Col> col_) : col(std::move(col_)) {}
 
         BoundExpr(std::shared_ptr<Col> col_, AggType type_) : col(std::move(col_)),
-                                                                type(type_) {
+                                                              type(type_) {
         }
 
         BoundExpr(std::shared_ptr<Col> col_, AggType type_, std::string &alias_) : col(std::move(col_)),
@@ -386,7 +387,7 @@ namespace ast {
         SetKnobType sv_setKnobType;
     };
 
-    extern std::shared_ptr<ast::TreeNode> parse_tree;
+    extern thread_local std::shared_ptr<TreeNode> parse_tree;
 }
 
 #define YYSTYPE ast::SemValue

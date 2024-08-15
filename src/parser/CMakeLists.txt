@@ -2,7 +2,7 @@ find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 
 bison_target(yacc yacc.y ${CMAKE_CURRENT_SOURCE_DIR}/yacc.tab.cpp
-        DEFINES_FILE ${CMAKE_CURRENT_SOURCE_DIR}/yacc.tab.h)
+        DEFINES_FILE ${CMAKE_CURRENT_SOURCE_DIR}/yacc.tab.hpp)
 flex_target(lex lex.l ${CMAKE_CURRENT_SOURCE_DIR}/lex.yy.cpp)
 add_flex_bison_dependency(lex yacc)
 

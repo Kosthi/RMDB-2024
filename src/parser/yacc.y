@@ -1,12 +1,12 @@
 %{
 #include "ast.h"
-#include "yacc.tab.h"
+#include "yacc.tab.hpp"
 #include <iostream>
 #include <memory>
 
-int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
+int yylex(YYSTYPE *yylval, YYLTYPE *yylloc, void *yyscanner);
 
-void yyerror(YYLTYPE *locp, const char* s) {
+void yyerror(YYLTYPE *locp, void *yyscanner, const char* s) {
     std::cerr << "Parser Error at line " << locp->first_line << " column " << locp->first_column << ": " << s << std::endl;
 }
 
@@ -19,6 +19,8 @@ using namespace ast;
 %locations
 // enable verbose syntax error message
 %define parse.error verbose
+// define the extra parameter for passing the lexer state
+%param {void *yyscanner}
 
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY

@@ -1,18 +1,20 @@
-    /* keywords are case insensitive */
+/* keywords are case insensitive */
 %option caseless
-    /* we don't need yywrap() function */
+/* we don't need yywrap() function */
 %option noyywrap
-    /* we don't need yyunput() function */
+/* we don't need yyunput() function */
 %option nounput
-    /* we don't need input() function */
+/* we don't need input() function */
 %option noinput
-    /* enable location */
+/* enable location */
 %option bison-bridge
 %option bison-locations
+/* Enable Reentrant Model to support multi-threaded calls */
+%option reentrant
 
 %{
 #include "ast.h"
-#include "yacc.tab.h"
+#include "yacc.tab.hpp"
 #include <iostream>
 
 // automatically update location

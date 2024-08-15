@@ -127,6 +127,6 @@ struct YYLTYPE
 
 
 
-int yyparse (void);
+int yyparse (void *yyscanner);
 
 #endif /* !YY_YY_YACC_TAB_HPP_INCLUDED  */
