@@ -18,23 +18,22 @@ See the Mulan PSL v2 for more details. */
 
 class InsertExecutor : public AbstractExecutor {
 private:
-    TabMeta tab_; // 表的元数据
-    std::vector<Value> values_; // 需要插入的数据
-    RmFileHandle *fh_; // 表的数据文件句柄
-    std::string tab_name_; // 表名称
-    Rid rid_{}; // 插入的位置，由于系统默认插入时不指定位置，因此当前rid_在插入后才赋值
     SmManager *sm_manager_;
+    std::string tab_name_; // 表名称
+    std::vector<Value> values_; // 需要插入的数据
+    TabMeta &tab_; // 表的元数据
+    RmFileHandle *fh_; // 表的数据文件句柄
+    Rid rid_{}; // 插入的位置，由于系统默认插入时不指定位置，因此当前rid_在插入后才赋值
 
 public:
-    InsertExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Value> values, Context *context) {
-        sm_manager_ = sm_manager;
-        tab_name_ = std::move(tab_name);
-        tab_ = sm_manager_->db_.get_table(tab_name_);
-        values_ = std::move(values);
+    // 用初始化列表初始化得和元素声明顺序一一对应，否则初始化不成功
+    InsertExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Value> values,
+                   Context *context) : sm_manager_(sm_manager), tab_name_(std::move(tab_name)),
+                                       values_(std::move(values)), tab_(sm_manager_->db_.get_table(tab_name_)) {
         if (values_.size() != tab_.cols.size()) {
             throw InvalidValueCountError();
         }
-        fh_ = sm_manager_->fhs_.at(tab_name_).get();
+        fh_ = sm_manager_->fhs_[tab_name_].get();
         context_ = context;
         // X 锁
         if (tab_.indexes.empty() && context_ != nullptr) {

@@ -117,6 +117,18 @@ namespace std {
             return hash;
         }
     };
+
+    template<>
+    struct hash<std::vector<std::string> > {
+        std::size_t operator()(const std::vector<std::string> &vec) const {
+            std::size_t hash = 0;
+            std::hash<std::string> hasher;
+            for (const auto &str: vec) {
+                hash ^= hasher(str) + 0x9e3779b9 + (hash << 6) + (hash >> 2); // Improved hash
+            }
+            return hash;
+        }
+    };
 }
 
 /* 表元数据 */
@@ -125,71 +137,50 @@ struct TabMeta {
     std::vector<ColMeta> cols; // 表包含的字段
     std::unordered_map<std::string, IndexMeta> indexes; // 表上建立的索引 索引名 -> 索引元信息
     std::unordered_map<std::string, std::vector<ColMeta>::iterator> cols_map; // 空间换时间，在 Analyze 阶段快速确定列是否存在
-
-    // TabMeta() {
-    // }
-
-    // TabMeta(const TabMeta &other) {
-    //     name = other.name;
-    //     for (auto &col: other.cols) {
-    //         cols.emplace_back(col);
-    //     }
-    // }
+    std::unordered_map<std::vector<std::string>, std::string> index_names_map; // cols name -> index file name
+    // eg: A(a,b,c) -> A_a_b_c.idx
 
     /* 判断当前表中是否存在名为col_name的字段 */
     bool is_col(const std::string &col_name) const {
         return cols_map.count(col_name);
     }
 
+    // 统一用 tab.get_index_name
     std::string get_index_name(const std::vector<std::string> &index_cols) {
-        std::string ix_name(name);
-        for (const auto &col: index_cols) {
-            name.append("_").append(col);
+        // 做个 cache 处理，避免多次连接字符串操作
+        auto it = index_names_map.find(index_cols);
+        if (it == index_names_map.end()) {
+            // 只要为命中才连接
+            std::string ix_name(name);
+            for (const auto &col: index_cols) {
+                ix_name.append("_").append(col);
+            }
+            ix_name.append(".idx");
+            it = index_names_map.emplace(index_cols, std::move(ix_name)).first;
         }
-        return std::move(name.append(".idx"));
+        return it->second;
     }
 
     /* 判断当前表上是否建有指定索引，索引包含的字段为col_names */
     bool is_index(const std::vector<std::string> &col_names) {
         // TODO 用哈希表优化
-        auto &&ix_name = get_index_name(col_names);
-        return indexes.count(ix_name) != 0;
-        // for(auto& index: indexes) {
-        //     if(index.col_num == col_names.size()) {
-        //         size_t i = 0;
-        //         for(; i < index.col_num; ++i) {
-        //             if(index.cols[i].name.compare(col_names[i]) != 0)
-        //                 break;
-        //         }
-        //         if(i == index.col_num) return true;
-        //     }
-        // }
+        auto ix_name = get_index_name(col_names);
+        return indexes.count(ix_name);
     }
 
     /* 根据字段名称集合获取索引元数据 */
     IndexMeta &get_index_meta(const std::vector<std::string> &col_names) {
         // TODO 优化
-        auto &&it = indexes.find(get_index_name(col_names));
+        auto it = indexes.find(get_index_name(col_names));
         if (it != indexes.end()) {
             return it->second;
         }
-        // for(auto index = indexes.begin(); index != indexes.end(); ++index) {
-        //     if((*index).col_num != col_names.size()) continue;
-        //     auto& index_cols = (*index).cols;
-        //     size_t i = 0;
-        //     for(; i < col_names.size(); ++i) {
-        //         if(index_cols[i].name.compare(col_names[i]) != 0)
-        //             break;
-        //     }
-        //     if(i == col_names.size()) return index;
-        // }
         throw IndexNotFoundError(name, col_names);
     }
 
     /* 根据字段名称获取字段元数据 */
     std::vector<ColMeta>::iterator get_col(const std::string &col_name) {
         auto pos = cols_map.find(col_name);
-        // auto pos = std::find_if(cols.begin(), cols.end(), [&](const ColMeta &col) { return col.name == col_name; });
         if (pos == cols_map.end()) {
             throw ColumnNotFoundError(col_name);
         }

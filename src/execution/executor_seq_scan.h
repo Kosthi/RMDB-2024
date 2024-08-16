@@ -23,8 +23,8 @@ private:
     std::string tab_name_; // 表的名称
     std::vector<Condition> conds_; // scan的条件
     RmFileHandle *fh_; // 表的数据文件句柄
-    std::vector<ColMeta> cols_; // scan后生成的记录的字段
-    std::vector<ColMeta> cond_cols_; // 谓词需要读取的字段
+    // std::vector<ColMeta> cols_; // scan后生成的记录的字段
+    std::vector<std::vector<ColMeta>::iterator> cond_cols_; // 谓词需要读取的字段
     size_t len_; // scan后生成的每条记录的长度
     // std::vector<Condition> fed_conds_; // 同conds_，两个字段相同
     Rid rid_;
@@ -34,22 +34,24 @@ private:
     bool is_sub_query_empty_;
     // false 为共享间隙锁，true 为互斥间隙锁
     bool gap_mode_;
-    TabMeta tab_;
+    TabMeta &tab_;
 
 public:
     SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context,
                     bool gap_mode = false)
-        : sm_manager_(sm_manager), tab_name_(std::move(tab_name)), conds_(std::move(conds)), gap_mode_(gap_mode) {
-        tab_ = sm_manager_->db_.get_table(tab_name_);
+        : sm_manager_(sm_manager), tab_name_(std::move(tab_name)), conds_(std::move(conds)), gap_mode_(gap_mode),
+          tab_(sm_manager_->db_.get_table(tab_name_)) {
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
-        cols_ = tab_.cols;
-        len_ = cols_.back().offset + cols_.back().len;
+        // cols_ = tab_.cols;
+        len_ = tab_.cols.back().offset + tab_.cols.back().len;
         context_ = context;
         // fed_conds_ = conds_;
         is_sub_query_empty_ = false;
 
+        cond_cols_.reserve(conds_.size());
         for (auto &cond: conds_) {
-            cond_cols_.emplace_back(*get_col(cols_, cond.lhs_col));
+            // 存迭代器
+            cond_cols_.emplace_back(tab_.cols_map[cond.lhs_col.col_name]);
         }
 
         // S 锁
@@ -122,7 +124,7 @@ public:
 
     bool is_end() const { return is_sub_query_empty_ || scan_->is_end(); }
 
-    const std::vector<ColMeta> &cols() const override { return cols_; }
+    const std::vector<ColMeta> &cols() const override { return tab_.cols; }
 
     size_t tupleLen() const override { return len_; }
 
@@ -149,7 +151,7 @@ public:
     // 判断是否满足单个谓词条件
     bool cmp_cond(int i, const RmRecord *rec, const Condition &cond) {
         const auto &lhs_col_meta = cond_cols_[i];
-        const char *lhs_data = rec->data + lhs_col_meta.offset;
+        const char *lhs_data = rec->data + lhs_col_meta->offset;
         char *rhs_data;
         ColType rhs_type;
         // 全局record 防止作为临时变量离开作用域自动析构，char* 指针指向错误的地址
@@ -167,7 +169,7 @@ public:
                     // 前面已经强制转换和检查类型匹配过了，这里不需要
                     for (auto &value: cond.rhs_value_list) {
                         rhs_data = value.raw->data;
-                        if (compare(lhs_data, rhs_data, lhs_col_meta.len, value.type) == 0) {
+                        if (compare(lhs_data, rhs_data, lhs_col_meta->len, value.type) == 0) {
                             return true;
                         }
                     }
@@ -176,7 +178,7 @@ public:
                 // 比较谓词
                 assert(cond.rhs_value_list.size() == 1);
                 auto &value = cond.rhs_value_list[0];
-                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta.len, value.type);
+                int cmp = compare(lhs_data, value.raw->data, lhs_col_meta->len, value.type);
                 switch (cond.op) {
                     case OP_EQ: return cmp == 0;
                     case OP_NE: return cmp != 0;
@@ -213,12 +215,12 @@ public:
                 for (; !cond.prev->is_end(); cond.prev->nextTuple()) {
                     record = cond.prev->Next();
                     rhs_data = record->data;
-                    if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+                    if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                         rhs_type = TYPE_FLOAT;
                         const float a = *reinterpret_cast<const int *>(rhs_data);
                         memcpy(rhs_data, &a, sizeof(float));
                     }
-                    if (compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type) == 0) {
+                    if (compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type) == 0) {
                         return true;
                     }
                 }
@@ -228,7 +230,7 @@ public:
             // 聚合或列值只能有一行
             record = cond.prev->Next();
             rhs_data = record->data;
-            if (lhs_col_meta.type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+            if (lhs_col_meta->type == TYPE_FLOAT && rhs_type == TYPE_INT) {
                 rhs_type = TYPE_FLOAT;
                 const float a = *reinterpret_cast<const int *>(rhs_data);
                 memcpy(rhs_data, &a, sizeof(float));
@@ -242,11 +244,11 @@ public:
             // rhs_data = rec->data + rhs_col_meta->offset;
         }
 
-        if (lhs_col_meta.type != rhs_type) {
-            throw IncompatibleTypeError(coltype2str(lhs_col_meta.type), coltype2str(rhs_type));
+        if (lhs_col_meta->type != rhs_type) {
+            throw IncompatibleTypeError(coltype2str(lhs_col_meta->type), coltype2str(rhs_type));
         }
 
-        int cmp = compare(lhs_data, rhs_data, lhs_col_meta.len, rhs_type);
+        int cmp = compare(lhs_data, rhs_data, lhs_col_meta->len, rhs_type);
         switch (cond.op) {
             case OP_EQ: return cmp == 0;
             case OP_NE: return cmp != 0;
@@ -260,7 +262,7 @@ public:
     }
 
     bool cmp_conds(const RmRecord *rec, const std::vector<Condition> &conds) {
-        for (size_t i = 0; i < conds.size(); ++i) {
+        for (int i = 0; i < conds.size(); ++i) {
             if (!cmp_cond(i, rec, conds[i])) {
                 return false;
             }

@@ -13,6 +13,8 @@ public:
 
     // TODO 暂时仅支持索引列解析
     explicit PredicateManager(IndexMeta &index_meta) {
+        predicates_.reserve(index_meta.col_num);
+        index_conds_.reserve(index_meta.col_num);
         for (size_t i = 0; i < index_meta.cols.size(); ++i) {
             predicates_.emplace(index_meta.cols[i].second.name, i);
             index_conds_.emplace_back(index_meta.cols[i].first,
