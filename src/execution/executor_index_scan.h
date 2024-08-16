@@ -63,6 +63,7 @@ private:
     // false 为共享间隙锁，true 为互斥间隙锁
     bool gap_mode_;
     PredicateManager predicate_manager_;
+    bool index_clean_{false}; // 记录是否需要过一遍索引谓词
 
     bool is_empty_btree_{false};
 
@@ -209,7 +210,7 @@ public:
             while (!scan_->is_end()) {
                 // 不回表
                 // 全是等号或最后一个谓词是比较，不需要再扫索引
-                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                if (index_clean_ || predicate_manager_.cmpIndexConds(scan_->get_key())) {
                     // 回表，查不在索引里的谓词
                     rid_ = scan_->rid();
                     rm_record_ = fh_->get_record(rid_, context_);
@@ -229,7 +230,7 @@ public:
         //     return;
         // }
 
-        lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
+        // lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
 
         // 全表扫索引
         if (scan_index_) {
@@ -240,7 +241,7 @@ public:
             while (!scan_->is_end()) {
                 // 不回表
                 // 全是等号或最后一个谓词是比较，不需要再扫索引
-                if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+                if (index_clean_ || predicate_manager_.cmpIndexConds(scan_->get_key())) {
                     // 回表，查不在索引里的谓词
                     rid_ = scan_->rid();
                     rm_record_ = fh_->get_record(rid_, context_);
@@ -338,6 +339,8 @@ public:
 
         auto last_idx = std::get<1>(last_left_tuple); // 第一个范围查询位置
 
+        index_clean_ = last_idx == index_meta_.col_num;
+
         // assert(last_idx == std::get<1>(last_right_tuple));
 
         // index(a, b, c) where a = 1, b = 1 等值查询
@@ -351,6 +354,7 @@ public:
             switch (last_left_op) {
                 // 交给查上界的处理
                 case OP_INVALID: {
+                    lower_ = ih_->leaf_begin();
                     break;
                 }
                 // 全部都是等值查询
@@ -419,9 +423,12 @@ public:
             // 找出上界 )
             switch (last_right_op) {
                 // 在前面查下界时已经确定
-                case OP_INVALID:
+                case OP_INVALID: {
+                    upper_ = ih_->leaf_end();
+                    break;
+                }
                 // 全部都是等值查询
-                case OP_EQ:
+                case OP_EQ: {
                     // 优化：如果这里是 EQ，前面找下界已经确定过了，不需要再走一遍
                     // where p_id = 0, name = 'bztyhnmj';
                     // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
@@ -439,6 +446,7 @@ public:
                     // 1.2 a = 1, b = 1
 
                     break;
+                }
                 case OP_LT: {
                     // where name < 'bztyhnmj';                      last_idx = 0, + 1
                     // where name < 'bztyhnmj' and id = 1;           last_idx = 0, + 1
@@ -820,7 +828,7 @@ public:
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
             // TODO 这里尽量把比较次数减少，如果选出来的记录都落在索引上了，就可以跳过
-            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+            if (index_clean_ || predicate_manager_.cmpIndexConds(scan_->get_key())) {
                 // 回表，查不在索引里的谓词
                 rid_ = scan_->rid();
                 rm_record_ = fh_->get_record(rid_, context_);
@@ -874,7 +882,7 @@ public:
             // 不回表
             // 全是等号或最后一个谓词是比较，不需要再扫索引
             // TODO 待优化
-            if (predicate_manager_.cmpIndexConds(scan_->get_key())) {
+            if (index_clean_ || predicate_manager_.cmpIndexConds(scan_->get_key())) {
                 // 回表，查不在索引里的谓词
                 rid_ = scan_->rid();
                 rm_record_ = fh_->get_record(rid_, context_);

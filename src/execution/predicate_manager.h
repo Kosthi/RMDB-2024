@@ -59,9 +59,13 @@ public:
     }
 
     bool cmpIndexLeftConds(const RmRecord &rec) {
-        for (auto &[cond, _]: index_conds_) {
-            std::ignore = _;
-            if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
+        // 如果没有谓词条件直接返回真
+        if (left_last_idx == 0) {
+            return true;
+        }
+        // TODO 优化 从第一个范围查询 +1 开始匹配，因为这里只会被 index scan 算子使用
+        for (int i = left_last_idx + 1; i < index_conds_.size(); ++i) {
+            if (index_conds_[i].first.op != OP_INVALID && !cmpIndexCond(rec, index_conds_[i].first)) {
                 return false;
             }
         }
@@ -69,9 +73,13 @@ public:
     }
 
     bool cmpIndexRightConds(const RmRecord &rec) {
-        for (auto &[_, cond]: index_conds_) {
-            std::ignore = _;
-            if (cond.op != OP_INVALID && !cmpIndexCond(rec, cond)) {
+        // 如果没有谓词条件直接返回真
+        if (right_last_idx == 0) {
+            return true;
+        }
+        // TODO 优化 从第一个范围查询 +1 开始匹配，因为这里只会被 index scan 算子使用
+        for (int i = right_last_idx + 1; i < index_conds_.size(); ++i) {
+            if (index_conds_[i].second.op != OP_INVALID && !cmpIndexCond(rec, index_conds_[i].second)) {
                 return false;
             }
         }
@@ -94,7 +102,7 @@ public:
 
     // 左边谓词第一个不为等号的
     std::tuple<CompOp, int> getLeftLastTuple(char *&key) {
-        int last_idx = 0; // 第一个范围查询位置
+        left_last_idx = 0; // 第一个范围查询位置
 
         CompOp op;
         for (auto &[cond, _]: index_conds_) {
@@ -107,14 +115,14 @@ public:
             if (op != OP_EQ) {
                 break;
             }
-            ++last_idx;
+            ++left_last_idx;
         }
 
-        return {op, last_idx};
+        return {op, left_last_idx};
     }
 
     std::tuple<CompOp, int> getRightLastTuple(char *&key) {
-        int last_idx = 0; // 第一个范围查询位置
+        right_last_idx = 0; // 第一个范围查询位置
 
         CompOp op;
         for (auto &[_, cond]: index_conds_) {
@@ -127,10 +135,10 @@ public:
             if (op != OP_EQ) {
                 break;
             }
-            ++last_idx;
+            ++right_last_idx;
         }
 
-        return {op, last_idx};
+        return {op, right_last_idx};
     }
 
     std::vector<std::pair<CondOp, CondOp> > &getIndexConds() {
@@ -138,6 +146,8 @@ public:
     }
 
 private:
+    int left_last_idx = 0;
+    int right_last_idx = 0;
     std::unordered_map<std::string, int> predicates_;
     std::vector<std::pair<CondOp, CondOp> > index_conds_;
 };
