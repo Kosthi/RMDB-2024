@@ -471,6 +471,9 @@ int main(int argc, char **argv) {
         recovery->redo();
         recovery->undo();
 #endif
+
+        // 静态 map 预留空间
+        TransactionManager::Initialize(20);
         // 开启服务端，开始接受客户端连接
         start_server();
     } catch (RMDBError &e) {

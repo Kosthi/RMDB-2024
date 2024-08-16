@@ -28,10 +28,15 @@ public:
         sm_manager_ = sm_manager;
         lock_manager_ = lock_manager;
         concurrency_mode_ = concurrency_mode;
-        txn_map.reserve(20);
     }
 
     ~TransactionManager() = default;
+
+    // 初始化静态成员函数
+    static void Initialize(size_t initial_capacity) {
+        // 实际就 17 个
+        txn_map.reserve(initial_capacity);
+    }
 
     Transaction *begin(Transaction *txn, LogManager *log_manager);
 
