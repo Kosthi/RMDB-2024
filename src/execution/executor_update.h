@@ -20,7 +20,7 @@ See the Mulan PSL v2 for more details. */
 class UpdateExecutor : public AbstractExecutor {
 private:
     TabMeta tab_;
-    std::vector<Condition> conds_;
+    // std::vector<Condition> conds_;
     RmFileHandle *fh_;
     std::vector<Rid> rids_;
     std::string tab_name_;
@@ -31,13 +31,13 @@ private:
 
 public:
     UpdateExecutor(SmManager *sm_manager, std::string tab_name, std::vector<SetClause> set_clauses,
-                   std::vector<Condition> conds, std::vector<Rid> rids, bool is_set_index_key, bool is_index_scan, Context *context) {
+                   std::vector<Rid> rids, bool is_set_index_key, bool is_index_scan, Context *context) {
         sm_manager_ = sm_manager;
         tab_name_ = std::move(tab_name);
         set_clauses_ = std::move(set_clauses);
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();
-        conds_ = std::move(conds);
+        // conds_ = std::move(conds);
         // 已经通过扫描算子找到了满足谓词条件的 rids
         // 不如同时把 records 也给我
         rids_ = std::move(rids);
@@ -143,7 +143,8 @@ public:
 
             // 防止 double throw
             // 写入事务写集
-            auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record, is_set_index_key_);
+            auto *write_record = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *old_record, *updated_record,
+                                                 is_set_index_key_);
             context_->txn_->append_write_record(write_record);
         }
         return nullptr;

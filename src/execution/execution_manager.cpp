@@ -87,7 +87,7 @@ char *my_itoa(int value, char *buff, int radix) {
 }
 
 // 主要负责执行DDL语句
-void QlManager::run_mutli_query(std::shared_ptr<Plan> plan, Context *context) {
+void QlManager::run_mutli_query(std::shared_ptr<Plan> &plan, Context *context) {
     if (auto x = std::dynamic_pointer_cast<DDLPlan>(plan)) {
         switch (x->tag) {
             case T_CreateTable: {
@@ -113,7 +113,7 @@ void QlManager::run_mutli_query(std::shared_ptr<Plan> plan, Context *context) {
 }
 
 // 执行help; show tables; desc table; begin; commit; abort;语句
-void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Context *context) {
+void QlManager::run_cmd_utility(std::shared_ptr<Plan> &plan, const txn_id_t *txn_id, Context *context) const {
     if (auto x = std::dynamic_pointer_cast<OtherPlan>(plan)) {
         switch (x->tag) {
             case T_Help: {
@@ -219,12 +219,12 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
 }
 
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
-void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
+void QlManager::select_from(std::unique_ptr<AbstractExecutor> &executorTreeRoot, std::vector<TabCol> &sel_cols,
                             Context *context) {
     std::vector<std::string> captions;
     captions.reserve(sel_cols.size());
     for (auto &sel_col: sel_cols) {
-        captions.push_back(sel_col.col_name);
+        captions.emplace_back(std::move(sel_col.col_name));
     }
 
     // Print header into buffer
@@ -245,10 +245,13 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
 
     // Print records
     size_t num_rec = 0;
+    std::vector<std::string> columns;
+    // 预留空间
+    columns.reserve(executorTreeRoot->cols().size());
     // 执行query_plan
     for (executorTreeRoot->beginTuple(); !executorTreeRoot->is_end(); executorTreeRoot->nextTuple()) {
+        columns.clear();
         auto Tuple = executorTreeRoot->Next();
-        std::vector<std::string> columns;
         for (auto &col: executorTreeRoot->cols()) {
             std::string col_str;
             char *rec_buf = Tuple->data + col.offset;
@@ -260,7 +263,8 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
                 col_str = std::string((char *) rec_buf, col.len);
                 col_str.resize(strlen(col_str.c_str()));
             }
-            columns.push_back(col_str);
+            // 移动语义
+            columns.emplace_back(std::move(col_str));
         }
         // print record into buffer
         rec_printer.print_record(columns, context);
@@ -284,7 +288,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
 void QlManager::select_fast_count_star(int count, std::string &sel_col, Context *context) {
     std::vector<std::string> captions;
-    captions.emplace_back(sel_col);
+    captions.emplace_back(std::move(sel_col));
 
     // Print header into buffer
     RecordPrinter rec_printer(1);
@@ -326,6 +330,6 @@ void QlManager::select_fast_count_star(int count, std::string &sel_col, Context 
 }
 
 // 执行DML语句
-void QlManager::run_dml(std::unique_ptr<AbstractExecutor> exec) {
+void QlManager::run_dml(std::unique_ptr<AbstractExecutor> &exec) {
     exec->Next();
 }

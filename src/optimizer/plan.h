@@ -68,7 +68,6 @@ public:
         TabMeta &tab = sm_manager->db_.get_table(tab_name_);
         cols_ = tab.cols;
         len_ = cols_.back().offset + cols_.back().len;
-        fed_conds_ = conds_;
         index_col_names_ = std::move(index_col_names);
         asc_ = asc;
     }
@@ -80,7 +79,6 @@ public:
     std::vector<ColMeta> cols_;
     std::vector<Condition> conds_;
     size_t len_;
-    std::vector<Condition> fed_conds_;
     std::vector<std::string> index_col_names_;
     // 顺序扫还是逆序
     bool asc_;
@@ -170,7 +168,7 @@ public:
 // load 语句，用于数据载入
 class LoadPlan : public Plan {
 public:
-    LoadPlan(PlanTag tag, std::string &filename, std::string &tab_name) {
+    LoadPlan(PlanTag tag, std::string filename, std::string tab_name) {
         Plan::tag = tag;
         filename_ = std::move(filename);
         tab_name_ = std::move(tab_name);
@@ -196,8 +194,7 @@ public:
         set_clauses_ = std::move(set_clauses);
     }
 
-    ~DMLPlan() {
-    }
+    ~DMLPlan() override = default;
 
     std::shared_ptr<Plan> subplan_;
     std::string tab_name_;

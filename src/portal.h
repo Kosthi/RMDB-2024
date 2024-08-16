@@ -11,7 +11,6 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <cerrno>
-#include <cstring>
 #include <string>
 
 #include "optimizer/plan.h"
@@ -55,11 +54,10 @@ private:
     SmManager *sm_manager_;
 
 public:
-    Portal(SmManager *sm_manager) : sm_manager_(sm_manager) {
+    explicit Portal(SmManager *sm_manager) : sm_manager_(sm_manager) {
     }
 
-    ~Portal() {
-    }
+    ~Portal() = default;
 
     // 将查询执行计划转换成对应的算子树
     std::shared_ptr<PortalStmt> start(std::shared_ptr<Plan> plan, Context *context) {
@@ -94,7 +92,6 @@ public:
                     return std::make_shared<PortalStmt>(PORTAL_ONE_SELECT, std::move(show_cols), std::move(root),
                                                         std::move(plan));
                 }
-
                 case T_Update: {
                     std::unique_ptr<AbstractExecutor> scan = convert_plan_executor(x->subplan_, context, true);
                     std::vector<Rid> rids;
@@ -118,7 +115,7 @@ public:
                         }
                     }
                     std::unique_ptr<AbstractExecutor> root = std::make_unique<UpdateExecutor>(sm_manager_,
-                        std::move(x->tab_name_), std::move(x->set_clauses_), std::move(x->conds_), std::move(rids),
+                        std::move(x->tab_name_), std::move(x->set_clauses_), std::move(rids),
                         is_set_index_key, scan->getType() == "IndexScanExecutor", context);
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), plan);
@@ -130,20 +127,19 @@ public:
                         rids.emplace_back(scan->rid());
                     }
                     std::unique_ptr<AbstractExecutor> root =
-                            std::make_unique<DeleteExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->conds_),
+                            std::make_unique<DeleteExecutor>(sm_manager_, std::move(x->tab_name_),
                                                              std::move(rids), context,
                                                              scan->getType() == "IndexScanExecutor");
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), plan);
                 }
-
                 case T_Insert: {
                     std::unique_ptr<AbstractExecutor> root =
-                            std::make_unique<InsertExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->values_), context);
+                            std::make_unique<InsertExecutor>(sm_manager_, std::move(x->tab_name_),
+                                                             std::move(x->values_), context);
                     return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(),
                                                         std::move(root), std::move(plan));
                 }
-
                 default:
                     throw InternalError("Unexpected field type");
             }
@@ -152,14 +148,14 @@ public:
     }
 
     // 遍历算子树并执行算子生成执行结果
-    void run(std::shared_ptr<PortalStmt> portal, QlManager *ql, txn_id_t *txn_id, Context *context) {
+    static void run(std::shared_ptr<PortalStmt> &portal, QlManager *ql, txn_id_t *txn_id, Context *context) {
         switch (portal->tag) {
             case PORTAL_ONE_SELECT: {
-                ql->select_from(std::move(portal->root), std::move(portal->sel_cols), context);
+                ql->select_from(portal->root, portal->sel_cols, context);
                 break;
             }
             case PORTAL_DML_WITHOUT_SELECT: {
-                ql->run_dml(std::move(portal->root));
+                QlManager::run_dml(portal->root);
                 break;
             }
             case PORTAL_MULTI_QUERY: {
@@ -177,7 +173,7 @@ public:
     }
 
     // 清空资源
-    void drop() {
+    static void drop() {
     }
 
     std::unique_ptr<AbstractExecutor> convert_plan_executor(const std::shared_ptr<Plan> &plan, Context *context,
@@ -222,8 +218,21 @@ public:
                                                        std::move(x->group_bys_), std::move(x->havings_), context);
         }
         if (auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
-            std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
-            std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
+            // std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
+            // std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
+
+            // 使用 lambda 表达式并行化 left 和 right 执行器的创建
+            auto left_future = std::async(std::launch::async, [&] {
+                return convert_plan_executor(x->left_, context);
+            });
+            auto right_future = std::async(std::launch::async, [&] {
+                return convert_plan_executor(x->right_, context);
+            });
+
+            // 等待并获取结果
+            std::unique_ptr<AbstractExecutor> left = left_future.get();
+            std::unique_ptr<AbstractExecutor> right = right_future.get();
+
             if (x->tag == T_NestLoop) {
                 return std::make_unique<NestedLoopJoinExecutor>(
                     std::move(left),

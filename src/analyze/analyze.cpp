@@ -281,7 +281,8 @@ void Analyze::check_column(const std::vector<std::string> &tables, TabCol &targe
 
 void Analyze::get_clause(std::vector<std::shared_ptr<ast::BinaryExpr> > &sv_conds,
                          std::vector<Condition> &conds) {
-    conds.clear();
+    // conds.clear();
+    conds.reserve(sv_conds.size());
     for (auto &expr: sv_conds) {
         Condition cond;
         cond.agg_type = AGG_COL;

@@ -22,17 +22,17 @@ class DeleteExecutor : public AbstractExecutor {
 private:
     SmManager *sm_manager_;
     std::string tab_name_; // 表名称
-    std::vector<Condition> conds_; // delete的条件
+    // std::vector<Condition> conds_; // delete的条件
     std::vector<Rid> rids_; // 需要删除的记录的位置
     bool is_index_scan_{false};
     TabMeta tab_; // 表的元数据
     RmFileHandle *fh_; // 表的数据文件句柄
 
 public:
-    DeleteExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
+    DeleteExecutor(SmManager *sm_manager, std::string tab_name,
                    std::vector<Rid> rids, Context *context, bool is_index_scan = false): sm_manager_(sm_manager),
         tab_name_(std::move(tab_name)),
-        conds_(std::move(conds)),
+        // conds_(std::move(conds)),
         rids_(std::move(rids)), is_index_scan_(is_index_scan) {
         tab_ = sm_manager_->db_.get_table(tab_name_);
         fh_ = sm_manager_->fhs_.at(tab_name_).get();

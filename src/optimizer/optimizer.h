@@ -42,11 +42,11 @@ public:
         }
         if (auto x = std::dynamic_pointer_cast<ast::ShowIndexs>(query->parse)) {
             // show indexs;
-            return std::make_shared<OtherPlan>(T_ShowIndex, x->tab_name);
+            return std::make_shared<OtherPlan>(T_ShowIndex, std::move(x->tab_name));
         }
         if (auto x = std::dynamic_pointer_cast<ast::DescTable>(query->parse)) {
             // desc table;
-            return std::make_shared<OtherPlan>(T_DescTable, x->tab_name);
+            return std::make_shared<OtherPlan>(T_DescTable, std::move(x->tab_name));
         }
         if (auto x = std::dynamic_pointer_cast<ast::TxnBegin>(query->parse)) {
             // begin;

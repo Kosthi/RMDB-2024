@@ -39,14 +39,14 @@ public:
         : sm_manager_(sm_manager), txn_mgr_(txn_mgr), planner_(planner) {
     }
 
-    void run_mutli_query(std::shared_ptr<Plan> plan, Context *context);
+    void run_mutli_query(std::shared_ptr<Plan> &plan, Context *context);
 
-    void run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Context *context);
+    void run_cmd_utility(std::shared_ptr<Plan> &plan, const txn_id_t *txn_id, Context *context) const;
 
-    void select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
+    void select_from(std::unique_ptr<AbstractExecutor> &executorTreeRoot, std::vector<TabCol> &sel_cols,
                      Context *context);
 
     void select_fast_count_star(int count, std::string &sel_col, Context *context);
 
-    void run_dml(std::unique_ptr<AbstractExecutor> exec);
+    static void run_dml(std::unique_ptr<AbstractExecutor> &exec);
 };

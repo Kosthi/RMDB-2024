@@ -56,8 +56,7 @@ public:
     // limit > 0 available
     int limit = -1;
 
-    Query() {
-    }
+    Query() = default;
 };
 
 class Analyze {
@@ -65,11 +64,10 @@ private:
     SmManager *sm_manager_;
 
 public:
-    Analyze(SmManager *sm_manager) : sm_manager_(sm_manager) {
+    explicit Analyze(SmManager *sm_manager) : sm_manager_(sm_manager) {
     }
 
-    ~Analyze() {
-    }
+    ~Analyze() = default;
 
     std::shared_ptr<Query> do_analyze(std::shared_ptr<ast::TreeNode> root);
 
