@@ -81,7 +81,8 @@ int IxNodeHandle::upper_bound(const char *target) const {
             l = mid + 1;
         }
     }
-    return l;
+    // 解决空树，返回 0
+    return r;
 }
 
 /**
@@ -848,6 +849,10 @@ Iid IxIndexHandle::upper_bound(const char *key) {
     auto &&leaf_node = find_leaf_page(key, Operation::FIND, nullptr, false).first;
     auto &&pos = leaf_node->upper_bound(key);
     Iid iid{};
+    // 如果第一个比他大的在第 0 个 key
+    if (pos == 1 && Compare(key, leaf_node->get_key(0)) < 0) {
+        --pos;
+    }
     if (pos == leaf_node->get_size()) {
         if (leaf_node->get_page_no() == file_hdr_->last_leaf_) {
             iid = {leaf_node->get_page_no(), pos};
@@ -857,10 +862,6 @@ Iid IxIndexHandle::upper_bound(const char *key) {
             iid = {leaf_node->get_next_leaf(), 0};
         }
     } else {
-        // 如果第一个比他大的在第 0 个 key
-        if (pos == 1 && Compare(key, leaf_node->get_key(0)) < 0) {
-            --pos;
-        }
         iid = {leaf_node->get_page_no(), pos};
     }
     leaf_node->page->RUnlatch();
@@ -876,7 +877,9 @@ Iid IxIndexHandle::upper_bound(const char *key) {
  */
 Iid IxIndexHandle::leaf_end() const {
     auto node = fetch_node(file_hdr_->last_leaf_);
+    node->page->RLatch();
     Iid iid = {.page_no = file_hdr_->last_leaf_, .slot_no = node->get_size()};
+    node->page->RUnlatch();
     buffer_pool_manager_->unpin_page(node->get_page_id(), false); // unpin it!
     return iid;
 }
