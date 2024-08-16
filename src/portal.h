@@ -218,20 +218,20 @@ public:
                                                        std::move(x->group_bys_), std::move(x->havings_), context);
         }
         if (auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
-            // std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
-            // std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
+            std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
+            std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
 
             // 使用 lambda 表达式并行化 left 和 right 执行器的创建
-            auto left_future = std::async(std::launch::async, [&] {
-                return convert_plan_executor(x->left_, context);
-            });
-            auto right_future = std::async(std::launch::async, [&] {
-                return convert_plan_executor(x->right_, context);
-            });
+            // auto left_future = std::async(std::launch::async, [&] {
+            //     return convert_plan_executor(x->left_, context);
+            // });
+            // auto right_future = std::async(std::launch::async, [&] {
+            //     return convert_plan_executor(x->right_, context);
+            // });
 
             // 等待并获取结果
-            std::unique_ptr<AbstractExecutor> left = left_future.get();
-            std::unique_ptr<AbstractExecutor> right = right_future.get();
+            // std::unique_ptr<AbstractExecutor> left = left_future.get();
+            // std::unique_ptr<AbstractExecutor> right = right_future.get();
 
             if (x->tag == T_NestLoop) {
                 return std::make_unique<NestedLoopJoinExecutor>(
