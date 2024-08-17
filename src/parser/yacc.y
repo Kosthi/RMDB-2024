@@ -192,7 +192,7 @@ dml:
 fieldList:
         field
     {
-        $$ = std::vector<std::shared_ptr<Field>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   fieldList ',' field
     {
@@ -203,7 +203,7 @@ fieldList:
 colNameList:
         colName
     {
-        $$ = std::vector<std::string>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   colNameList ',' colName
     {
@@ -240,7 +240,7 @@ type:
 valueList:
         value
     {
-        $$ = std::vector<std::shared_ptr<Value>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   valueList ',' value
     {
@@ -292,7 +292,7 @@ optWhereClause:
 whereClause:
         condition 
     {
-        $$ = std::vector<std::shared_ptr<BinaryExpr>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   whereClause AND condition
     {
@@ -314,7 +314,7 @@ col:
 colList:
         col
     {
-        $$ = std::vector<std::shared_ptr<Col>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   colList ',' col
     {
@@ -371,7 +371,7 @@ expr:
 setClauses:
         setClause
     {
-        $$ = std::vector<std::shared_ptr<SetClause>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   setClauses ',' setClause
     {
@@ -435,7 +435,7 @@ select_list:
     }
     |   select_item
     {
-        $$ = std::vector<std::shared_ptr<BoundExpr>>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   select_list ',' select_item
     {
@@ -446,7 +446,7 @@ select_list:
 tableList:
         tbName
     {
-        $$ = std::vector<std::string>{std::move($1)};
+        $$.emplace_back(std::move($1));
     }
     |   tableList ',' tbName
     {

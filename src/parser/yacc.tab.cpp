@@ -1827,7 +1827,7 @@ yyreduce:
   case 31:
 #line 194 "yacc.y"
     {
-        (yyval.sv_fields) = std::vector<std::shared_ptr<Field>>{std::move((yyvsp[0].sv_field))};
+        (yyval.sv_fields).emplace_back(std::move((yyvsp[0].sv_field)));
     }
 #line 1833 "yacc.tab.cpp"
     break;
@@ -1843,7 +1843,7 @@ yyreduce:
   case 33:
 #line 205 "yacc.y"
     {
-        (yyval.sv_strs) = std::vector<std::string>{std::move((yyvsp[0].sv_str))};
+        (yyval.sv_strs).emplace_back(std::move((yyvsp[0].sv_str)));
     }
 #line 1849 "yacc.tab.cpp"
     break;
@@ -1899,7 +1899,7 @@ yyreduce:
   case 40:
 #line 242 "yacc.y"
     {
-        (yyval.sv_vals) = std::vector<std::shared_ptr<Value>>{std::move((yyvsp[0].sv_val))};
+        (yyval.sv_vals).emplace_back(std::move((yyvsp[0].sv_val)));
     }
 #line 1905 "yacc.tab.cpp"
     break;
@@ -1979,7 +1979,7 @@ yyreduce:
   case 50:
 #line 294 "yacc.y"
     {
-        (yyval.sv_conds) = std::vector<std::shared_ptr<BinaryExpr>>{std::move((yyvsp[0].sv_cond))};
+        (yyval.sv_conds).emplace_back(std::move((yyvsp[0].sv_cond)));
     }
 #line 1985 "yacc.tab.cpp"
     break;
@@ -2011,7 +2011,7 @@ yyreduce:
   case 54:
 #line 316 "yacc.y"
     {
-        (yyval.sv_cols) = std::vector<std::shared_ptr<Col>>{std::move((yyvsp[0].sv_col))};
+        (yyval.sv_cols).emplace_back(std::move((yyvsp[0].sv_col)));
     }
 #line 2017 "yacc.tab.cpp"
     break;
@@ -2107,7 +2107,7 @@ yyreduce:
   case 66:
 #line 373 "yacc.y"
     {
-        (yyval.sv_set_clauses) = std::vector<std::shared_ptr<SetClause>>{std::move((yyvsp[0].sv_set_clause))};
+        (yyval.sv_set_clauses).emplace_back(std::move((yyvsp[0].sv_set_clause)));
     }
 #line 2113 "yacc.tab.cpp"
     break;
@@ -2211,7 +2211,7 @@ yyreduce:
   case 79:
 #line 437 "yacc.y"
     {
-        (yyval.sv_bounds) = std::vector<std::shared_ptr<BoundExpr>>{std::move((yyvsp[0].sv_bound))};
+        (yyval.sv_bounds).emplace_back(std::move((yyvsp[0].sv_bound)));
     }
 #line 2217 "yacc.tab.cpp"
     break;
@@ -2227,7 +2227,7 @@ yyreduce:
   case 81:
 #line 448 "yacc.y"
     {
-        (yyval.sv_strs) = std::vector<std::string>{std::move((yyvsp[0].sv_str))};
+        (yyval.sv_strs).emplace_back(std::move((yyvsp[0].sv_str)));
     }
 #line 2233 "yacc.tab.cpp"
     break;
