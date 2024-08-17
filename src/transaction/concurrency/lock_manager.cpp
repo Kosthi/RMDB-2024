@@ -51,6 +51,7 @@ bool LockManager::lock_shared_on_gap(Transaction *txn, IndexMeta &index_meta, Ga
         // 新建
         it = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
                                      std::forward_as_tuple()).first;
+        it->second.reserve(80);
     }
 
     if (it->second.find(lock_data_id) != it->second.end()) {
@@ -230,6 +231,7 @@ bool LockManager::lock_exclusive_on_gap(Transaction *txn, IndexMeta &index_meta,
         // 新建
         it = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
                                      std::forward_as_tuple()).first;
+        it->second.reserve(80);
     }
 
     bool contain = false;
@@ -557,6 +559,7 @@ bool LockManager::isSafeInGap(Transaction *txn, IndexMeta &index_meta, RmRecord 
                 // 新建
                 it_ = gap_lock_table_.emplace(std::piecewise_construct, std::forward_as_tuple(index_meta),
                                               std::forward_as_tuple()).first;
+                it_->second.reserve(80);
             }
 
             // 这里实际上是加了一层唯一索引校验，如果两个事务同时插入一样的数据，即使过了第一层校验，也有可能两事务同时拿到这行的间隙锁
