@@ -181,34 +181,31 @@ public:
             ++it;
         }
 
-        if (conds_[0].lhs_col.col_name == "c_last") {
-            is_empty_btree_ = true;
+        cond_cols_.reserve(conds_.size());
+
+        for (auto &cond: conds_) {
+            // 存对应的 col_meta 迭代器
+            cond_cols_.emplace_back(tab_.cols_map[cond.lhs_col.col_name]);
+        }
+
+        // S 锁
+        // if (context_ != nullptr) {
+        //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+        // }
+        auto gap = Gap(predicate_manager_.getIndexConds());
+        if (gap_mode_) {
+            context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
         } else {
-            cond_cols_.reserve(conds_.size());
-
-            for (auto &cond: conds_) {
-                // 存对应的 col_meta 迭代器
-                cond_cols_.emplace_back(tab_.cols_map[cond.lhs_col.col_name]);
-            }
-
-            // S 锁
-            // if (context_ != nullptr) {
-            //     context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-            // }
-            auto gap = Gap(predicate_manager_.getIndexConds());
-            if (gap_mode_) {
-                context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-            } else {
-                context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
-            }
+            context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, gap, fh_->GetFd());
         }
     }
 
     void beginTuple() override {
-        if (is_empty_btree_) {
-            is_end_ = true;
-            return;
-        }
+        // 已经解决空树问题
+        // if (is_empty_btree_) {
+        //     is_end_ = true;
+        //     return;
+        // }
         if (already_begin_ && (!mergesort_ || scan_index_)) {
             is_end_ = false;
             scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
@@ -228,14 +225,6 @@ public:
             is_end_ = true;
             return;
         }
-
-        // 空树
-        // if (ih_->is_empty()) {
-        //     is_empty_btree_ = is_end_ = true;
-        //     return;
-        // }
-
-        // lower_ = ih_->leaf_begin(), upper_ = ih_->leaf_end();
 
         // 全表扫索引
         if (scan_index_) {
@@ -498,324 +487,9 @@ public:
             }
         }
 
-        // switch (last_cond.op) {
-        //     // 全部都是等值查询
-        //     case OP_EQ: {
-        //         // where p_id = 0, name = 'bztyhnmj';
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx, key);
-        //         lower_ = ih_->lower_bound(key);
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx, key);
-        //         upper_ = ih_->upper_bound(key);
-        //
-        //         // 1.最简单的情况，唯一索引等值锁定存在的数据：加行锁index(a, b, c) a = 1, b = 1, c = 1
-        //         // 加间隙锁
-        //         // 1.1 a = 1
-        //         // 1.2 a = 1, b = 1
-        //
-        //         break;
-        //     }
-        //     case OP_GE: {
-        //         // where name >= 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name >= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name >= 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name >= 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 如果前面有等号需要重新更新上下界
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx + 1, key);
-        //         lower_ = ih_->lower_bound(key);
-        //         // where w_id = 0 and name >= 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询置最大 找上限
-        //             // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //             set_remaining_all_max(equal_offset, last_idx, key);
-        //             upper_ = ih_->upper_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_LE: {
-        //         // where name <= 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name <= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name <= 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name <= 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx + 1, key);
-        //         upper_ = ih_->upper_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name <= 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找下限
-        //             // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //             set_remaining_all_min(equal_offset, last_idx, key);
-        //             lower_ = ih_->lower_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_GT: {
-        //         // where name > 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name > 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name > 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name > 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx + 1, key);
-        //         lower_ = ih_->upper_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name > 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找上限
-        //             // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //             set_remaining_all_max(equal_offset, last_idx, key);
-        //             upper_ = ih_->upper_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_LT: {
-        //         // where name < 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name < 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name < 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name < 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx + 1, key);
-        //         upper_ = ih_->lower_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name < 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找下限
-        //             // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //             set_remaining_all_min(equal_offset, last_idx, key);
-        //             lower_ = ih_->lower_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_NE:
-        //         break;
-        //     default:
-        //         throw InternalError("Unexpected op type！");
-        // }
-
         // 释放内存
         delete []left_key;
         delete []right_key;
-
-        // switch (last_cond.op) {
-        //     // 全部都是等值查询
-        //     case OP_EQ: {
-        //         // where p_id = 0, name = 'bztyhnmj';
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx, key);
-        //         lower_ = ih_->lower_bound(key);
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx, key);
-        //         upper_ = ih_->upper_bound(key);
-        //
-        //         // 1.最简单的情况，唯一索引等值锁定存在的数据：加行锁index(a, b, c) a = 1, b = 1, c = 1
-        //         // 加间隙锁
-        //         // 1.1 a = 1
-        //         // 1.2 a = 1, b = 1
-        //
-        //         break;
-        //     }
-        //     case OP_GT: {
-        //         // where name > 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name > 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name > 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name > 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx + 1, key);
-        //         lower_ = ih_->upper_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name > 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找上限
-        //             // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //             set_remaining_all_max(equal_offset, last_idx, key);
-        //             upper_ = ih_->upper_bound(key);
-        //         }
-        //
-        //         // 左边取第一个> 右边取第一个小于
-        //         // a = 1, b > 1, c > 1  // 用upper_bound找然后-1 lower 找111 找到为开，找不到去前面一个为开，upper不动
-        //         // a = 1, b >= 1, c > 1 // lower 找111 找到为开，找不到去前面一个为开，upper不动
-        //
-        //         // 扫索引，不回表，直到匹配
-        //         for (; !scan_->is_end(); scan_->next()) {
-        //             // TODO 优化，不一定全匹配
-        //             if (predicate_manager_.cmpIndexLeftConds(ih_->get_key(scan_->iid()))) {
-        //                 // 下界为
-        //                 scan_->prev_iid();
-        //             }
-        //         }
-        //         break;
-        //     }
-        //     case OP_GE: {
-        //         // where name >= 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name >= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name >= 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name >= 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 如果前面有等号需要重新更新上下界
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx + 1, key);
-        //         lower_ = ih_->lower_bound(key);
-        //         // where w_id = 0 and name >= 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询置最大 找上限
-        //             // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //             set_remaining_all_max(equal_offset, last_idx, key);
-        //             upper_ = ih_->upper_bound(key);
-        //         }
-        //
-        //         // 左边取第一个> 右边取第一个小于
-        //         // a = 1, b > 1, c >= 1 // lower 找111 找到为开，找不到去前面一个为开，upper不动
-        //         // a = 1, b >= 1, c >= 1 // lower 找111 找到为开，找不到去前面一个为开，upper不动
-        //
-        //         break;
-        //     }
-        //     case OP_LE: {
-        //         // where name <= 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name <= 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name <= 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name <= 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最大值，需要根据类型设置，不能直接0xff，int 为 -1
-        //         set_remaining_all_max(offset, last_idx + 1, key);
-        //         upper_ = ih_->upper_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name <= 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找下限
-        //             // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //             set_remaining_all_min(equal_offset, last_idx, key);
-        //             lower_ = ih_->lower_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_LT: {
-        //         // where name < 'bztyhnmj';                      last_idx = 0, + 1
-        //         // where name < 'bztyhnmj' and id = 1;           last_idx = 0, + 1
-        //         // where p_id = 3, name < 'bztyhnmj';            last_idx = 1, + 1
-        //         // where p_id = 3, name < 'bztyhnmj' and id = 1; last_idx = 1, + 1
-        //         // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //         set_remaining_all_min(offset, last_idx + 1, key);
-        //         upper_ = ih_->lower_bound(key);
-        //         // 如果前面有等号需要重新更新上下界
-        //         // where w_id = 0 and name < 'bztyhnmj';
-        //         if (last_idx > 0) {
-        //             // 把后面的范围查询清 0 找下限
-        //             // 设置成最小值，需要根据类型设置，不能直接0，int 会有负值
-        //             set_remaining_all_min(equal_offset, last_idx, key);
-        //             lower_ = ih_->lower_bound(key);
-        //         }
-        //         break;
-        //     }
-        //     case OP_NE:
-        //         break;
-        //     default:
-        //         throw InternalError("Unexpected op type！");
-        // }
-        //
-        // RmRecord lower_rec(index_meta_.col_tot_len);
-        // RmRecord upper_rec(index_meta_.col_tot_len);
-        //
-        // set_remaining_all_min(0, 0, lower_rec.data);
-        // set_remaining_all_max(0, 0, upper_rec.data);
-        //
-        // // 实现最小粒度的间隙，查询条件即为加锁范围
-        // for (auto &cond : conds_) {
-        //     assert(cond.lhs_col.tab_name == tab_name_);
-        //     auto it = index_meta_.cols_map.find(cond.lhs_col.col_name);
-        //     if (it != index_meta_.cols_map.end() && cond.op != OP_NE ) {
-        //         // TODO 先不涉及 同种谓词出现两次以上 id > 1 and id > 10
-        //         // index(a, b, c) a > 1 and b >= 2 and a <= 10
-        //         if (cond.op == OP_GT || cond.op == OP_GE || cond.op == OP_EQ) {
-        //             memcpy(lower_rec.data + it->second.first, cond.rhs_val.raw->data, it->second.second.len);
-        //         }
-        //         if (cond.op == OP_LT || cond.op == OP_LE || cond.op == OP_EQ) {
-        //             memcpy(upper_rec.data + it->second.first, cond.rhs_val.raw->data, it->second.second.len);
-        //         }
-        //     }
-        // }
-        //
-        // if (gap_mode_) {
-        //     context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        // } else {
-        //     context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        // }
-        //
-        // lower_ = ih_->lower_bound(lower_rec.data);
-        // upper_ = ih_->upper_bound(upper_rec.data);
-        //
-        // auto lower_actual = fh_->get_record(ih_->get_rid(lower_), context_);
-        //
-        // scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
-        //
-        // // 1.最简单的情况，唯一索引等值锁定存在的数据：加行锁index(a, b, c) a = 1, b = 1, c = 1
-        // if (ix_compare(lower_rec.data, upper_rec.data, index_meta_) == 0) {
-        //     // 记录存在，加行锁
-        //     if (!scan_->is_end()) {
-        //         if (gap_mode_) {
-        //             context_->lock_mgr_->lock_exclusive_on_record(context_->txn_, rid_, fh_->GetFd());
-        //         } else {
-        //             context_->lock_mgr_->lock_shared_on_record(context_->txn_, rid_, fh_->GetFd());
-        //         }
-        //     } else {
-        //         // 记录不存在，在查找条件所在间隙加间隙锁
-        //         // 确定上界
-        //         upper_rec = ih_->get_key(scan_->iid());
-        //         lower_rec = ih_->get_key(scan_->prev_iid());
-        //         if (gap_mode_) {
-        //             context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        //         } else {
-        //             context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        //         }
-        //     }
-        // } else {
-        //     // index(a, b, c) 存在范围
-        //     // 1.1 a = 1
-        //     // 1.2 a = 1, b = 1
-        //     // 全部是等号
-        //     // 直接加间隙锁
-        //     if (gap_mode_) {
-        //         context_->lock_mgr_->lock_exclusive_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        //     } else {
-        //         context_->lock_mgr_->lock_shared_on_gap(context_->txn_, index_meta_, lower_rec, upper_rec, fh_->GetFd());
-        //     }
-        //
-        //     // 2.1.1 a = 1, b = 1，c > 1 (1, +INF)
-        //     // 2.1.2 a = 1, b = 1，c >= 1 [1], (1, +INF)
-        //     // 2.2   a = 1, b > 1, c > 1 // lower 找111 找到为开，找不到去前面一个为开，upper不动
-        //     // 2.3   a = 1, b > 1, c > 1, b < 5 lower 找111 找到为开，找不到去前面一个为开，上界用lower找第一个大于等于5的
-        //     // 2.4   a = 1, b > 1, b < 5, c > 1, c < 3
-        //     auto lower_fact = ih_->get_key(scan_->iid());
-        //
-        //     lower_fact = ih_->get_key(scan_->prev_iid(ih_->upper_bound(lower_rec.data)));
-        //
-        //
-        //
-        //     if (ix_compare(lower_fact.data, lower_rec.data, index_meta_) == 0) {
-        //
-        //     }
-        //
-        //     ih_->lower_bound(lower_rec.data);
-        // }
-
-        // 确定间隙锁真正的上下界
-        // while (!scan_->is_end()) {
-        //     rid_ = scan_->rid();
-        //     // 唯一索引等值查询
-        //     rm_record_ = fh_->get_record(rid_, context_);
-        //     if (cmp_conds(rm_record_.get(), fed_conds_, cols_)) {
-        //         break;
-        //     }
-        // }
-        //
-        // // 第一个满足的即为下界
-        // auto lower_rid = ih_->get_rid(scan_->prev_iid());
-        //
-        // // 谓词的比较值作为下界
-        // if (lower_rid.page_no == -1 || lower_rid.slot_no == -1) {
-        //
-        // }
-        //
-        // lower_rec = fh_->get_record(lower_rid, context_);
 
         scan_ = std::make_unique<IxScan>(ih_, lower_, upper_, sm_manager_->get_bpm());
         already_begin_ = true;
