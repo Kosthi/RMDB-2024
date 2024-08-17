@@ -76,18 +76,6 @@ std::unordered_map<std::string, std::string> sort_map = {
     {"order_line", "sort -n -t, -k3,3 -k2,2 -k1,1 -k4,4 "}
 };
 
-std::unordered_map<std::string, std::string> index_map = {
-    {"warehouse", "none"},
-    {"item", "none"},
-    {"stock", "sort -n -t, -k1,1 -k2,2 -S 10% -T /fast/tmp --parallel=4 "},
-    {"district", "sort -n -t, -k1,1 -k2,2 "},
-    {"customer", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
-    {"history", "none"},
-    {"orders", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
-    {"new_orders", "sort -n -t, -k1,1 -k2,2 -k3,3 -S 10% -T /fast/tmp --parallel=4 "},
-    {"order_line", "sort -n -t, -k1,1 -k2,2 -k3,3 -k4,4 -S 10% -T /fast/tmp --parallel=4 "}
-};
-
 void load_data(std::string filename, std::string tabname);
 
 int fast_count_star(std::string &tabname, Context *context);
@@ -520,6 +508,7 @@ int getFileLineCount(const std::string &filename) {
 }
 
 void load_data(std::string filename, std::string tabname) {
+    // 如果使用 bulkloading 算法索引载入，必须先 sort 表文件
     filename = doSort(filename, tabname);
 
     // 获取 table
@@ -578,28 +567,11 @@ void load_data(std::string filename, std::string tabname) {
     // int index_pages = 0;
     // int ih_fd = -1;
 
+    // 支持正常索引载入与 bulkloading 批量载入
+    // bulkloading 算法参考了开源实现，并修复了两处实现缺陷，完美适应了本项目实现的 B+ 树引擎
     if (!tab_.indexes.empty()) {
         // 只有一个索引
         int num_lines = getFileLineCount(filename);
-
-        // if (tabname == "customer") {
-        //     auto &ix_name = tab_.indexes.begin()->first;
-        //     auto &&ih = sm_manager->ihs_.at(ix_name);
-        //
-        //     ix_manager->close_index(ih.get());
-        //     ix_manager->destroy_index(ix_name);
-        //     sm_manager->ihs_.erase(ix_name);
-        //     tab_.indexes.erase(ix_name);
-        //
-        //     std::vector<std::string> index_names;
-        //     index_names.reserve(3);
-        //     for (int j = 0; j < 3; ++j) {
-        //         index_names.emplace_back(tab_.cols[j].name);
-        //     }
-        //
-        //     // 不能 move tab.name
-        //     sm_manager->create_index(tabname, index_names, nullptr);
-        // }
 
         auto &ix_name = tab_.indexes.begin()->first;
         auto &ih = sm_manager->ihs_[ix_name];
@@ -730,6 +702,7 @@ void load_data(std::string filename, std::string tabname) {
                     memcpy(key + index_offset, cur + col.offset, col.len);
                 }
 
+                // 正常索引载入用这个
                 // for (auto &[index_name, index]: tab_.indexes) {
                 //     auto &ih = sm_manager->ihs_[index_name];
                 //     char *key = new char[index.col_tot_len];
@@ -758,7 +731,6 @@ void load_data(std::string filename, std::string tabname) {
                     node_key = node->get_key(0);
                     node_rid = node->get_rid(0);
 
-                    // TODO why use ?
                     if (++block + remaining_leaf_num == blocks) {
                         // assert(0);
                         ++actual_leaf_num;
