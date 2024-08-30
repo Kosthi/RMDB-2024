@@ -509,7 +509,7 @@ int getFileLineCount(const std::string &filename) {
 
 void load_data(std::string filename, std::string tabname) {
     // 如果使用 bulkloading 算法索引载入，必须先 sort 表文件
-    filename = doSort(filename, tabname);
+    // filename = doSort(filename, tabname);
 
     // 获取 table
     auto &tab_ = sm_manager->db_.get_table(tabname);
